@@ -13,6 +13,10 @@ from app.config import Settings
 logger = logging.getLogger(__name__)
 
 
+# 导入 LLMResponse 以保持接口兼容
+from app.services.llm import LLMResponse
+
+
 class TextServiceError(Exception):
     """文本服务基础异常"""
 
@@ -260,11 +264,26 @@ class TextService:
     async def generate(
         self,
         *,
-        prompt: str,
+        messages: list[dict[str, Any]] | None = None,
+        prompt: str | None = None,
+        system: str | None = None,
         max_tokens: int = 1024,
         temperature: float | None = None,
         **kwargs: Any,
-    ) -> str:
+    ) -> LLMResponse:
+        """生成文本（兼容 LLMService 接口）
+
+        Args:
+            messages: 消息列表（优先使用）
+            prompt: 提示词（向后兼容）
+            system: 系统提示（可选）
+            max_tokens: 最大 token 数
+            temperature: 温度参数
+            **kwargs: 其他参数
+
+        Returns:
+            LLMResponse 对象（与 LLMService 兼容）
+        """
         url = self._build_url()
 
         payload: dict[str, Any] = {
@@ -274,24 +293,71 @@ class TextService:
         }
         if temperature is not None:
             payload["temperature"] = temperature
+
         if self._is_chat_endpoint():
-            if "messages" not in payload:
+            # Chat 端点使用 messages
+            if messages:
+                payload["messages"] = messages
+                # 如果有 system，添加到 messages 开头
+                if system:
+                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+            elif prompt:
                 payload["messages"] = [{"role": "user", "content": prompt}]
+                if system:
+                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+            else:
+                raise ValueError("Either messages or prompt must be provided")
         else:
-            payload["prompt"] = prompt
+            # Completions 端点使用 prompt
+            if messages:
+                # 将 messages 转换为 prompt
+                prompt_parts = []
+                if system:
+                    prompt_parts.append(f"System: {system}")
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    prompt_parts.append(f"{role.capitalize()}: {content}")
+                payload["prompt"] = "\n\n".join(prompt_parts)
+            elif prompt:
+                if system:
+                    payload["prompt"] = f"System: {system}\n\n{prompt}"
+                else:
+                    payload["prompt"] = prompt
+            else:
+                raise ValueError("Either messages or prompt must be provided")
+
         payload["stream"] = False
 
         data = await self._post_json_with_retry(url, payload)
-        return self._extract_text_from_response(data)
+        text = self._extract_text_from_response(data)
+        return LLMResponse(text=text, tool_calls=[], raw=data)
 
     async def stream(
         self,
         *,
-        prompt: str,
+        messages: list[dict[str, Any]] | None = None,
+        prompt: str | None = None,
+        system: str | None = None,
         max_tokens: int = 1024,
         temperature: float | None = None,
         **kwargs: Any,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[dict[str, Any]]:
+        """流式生成文本（兼容 LLMService 接口）
+
+        Args:
+            messages: 消息列表（优先使用）
+            prompt: 提示词（向后兼容）
+            system: 系统提示（可选）
+            max_tokens: 最大 token 数
+            temperature: 温度参数
+            **kwargs: 其他参数
+
+        Yields:
+            事件字典（与 LLMService 兼容）:
+            - {"type": "text", "text": "..."}  # 增量文本
+            - {"type": "final", "response": LLMResponse(...)}  # 最终响应
+        """
         url = self._build_url()
 
         payload: dict[str, Any] = {
@@ -301,14 +367,55 @@ class TextService:
         }
         if temperature is not None:
             payload["temperature"] = temperature
+
         if self._is_chat_endpoint():
-            if "messages" not in payload:
+            # Chat 端点使用 messages
+            if messages:
+                payload["messages"] = messages
+                # 如果有 system，添加到 messages 开头
+                if system:
+                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+            elif prompt:
                 payload["messages"] = [{"role": "user", "content": prompt}]
+                if system:
+                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+            else:
+                raise ValueError("Either messages or prompt must be provided")
         else:
-            payload["prompt"] = prompt
+            # Completions 端点使用 prompt
+            if messages:
+                # 将 messages 转换为 prompt
+                prompt_parts = []
+                if system:
+                    prompt_parts.append(f"System: {system}")
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    prompt_parts.append(f"{role.capitalize()}: {content}")
+                payload["prompt"] = "\n\n".join(prompt_parts)
+            elif prompt:
+                if system:
+                    payload["prompt"] = f"System: {system}\n\n{prompt}"
+                else:
+                    payload["prompt"] = prompt
+            else:
+                raise ValueError("Either messages or prompt must be provided")
+
         payload["stream"] = True
+
+        # 收集完整文本用于最终响应
+        full_text = []
 
         async for chunk in self._post_stream_with_retry(url, payload):
             text = self._extract_text_from_stream_chunk(chunk)
             if text:
-                yield text
+                full_text.append(text)
+                # 产出增量文本事件
+                yield {"type": "text", "text": text}
+
+        # 产出最终响应事件
+        complete_text = "".join(full_text)
+        yield {
+            "type": "final",
+            "response": LLMResponse(text=complete_text, tool_calls=[], raw=None)
+        }

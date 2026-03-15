@@ -50,20 +50,26 @@ class Settings(BaseSettings):
     )
 
     # ============================================
-    # 文本生成服务 (OpenAI 兼容接口)
+    # 文本生成服务
     # ============================================
+    text_provider: str = Field(
+        default="anthropic",
+        description="文本生成服务提供商：anthropic / openai",
+    )
+
+    # OpenAI 兼容接口
     text_base_url: str = Field(
         default="https://api.openai.com/v1",
-        description="文本生成服务基础地址",
+        description="文本生成服务基础地址（OpenAI 兼容）",
     )
     text_api_key: str | None = None
     text_model: str = Field(
         default="gpt-4o-mini",
-        description="文本生成模型名称",
+        description="文本生成模型名称（OpenAI 兼容）",
     )
     text_endpoint: str = Field(
         default="/chat/completions",
-        description="文本生成 API 端点路径",
+        description="文本生成 API 端点路径（OpenAI 兼容）",
     )
 
     # ============================================
