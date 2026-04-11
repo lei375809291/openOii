@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from app.agents.storyboard_artist import StoryboardArtistAgent
 from app.agents.video_generator import VideoGeneratorAgent
+from app.orchestration.nodes import storyboard_approval_node
 from app.services.approval_gate import can_enter_clip_generation
 from app.services.shot_binding import resolve_shot_bound_approved_characters
 from tests.factories import create_character, create_project, create_run, create_shot
@@ -64,3 +67,29 @@ async def test_clip_generation_stays_blocked_until_every_storyboard_shot_is_appr
     await test_session.commit()
 
     assert await can_enter_clip_generation(test_session, run) is True
+
+
+@pytest.mark.asyncio
+async def test_storyboard_approval_routes_back_to_review_when_clip_gate_blocks(
+    test_session, monkeypatch
+):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(
+            auto_mode=False,
+            agent_context=SimpleNamespace(session=test_session, project=project, run=run),
+        )
+    )
+
+    async def _blocked(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr("app.orchestration.nodes.interrupt", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr("app.orchestration.nodes.can_enter_clip_generation", _blocked)
+
+    result = await storyboard_approval_node({}, runtime)
+
+    assert result["route_stage"] == "review"
+    assert result["review_requested"] is True

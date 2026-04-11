@@ -7,10 +7,12 @@ from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
 from app.services.doubao_video import DoubaoVideoService
 from app.services.image_composer import ImageComposer
+from app.services.shot_binding import resolve_shot_bound_approved_characters
 
 
 class VideoGeneratorAgent(BaseAgent):
     """为分镜生成视频"""
+
     name = "video_generator"
 
     def __init__(self):
@@ -40,16 +42,10 @@ class VideoGeneratorAgent(BaseAgent):
         return default_duration
 
     async def run(self, ctx: AgentContext) -> None:
-        # 使用基类方法查询项目角色
-        characters = await self.get_project_characters(ctx)
-
         # 查找没有视频的 Shot（可按目标分镜过滤）
-        query = (
-            select(Shot)
-            .where(
-                Shot.project_id == ctx.project.id,
-                Shot.video_url.is_(None),
-            )
+        query = select(Shot).where(
+            Shot.project_id == ctx.project.id,
+            Shot.video_url.is_(None),
         )
         if ctx.target_ids and ctx.target_ids.shot_ids:
             query = query.where(Shot.id.in_(ctx.target_ids.shot_ids))
@@ -63,22 +59,19 @@ class VideoGeneratorAgent(BaseAgent):
         use_image_mode = ctx.settings.use_i2v()
         # 检查是否使用豆包服务
         is_doubao = isinstance(ctx.video, DoubaoVideoService)
-        default_duration = (
-            float(ctx.settings.doubao_video_duration) if is_doubao else 5.0
-        )
+        default_duration = float(ctx.settings.doubao_video_duration) if is_doubao else 5.0
 
         total = len(shots)
         updated_count = 0
 
         mode_desc = "图生视频" if use_image_mode else "文生视频"
-        provider_desc = "豆包" if is_doubao else "OpenAI兼容"
         image_mode = (ctx.settings.video_image_mode or "first_frame").strip().lower()
         # 发送带进度的消息
         await self.send_message(
             ctx,
             f"🎬 开始为 {total} 个分镜生成视频（{mode_desc}）...",
             progress=0.0,
-            is_loading=True
+            is_loading=True,
         )
 
         for i, shot in enumerate(shots):
@@ -88,9 +81,10 @@ class VideoGeneratorAgent(BaseAgent):
                     ctx,
                     total=total,
                     current=i,
-                    message=f"   正在生成视频 {i+1}/{total}...",
+                    message=f"   正在生成视频 {i + 1}/{total}...",
                 )
 
+                characters = await resolve_shot_bound_approved_characters(ctx.session, shot)
                 video_prompt = self._build_video_prompt(shot, characters, style=ctx.project.style)
                 duration = self._get_duration(shot, default_duration)
 
@@ -101,13 +95,14 @@ class VideoGeneratorAgent(BaseAgent):
                     if use_image_mode and shot.image_url:
                         if image_mode == "reference":
                             try:
-                                # 收集有图片的角色
                                 char_image_urls = [c.image_url for c in characters if c.image_url]
 
                                 # 拼接分镜图和角色图，保存到本地并获取 URL
-                                image_url = await self.image_composer.compose_and_save_reference_image(
-                                    shot_image_url=shot.image_url,
-                                    character_image_urls=char_image_urls,
+                                image_url = (
+                                    await self.image_composer.compose_and_save_reference_image(
+                                        shot_image_url=shot.image_url,
+                                        character_image_urls=char_image_urls,
+                                    )
                                 )
                                 await self.send_message(
                                     ctx,
@@ -136,23 +131,31 @@ class VideoGeneratorAgent(BaseAgent):
                     if use_image_mode and shot.image_url:
                         try:
                             if image_mode == "reference":
-                                # 收集有图片的角色
                                 char_image_urls = [c.image_url for c in characters if c.image_url]
 
                                 # 拼接分镜图和角色图
-                                reference_image_bytes = await self.image_composer.compose_reference_image(
-                                    shot_image_url=shot.image_url,
-                                    character_image_urls=char_image_urls,
+                                reference_image_bytes = (
+                                    await self.image_composer.compose_reference_image(
+                                        shot_image_url=shot.image_url,
+                                        character_image_urls=char_image_urls,
+                                    )
                                 )
-                                await self.send_message(ctx, f"镜头 {shot.order}: 已生成参考图（分镜图 + {len(char_image_urls)} 个角色图）")
+                                await self.send_message(
+                                    ctx,
+                                    f"镜头 {shot.order}: 已生成参考图（分镜图 + {len(char_image_urls)} 个角色图）",
+                                )
                             else:
                                 # 仅使用分镜首帧图
-                                reference_image_bytes = await self.image_composer.compose_reference_image(
-                                    shot_image_url=shot.image_url,
-                                    character_image_urls=[],
+                                reference_image_bytes = (
+                                    await self.image_composer.compose_reference_image(
+                                        shot_image_url=shot.image_url,
+                                        character_image_urls=[],
+                                    )
                                 )
                         except Exception as e:
-                            await self.send_message(ctx, f"镜头 {shot.order}: 参考图生成失败，将使用文生视频模式: {e}")
+                            await self.send_message(
+                                ctx, f"镜头 {shot.order}: 参考图生成失败，将使用文生视频模式: {e}"
+                            )
                             reference_image_bytes = None
 
                     # OpenAI 兼容服务的 generate_url 接口
@@ -174,6 +177,13 @@ class VideoGeneratorAgent(BaseAgent):
         await ctx.session.commit()
         # 完成消息
         if updated_count > 0:
-            await self.send_message(ctx, f"✅ 已为 {updated_count} 个分镜生成视频，接下来将合成完整视频。", progress=1.0, is_loading=False)
+            await self.send_message(
+                ctx,
+                f"✅ 已为 {updated_count} 个分镜生成视频，接下来将合成完整视频。",
+                progress=1.0,
+                is_loading=False,
+            )
         else:
-            await self.send_message(ctx, f"❌ 所有分镜视频生成均失败。", progress=1.0, is_loading=False)
+            await self.send_message(
+                ctx, "❌ 所有分镜视频生成均失败。", progress=1.0, is_loading=False
+            )

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
+from app.services.shot_binding import resolve_shot_bound_approved_characters
 from app.services.image_composer import ImageComposer
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class StoryboardArtistAgent(BaseAgent):
     """为分镜生成首帧图片"""
+
     name = "storyboard_artist"
 
     def __init__(self):
@@ -33,7 +35,9 @@ class StoryboardArtistAgent(BaseAgent):
             parts.append(char_context)
 
         # 强制动漫风格：添加更具体的风格关键词
-        anime_style = "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style"
+        anime_style = (
+            "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style"
+        )
         parts.append(anime_style)
         if style.strip():
             parts.append(style.strip())
@@ -42,30 +46,6 @@ class StoryboardArtistAgent(BaseAgent):
 
     async def run(self, ctx: AgentContext) -> None:
         use_i2i = ctx.settings.use_i2i()
-
-        # 使用基类方法查询项目角色
-        characters = await self.get_project_characters(ctx)
-
-        # 收集有图片的角色 URL（用于 I2I 参考图）
-        char_image_urls = [c.image_url for c in characters if c.image_url]
-        reference_image_bytes: bytes | None = None
-
-        if use_i2i:
-            if not char_image_urls:
-                logger.info("I2I enabled but no character images available; will fall back to text-to-image")
-            else:
-                try:
-                    reference_image_bytes = await self.image_composer.compose_character_reference_image(
-                        char_image_urls
-                    )
-                    logger.info("I2I enabled: composed character reference image with %d characters", len(char_image_urls))
-                except Exception as exc:
-                    reference_image_bytes = None
-                    logger.warning(
-                        "Failed to compose character reference image; falling back to text-to-image: %s",
-                        exc,
-                        exc_info=True,
-                    )
 
         # 查找没有首帧图片的 Shot（可按目标分镜过滤）
         query = (
@@ -89,7 +69,9 @@ class StoryboardArtistAgent(BaseAgent):
         failed_count = 0
 
         # 发送带进度的消息
-        await self.send_message(ctx, f"🖼️ 开始为 {total} 个分镜生成首帧图片...", progress=0.0, is_loading=True)
+        await self.send_message(
+            ctx, f"🖼️ 开始为 {total} 个分镜生成首帧图片...", progress=0.0, is_loading=True
+        )
 
         for i, shot in enumerate(shots):
             try:
@@ -98,8 +80,36 @@ class StoryboardArtistAgent(BaseAgent):
                     ctx,
                     total=total,
                     current=i,
-                    message=f"   正在绘制分镜 {i+1}/{total}...",
+                    message=f"   正在绘制分镜 {i + 1}/{total}...",
                 )
+
+                characters = await resolve_shot_bound_approved_characters(ctx.session, shot)
+                char_image_urls = [c.image_url for c in characters if c.image_url]
+                reference_image_bytes: bytes | None = None
+
+                if use_i2i:
+                    if not char_image_urls:
+                        logger.info(
+                            "I2I enabled but no character images available; will fall back to text-to-image"
+                        )
+                    else:
+                        try:
+                            reference_image_bytes = (
+                                await self.image_composer.compose_character_reference_image(
+                                    char_image_urls
+                                )
+                            )
+                            logger.info(
+                                "I2I enabled: composed character reference image with %d characters",
+                                len(char_image_urls),
+                            )
+                        except Exception as exc:
+                            reference_image_bytes = None
+                            logger.warning(
+                                "Failed to compose character reference image; falling back to text-to-image: %s",
+                                exc,
+                                exc_info=True,
+                            )
 
                 image_prompt = self._build_image_prompt(shot, characters, style=ctx.project.style)
 
@@ -138,4 +148,9 @@ class StoryboardArtistAgent(BaseAgent):
                 msg += f"（{failed_count} 个失败）"
             await self.send_message(ctx, msg, progress=1.0, is_loading=False)
         elif failed_count > 0:
-            await self.send_message(ctx, f"❌ 所有 {failed_count} 个分镜首帧图片生成均失败。", progress=1.0, is_loading=False)
+            await self.send_message(
+                ctx,
+                f"❌ 所有 {failed_count} 个分镜首帧图片生成均失败。",
+                progress=1.0,
+                is_loading=False,
+            )
