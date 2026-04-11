@@ -14,7 +14,7 @@ from app.db.session import async_session_maker
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Project
-from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest
+from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest, ResumeRequest
 from app.services.run_recovery import build_recovery_control_surface
 from app.services.task_manager import task_manager
 from app.ws.manager import ConnectionManager
@@ -107,6 +107,48 @@ async def generate_project(
                 await orchestrator.run(project_id=project_id, run_id=run.id, request=payload)
         except asyncio.CancelledError:
             # 任务被取消，更新数据库状态
+            async with async_session_maker() as cancel_session:
+                run_obj = await cancel_session.get(AgentRun, run.id)
+                if run_obj and run_obj.status not in ("cancelled", "failed", "succeeded"):
+                    run_obj.status = "cancelled"
+                    await cancel_session.commit()
+            raise
+        finally:
+            task_manager.remove(project_id)
+
+    task = asyncio.create_task(_task())
+    task_manager.register(project_id, task)
+    return AgentRunRead.model_validate(run)
+
+
+@router.post("/{project_id}/resume", response_model=AgentRunRead)
+async def resume_project_run(
+    project_id: int,
+    payload: ResumeRequest,
+    session: AsyncSession = SessionDep,
+    settings: Settings = SettingsDep,
+    ws: ConnectionManager = WsManagerDep,
+    _: None = AdminDep,
+):
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    run = await session.get(AgentRun, payload.run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if run.status in ("queued", "running") and task_manager.is_running(project_id):
+        return AgentRunRead.model_validate(run)
+
+    async def _task() -> None:
+        try:
+            async with async_session_maker() as task_session:
+                orchestrator = GenerationOrchestrator(
+                    settings=settings, ws=ws, session=task_session
+                )
+                await orchestrator.resume_from_recovery(project_id=project_id, run_id=run.id)
+        except asyncio.CancelledError:
             async with async_session_maker() as cancel_session:
                 run_obj = await cancel_session.get(AgentRun, run.id)
                 if run_obj and run_obj.status not in ("cancelled", "failed", "succeeded"):

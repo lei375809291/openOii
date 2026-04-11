@@ -84,6 +84,10 @@ class GenerateRequest(BaseModel):
     notes: str | None = None
 
 
+class ResumeRequest(BaseModel):
+    run_id: int
+
+
 class AgentRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

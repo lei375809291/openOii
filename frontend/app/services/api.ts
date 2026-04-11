@@ -160,6 +160,12 @@ export const projectsApi = {
       method: "POST",
     }),
 
+  resume: (id: number, runId: number) =>
+    fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/resume`, {
+      method: "POST",
+      body: JSON.stringify({ run_id: runId }),
+    }),
+
   feedback: (id: number, content: string, runId?: number) =>
     fetchApi<{ status: string }>(`/api/v1/projects/${id}/feedback`, {
       method: "POST",

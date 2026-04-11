@@ -24,7 +24,11 @@ from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
 from app.orchestration.graph import build_phase2_graph
 from app.orchestration.persistence import build_postgres_checkpointer
-from app.orchestration.runtime import build_graph_config, build_phase2_runtime_context
+from app.orchestration.runtime import (
+    build_graph_config,
+    build_phase2_runtime_context,
+    build_stage_recovery_config,
+)
 from app.orchestration.state import Phase2Stage
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
@@ -66,6 +70,23 @@ GRAPH_STAGE_FOR_AGENT = {
     "video_merger": "merge",
     "review": "review",
 }
+
+RESUME_AGENT_FOR_STAGE = {
+    "script": "scriptwriter",
+    "character": "character_artist",
+    "storyboard": "storyboard_artist",
+    "clip": "video_generator",
+    "merge": "video_merger",
+    "review": "review",
+    "ideate": "scriptwriter",
+}
+
+
+def _resume_agent_for_stage(stage: str | None) -> str:
+    if not isinstance(stage, str):
+        return "scriptwriter"
+    return RESUME_AGENT_FOR_STAGE.get(stage, "scriptwriter")
+
 
 # Agent 完成后的描述信息
 AGENT_COMPLETION_INFO = {
@@ -491,6 +512,52 @@ class GenerationOrchestrator:
             "route_mode": "full",
         }
 
+    async def _invoke_phase2_graph(
+        self,
+        *,
+        project: Project,
+        run: AgentRun,
+        ctx: AgentContext,
+        compiled_graph: Any,
+        graph_config: dict[str, dict[str, str]],
+        runtime_context: Any,
+        initial_payload: Any,
+        auto_mode: bool,
+    ) -> None:
+        if project.id is None or run.id is None:
+            raise RuntimeError("Project and run must be persisted before graph execution")
+        project_pk = int(project.id)
+        run_pk = int(run.id)
+
+        payload: Any = initial_payload
+        while True:
+            result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
+            if not isinstance(result, dict):
+                break
+
+            interrupts = result.get("__interrupt__") or []
+            if not interrupts:
+                break
+
+            interrupt_value = getattr(interrupts[0], "value", None)
+            gate_agent = None
+            if isinstance(interrupt_value, dict):
+                gate_agent = interrupt_value.get("gate")
+
+            if not isinstance(gate_agent, str) or not gate_agent.strip():
+                raise RuntimeError("LangGraph approval gate did not include a valid gate name")
+
+            feedback = ""
+            if not auto_mode:
+                feedback = await self._wait_for_confirm(project_pk, run, gate_agent.strip()) or ""
+
+            payload = Command(resume=feedback)
+
+        await self.session.refresh(ctx.project)
+        ctx.project.status = "ready"
+        self.session.add(ctx.project)
+        await self.session.commit()
+
     async def _run_phase2_graph(
         self,
         *,
@@ -512,10 +579,7 @@ class GenerationOrchestrator:
         start_stage = cast(Phase2Stage, GRAPH_STAGE_FOR_AGENT[agent_name])
         if project.id is None or run.id is None:
             raise RuntimeError("Project and run must be persisted before graph execution")
-        project_pk = int(project.id)
-        run_pk = int(run.id)
         graph_config = cast(Any, build_graph_config(run))
-        thread_id = graph_config["configurable"]["thread_id"]
         runtime_context = build_phase2_runtime_context(
             orchestrator=self,
             agent_context=ctx,
@@ -523,47 +587,123 @@ class GenerationOrchestrator:
             auto_mode=auto_mode,
         )
         initial_state = self._build_phase2_state(
-            project_id=project_pk,
-            run_id=run_pk,
-            thread_id=thread_id,
+            project_id=int(project.id),
+            run_id=int(run.id),
+            thread_id=graph_config["configurable"]["thread_id"],
             start_stage=start_stage,
         )
 
         async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
             compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
+            await self._invoke_phase2_graph(
+                project=project,
+                run=run,
+                ctx=ctx,
+                compiled_graph=compiled_graph,
+                graph_config=graph_config,
+                runtime_context=runtime_context,
+                initial_payload=initial_state,
+                auto_mode=auto_mode,
+            )
 
-            payload: Any = initial_state
-            while True:
-                result = await compiled_graph.ainvoke(
-                    payload, graph_config, context=runtime_context
+    async def resume_from_recovery(
+        self,
+        *,
+        project_id: int,
+        run_id: int,
+        auto_mode: bool = False,
+    ) -> None:
+        project = await self.session.get(Project, project_id)
+        run = await self.session.get(AgentRun, run_id)
+        if not project or not run:
+            return
+
+        recovery = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+        resume_stage = cast(Phase2Stage, recovery.next_stage or recovery.current_stage)
+        resume_agent = _resume_agent_for_stage(resume_stage)
+
+        try:
+            self._agent_index(resume_agent)
+            await self._set_run(
+                run, status="running", current_agent="orchestrator", progress=0.01, error=None
+            )
+
+            ctx = self._build_agent_context(
+                project=project,
+                run=run,
+                request=GenerateRequest(),
+            )
+            ctx.user_feedback = None
+
+            await self.ws.send_event(
+                project_id,
+                {
+                    "type": "run_started",
+                    "data": {
+                        "run_id": run_id,
+                        "project_id": project_id,
+                        "stage": resume_stage,
+                        "next_stage": recovery.next_stage,
+                        "recovery_summary": recovery.model_dump(mode="json"),
+                    },
+                },
+            )
+            await self._log(
+                run_id,
+                agent="orchestrator",
+                role="system",
+                content=f"Resuming from checkpoint at {resume_stage}: {recovery!r}",
+            )
+
+            async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
+                compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
+                resume_config = cast(
+                    Any,
+                    build_stage_recovery_config(
+                        compiled_graph,
+                        run,
+                        before_stage=recovery.next_stage or recovery.current_stage,
+                    ),
                 )
-                if not isinstance(result, dict):
-                    break
+                runtime_context = build_phase2_runtime_context(
+                    orchestrator=self,
+                    agent_context=ctx,
+                    start_stage=resume_stage,
+                    auto_mode=auto_mode,
+                )
+                await self._invoke_phase2_graph(
+                    project=project,
+                    run=run,
+                    ctx=ctx,
+                    compiled_graph=compiled_graph,
+                    graph_config=resume_config,
+                    runtime_context=runtime_context,
+                    initial_payload=None,
+                    auto_mode=auto_mode,
+                )
 
-                interrupts = result.get("__interrupt__") or []
-                if not interrupts:
-                    break
-
-                interrupt_value = getattr(interrupts[0], "value", None)
-                gate_agent = None
-                if isinstance(interrupt_value, dict):
-                    gate_agent = interrupt_value.get("gate")
-
-                if not isinstance(gate_agent, str) or not gate_agent.strip():
-                    raise RuntimeError("LangGraph approval gate did not include a valid gate name")
-
-                feedback = ""
-                if not auto_mode:
-                    feedback = (
-                        await self._wait_for_confirm(project_pk, run, gate_agent.strip()) or ""
-                    )
-
-                payload = Command(resume=feedback)
-
-        await self.session.refresh(ctx.project)
-        ctx.project.status = "ready"
-        self.session.add(ctx.project)
-        await self.session.commit()
+            await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
+            await self.ws.send_event(
+                project_id, {"type": "run_completed", "data": {"run_id": run_id}}
+            )
+        except Exception as e:
+            await self.session.rollback()
+            try:
+                await self._log(
+                    run_id, agent="orchestrator", role="system", content=f"Resume failed: {e!r}"
+                )
+                await self._set_run(run, status="failed", error=str(e))
+            except Exception:
+                pass
+            await self.ws.send_event(
+                project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(e)}}
+            )
+        finally:
+            await clear_confirm_event_redis(run_id)
 
     async def run_from_agent(
         self,
