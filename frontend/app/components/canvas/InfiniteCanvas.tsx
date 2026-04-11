@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Tldraw, type Editor, type TLComponents } from "tldraw";
+import { Tldraw, type Editor, type TLComponents, type TLShapePartial } from "tldraw";
 import "tldraw/tldraw.css";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEditorStore } from "~/stores/editorStore";
@@ -46,6 +46,9 @@ const components: TLComponents = {
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
   const editorRef = useRef<Editor | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const lastAppliedShapesSignatureRef = useRef<string | null>(null);
+  const shapesRef = useRef<TLShapePartial[]>([]);
+  const shapesSignatureRef = useRef("");
 
   // Store 数据
   const {
@@ -165,6 +168,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
       });
     }, [project, recoverySummary, currentStage, isGenerating, characters, shots]),
   });
+  const shapesSignature = useMemo(() => JSON.stringify(shapes), [shapes]);
+  shapesRef.current = shapes;
+  shapesSignatureRef.current = shapesSignature;
 
   // 监听类型安全的画布事件
   useEffect(() => {
@@ -200,26 +206,32 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
   const handleMount = useCallback(
     (editor: Editor) => {
       editorRef.current = editor;
+      const currentShapes = shapesRef.current;
+      const currentSignature = shapesSignatureRef.current;
 
       // 创建初始 shapes
-      if (shapes.length > 0) {
-        editor.createShapes(shapes as any);
+      if (currentShapes.length > 0) {
+        editor.createShapes(currentShapes as any);
+        lastAppliedShapesSignatureRef.current = currentSignature;
 
         // 缩放到适合视图
         setTimeout(() => {
           editor.zoomToFit({ animation: { duration: 300 } });
         }, 100);
+      } else {
+        lastAppliedShapesSignatureRef.current = currentSignature;
       }
 
       setIsInitialized(true);
     },
-    [shapes]
+    []
   );
 
   // 数据变化时更新画布
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !isInitialized) return;
+    if (lastAppliedShapesSignatureRef.current === shapesSignature) return;
 
     // 获取当前所有 shape
     const currentShapes = editor.getCurrentPageShapes();
@@ -246,7 +258,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
         editor.createShape(shape as any);
       }
     });
-  }, [shapes, isInitialized]);
+
+    lastAppliedShapesSignatureRef.current = shapesSignature;
+  }, [shapes, shapesSignature, isInitialized]);
 
   return (
     <>
