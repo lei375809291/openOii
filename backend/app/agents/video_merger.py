@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 from sqlalchemy import select
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.base import AgentContext, BaseAgent
 from app.models.project import Shot
@@ -13,6 +16,10 @@ class VideoMergerAgent(BaseAgent):
     name = "video_merger"
 
     async def run(self, ctx: AgentContext) -> None:
+        project_id = ctx.project.id
+        if project_id is None:
+            raise RuntimeError("Project must be persisted before final assembly")
+
         # 检查项目是否已有最终视频
         if ctx.project.video_url and ctx.project.status != "superseded":
             await self.send_message(ctx, "项目已有最终视频。")
@@ -31,7 +38,7 @@ class VideoMergerAgent(BaseAgent):
                 is_loading=False,
             )
             await ctx.ws.send_event(
-                ctx.project.id,
+                project_id,
                 {
                     "type": "project_updated",
                     "data": {
@@ -47,10 +54,13 @@ class VideoMergerAgent(BaseAgent):
             return
 
         # 获取所有带视频的 Shot，按场景和镜头顺序排序
+        shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
+        shot_video_url_col = cast(InstrumentedAttribute[str | None], cast(object, Shot.video_url))
+        shot_order_col = cast(InstrumentedAttribute[int], cast(object, Shot.order))
         res = await ctx.session.execute(
             select(Shot)
-            .where(Shot.project_id == ctx.project.id, Shot.video_url.isnot(None))
-            .order_by(Shot.order.asc())
+            .where(shot_project_id_col == project_id, shot_video_url_col.is_not(None))
+            .order_by(shot_order_col.asc())
         )
         shots = res.scalars().all()
 
@@ -83,7 +93,7 @@ class VideoMergerAgent(BaseAgent):
 
             # 发送 project_updated 事件，通知前端刷新
             await ctx.ws.send_event(
-                ctx.project.id,
+                project_id,
                 {
                     "type": "project_updated",
                     "data": {

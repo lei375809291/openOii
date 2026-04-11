@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.api.deps import AdminDep, SessionDep
 from app.models.agent_run import AgentMessage, AgentRun
@@ -26,7 +28,7 @@ router = APIRouter()
 
 
 def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def _delete_project_files(session: AsyncSession, project: Project, project_id: int) -> None:
@@ -35,12 +37,16 @@ async def _delete_project_files(session: AsyncSession, project: Project, project
     delete_file(project.video_url)
 
     # 删除角色图片
-    chars_res = await session.execute(select(Character).where(Character.project_id == project_id))
+    character_project_id_col = cast(InstrumentedAttribute[int], cast(object, Character.project_id))
+    chars_res = await session.execute(
+        select(Character).where(character_project_id_col == project_id)
+    )
     chars = chars_res.scalars().all()
     delete_files([c.image_url for c in chars])
 
     # 删除分镜图片和视频
-    shots_res = await session.execute(select(Shot).where(Shot.project_id == project_id))
+    shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
+    shots_res = await session.execute(select(Shot).where(shot_project_id_col == project_id))
     shots = shots_res.scalars().all()
     delete_files([s.image_url for s in shots])
     delete_files([s.video_url for s in shots])
@@ -49,20 +55,28 @@ async def _delete_project_files(session: AsyncSession, project: Project, project
 async def _delete_project_data(session: AsyncSession, project_id: int) -> None:
     """删除项目关联的所有数据库记录"""
     # 删除 Message（聊天消息）
-    await session.execute(delete(Message).where(Message.project_id == project_id))
+    message_project_id_col = cast(InstrumentedAttribute[int], cast(object, Message.project_id))
+    await session.execute(delete(Message).where(message_project_id_col == project_id))
 
     # 删除 AgentMessage（通过 AgentRun 关联）
-    run_ids_subq = select(AgentRun.id).where(AgentRun.project_id == project_id)
-    await session.execute(delete(AgentMessage).where(AgentMessage.run_id.in_(run_ids_subq)))
+    agent_run_id_col = cast(InstrumentedAttribute[int | None], cast(object, AgentRun.id))
+    agent_run_project_id_col = cast(InstrumentedAttribute[int], cast(object, AgentRun.project_id))
+    agent_message_run_id_col = cast(
+        InstrumentedAttribute[int | None], cast(object, AgentMessage.run_id)
+    )
+    run_ids_subq = select(agent_run_id_col).where(agent_run_project_id_col == project_id)
+    await session.execute(delete(AgentMessage).where(agent_message_run_id_col.in_(run_ids_subq)))
 
     # 删除 AgentRun
-    await session.execute(delete(AgentRun).where(AgentRun.project_id == project_id))
+    await session.execute(delete(AgentRun).where(agent_run_project_id_col == project_id))
 
     # 删除 Shot
-    await session.execute(delete(Shot).where(Shot.project_id == project_id))
+    shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
+    await session.execute(delete(Shot).where(shot_project_id_col == project_id))
 
     # 删除 Character
-    await session.execute(delete(Character).where(Character.project_id == project_id))
+    character_project_id_col = cast(InstrumentedAttribute[int], cast(object, Character.project_id))
+    await session.execute(delete(Character).where(character_project_id_col == project_id))
 
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
@@ -82,7 +96,8 @@ async def create_project(payload: ProjectCreate, session: AsyncSession = Session
 
 @router.get("", response_model=ProjectListRead)
 async def list_projects(session: AsyncSession = SessionDep):
-    res = await session.execute(select(Project).order_by(Project.created_at.desc()))
+    project_created_at_col = cast(InstrumentedAttribute[datetime], cast(object, Project.created_at))
+    res = await session.execute(select(Project).order_by(project_created_at_col.desc()))
     items = res.scalars().all()
     return {"items": [ProjectRead.model_validate(p) for p in items], "total": len(items)}
 
@@ -136,10 +151,12 @@ async def delete_project(project_id: int, session: AsyncSession = SessionDep, _:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # 0. 先取消所有运行中的任务（防止异步任务继续操作）
+    agent_run_project_id_col = cast(InstrumentedAttribute[int], cast(object, AgentRun.project_id))
+    agent_run_status_col = cast(InstrumentedAttribute[str], cast(object, AgentRun.status))
     await session.execute(
-        AgentRun.__table__.update()
-        .where(AgentRun.project_id == project_id)
-        .where(AgentRun.status.in_(["queued", "running"]))
+        update(AgentRun)
+        .where(agent_run_project_id_col == project_id)
+        .where(agent_run_status_col.in_(("queued", "running")))
         .values(status="cancelled")
     )
 
@@ -160,7 +177,8 @@ async def list_characters(project_id: int, session: AsyncSession = SessionDep):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    res = await session.execute(select(Character).where(Character.project_id == project_id))
+    character_project_id_col = cast(InstrumentedAttribute[int], cast(object, Character.project_id))
+    res = await session.execute(select(Character).where(character_project_id_col == project_id))
     return [CharacterRead.model_validate(c) for c in res.scalars().all()]
 
 
@@ -169,8 +187,10 @@ async def list_shots(project_id: int, session: AsyncSession = SessionDep):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
+    shot_order_col = cast(InstrumentedAttribute[int], cast(object, Shot.order))
     res = await session.execute(
-        select(Shot).where(Shot.project_id == project_id).order_by(Shot.order.asc())
+        select(Shot).where(shot_project_id_col == project_id).order_by(shot_order_col.asc())
     )
     return [ShotRead.model_validate(s) for s in res.scalars().all()]
 
@@ -181,7 +201,11 @@ async def list_messages(project_id: int, session: AsyncSession = SessionDep):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    message_project_id_col = cast(InstrumentedAttribute[int], cast(object, Message.project_id))
+    message_created_at_col = cast(InstrumentedAttribute[datetime], cast(object, Message.created_at))
     res = await session.execute(
-        select(Message).where(Message.project_id == project_id).order_by(Message.created_at.asc())
+        select(Message)
+        .where(message_project_id_col == project_id)
+        .order_by(message_created_at_col.asc())
     )
     return [MessageRead.model_validate(m) for m in res.scalars().all()]

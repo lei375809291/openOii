@@ -107,6 +107,11 @@ Each task was committed atomically:
 
 None - plan executed as written.
 
+## Post-Execution Fixes
+
+- Aggregate static verification surfaced basedpyright errors in `backend/app/agents/video_merger.py` and `backend/app/api/v1/routes/projects.py` around SQLModel query expressions, `UTC`, and optional project IDs.
+- Fixed them with type-safe SQLAlchemy attribute bindings, `timezone.utc`, and explicit persisted project-id narrowing only; runtime behavior and delivery semantics stayed unchanged.
+
 ## Issues Encountered
 
 - `pytest_asyncio` 在仓库根目录的运行环境里未被解析；切到 `backend/` 目录并同步 dev 依赖后，目标测试恢复为绿色。
