@@ -28,6 +28,7 @@ from app.orchestration.runtime import build_graph_config, build_phase2_runtime_c
 from app.orchestration.state import Phase2Stage
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
+from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary
 from app.services.text_factory import create_text_service
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
@@ -44,6 +45,16 @@ AGENT_STAGE_MAP = {
     "video_merger": "deploy",
     "review": "ideate",
 }
+
+
+def _next_phase2_stage(stage: str | None) -> str | None:
+    if not isinstance(stage, str) or stage not in PHASE2_STAGE_ORDER:
+        return None
+    next_index = PHASE2_STAGE_ORDER.index(stage) + 1
+    if next_index >= len(PHASE2_STAGE_ORDER):
+        return None
+    return PHASE2_STAGE_ORDER[next_index]
+
 
 GRAPH_STAGE_FOR_AGENT = {
     "onboarding": "ideate",
@@ -346,13 +357,23 @@ class GenerationOrchestrator:
         self.session.add(msg)
         await self.session.commit()
 
-    async def _wait_for_confirm(self, project_id: int, run_id: int, agent_name: str) -> str | None:
+    async def _wait_for_confirm(
+        self, project_id: int, run: AgentRun, agent_name: str
+    ) -> str | None:
         # 获取 agent 完成信息
         info = AGENT_COMPLETION_INFO.get(agent_name, {})
         completed = info.get("completed", f"「{agent_name}」已完成")
         details = info.get("details", "")
         next_step = info.get("next", "继续下一步")
         question = info.get("question", "是否继续？")
+        current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "ideate")
+        next_stage = _next_phase2_stage(current_stage)
+        recovery_summary = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+        run_pk = run.id or 0
 
         # 构建详细消息
         message_parts = [f"✅ {completed}"]
@@ -364,15 +385,22 @@ class GenerationOrchestrator:
         full_message = "\n".join(message_parts)
 
         # 清理上一轮遗留的 confirm（避免误触导致直接跳过等待）
-        await clear_confirm_event_redis(run_id)
+        await clear_confirm_event_redis(run_pk)
 
         await self.ws.send_event(
             project_id,
             {
                 "type": "run_awaiting_confirm",
                 "data": {
-                    "run_id": run_id,
+                    "run_id": run_pk,
+                    "project_id": project_id,
                     "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": current_stage,
+                    "stage": current_stage,
+                    "next_stage": next_stage,
+                    "recovery_summary": recovery_summary.model_dump(mode="json"),
+                    "preserved_stages": recovery_summary.preserved_stages,
                     "message": full_message,
                     "completed": completed,
                     "next_step": next_step,
@@ -382,7 +410,7 @@ class GenerationOrchestrator:
         )
 
         try:
-            ok = await wait_for_confirm_redis(run_id, timeout=1800)
+            ok = await wait_for_confirm_redis(run_pk, timeout=1800)
             if not ok:
                 raise asyncio.TimeoutError()
         except asyncio.TimeoutError:
@@ -392,7 +420,16 @@ class GenerationOrchestrator:
             project_id,
             {
                 "type": "run_confirmed",
-                "data": {"run_id": run_id, "agent": agent_name},
+                "data": {
+                    "run_id": run_pk,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": current_stage,
+                    "stage": current_stage,
+                    "next_stage": next_stage,
+                    "recovery_summary": recovery_summary.model_dump(mode="json"),
+                },
             },
         )
 
@@ -402,7 +439,7 @@ class GenerationOrchestrator:
         # 读取本次确认携带的最新用户反馈（若有）
         res = await self.session.execute(
             select(AgentMessage)
-            .where(AgentMessage.run_id == run_id)
+            .where(AgentMessage.run_id == run_pk)
             .where(AgentMessage.role == "user")
             .order_by(AgentMessage.created_at.desc())
             .limit(1)
@@ -518,7 +555,7 @@ class GenerationOrchestrator:
                 feedback = ""
                 if not auto_mode:
                     feedback = (
-                        await self._wait_for_confirm(project_pk, run_pk, gate_agent.strip()) or ""
+                        await self._wait_for_confirm(project_pk, run, gate_agent.strip()) or ""
                     )
 
                 payload = Command(resume=feedback)
@@ -596,7 +633,11 @@ class GenerationOrchestrator:
                         "data": {
                             "run_id": run_id,
                             "current_agent": review_agent.name,
+                            "current_stage": AGENT_STAGE_MAP.get(review_agent.name, "ideate"),
                             "stage": AGENT_STAGE_MAP.get(review_agent.name, "ideate"),
+                            "next_stage": _next_phase2_stage(
+                                AGENT_STAGE_MAP.get(review_agent.name, "ideate")
+                            ),
                             "progress": 0.0,
                         },
                     },

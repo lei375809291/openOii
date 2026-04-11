@@ -7,7 +7,19 @@ from typing import Any
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
-from app.schemas.ws import WsEvent
+from app.schemas.ws import (
+    RunAwaitingConfirmEventData,
+    RunConfirmedEventData,
+    RunProgressEventData,
+    WsEvent,
+)
+
+
+_EVENT_DATA_MODELS: dict[str, type[Any]] = {
+    "run_progress": RunProgressEventData,
+    "run_awaiting_confirm": RunAwaitingConfirmEventData,
+    "run_confirmed": RunConfirmedEventData,
+}
 
 
 class ConnectionManager:
@@ -30,6 +42,11 @@ class ConnectionManager:
     async def send_event(self, project_id: int, event: dict[str, Any] | WsEvent) -> None:
         if isinstance(event, dict):
             event = WsEvent.model_validate(event)
+
+        data_model = _EVENT_DATA_MODELS.get(event.type)
+        if data_model is not None:
+            validated_data = data_model.model_validate(event.data)
+            event = WsEvent(type=event.type, data=validated_data.model_dump(mode="json"))
         payload = event.model_dump()
         conns = list(self._conns.get(project_id, set()))
         for ws in conns:
@@ -42,4 +59,3 @@ class ConnectionManager:
 
 
 ws_manager = ConnectionManager()
-
