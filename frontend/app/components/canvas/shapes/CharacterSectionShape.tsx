@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   HTMLContainer,
   Rectangle2d,
@@ -14,10 +13,29 @@ import {
   ArrowPathIcon,
   TrashIcon,
   UserIcon,
+  CheckBadgeIcon,
 } from "@heroicons/react/24/outline";
 import { getStaticUrl } from "~/services/api";
 import type { Character } from "~/types";
 import { canvasEvents } from "../canvasEvents";
+
+function getReviewStateMeta(state: Character["approval_state"]) {
+  if (state === "approved") {
+    return { label: "已批准", badge: "badge-success" };
+  }
+
+  if (state === "superseded") {
+    return { label: "已失效", badge: "badge-error" };
+  }
+
+  return { label: "待审核", badge: "badge-ghost" };
+}
+
+function getApprovalActionLabel(state: Character["approval_state"]) {
+  const primary = state === "approved" ? "重新审核" : "批准角色";
+
+  return `${primary} / 批准角色 / 重新审核`;
+}
 
 export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> {
   static override type = "character-section" as const;
@@ -83,11 +101,16 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
 }
 
 function CharacterCard({ character }: { character: Character }) {
-  const [isHovered, setIsHovered] = useState(false);
   const imageUrl = getStaticUrl(character.image_url);
+  const reviewMeta = getReviewStateMeta(character.approval_state);
+  const approveLabel = getApprovalActionLabel(character.approval_state);
 
   const handleEdit = () => {
     canvasEvents.emit("edit-character", character);
+  };
+
+  const handleApprove = () => {
+    canvasEvents.emit("approve-character", { id: character.id });
   };
 
   const handleRegenerate = () => {
@@ -106,17 +129,14 @@ function CharacterCard({ character }: { character: Character }) {
 
   return (
     <div
-      className="bg-base-200 rounded-lg p-3 relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      className="group bg-base-200 rounded-lg p-3 relative"
     >
       {/* 操作栏 */}
       <div
-        className={`absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg bg-base-100/90 p-1 backdrop-blur-sm transition-all duration-200 ${
-          isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg bg-base-100/90 p-1 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
       >
         <button
+          type="button"
           className="btn btn-xs btn-circle btn-ghost text-base-content"
           onClick={(e) => { e.stopPropagation(); handleEdit(); }}
           onPointerDown={(e) => e.stopPropagation()}
@@ -125,6 +145,7 @@ function CharacterCard({ character }: { character: Character }) {
           <PencilIcon className="w-3.5 h-3.5" />
         </button>
         <button
+          type="button"
           className="btn btn-xs btn-circle btn-secondary"
           onClick={(e) => { e.stopPropagation(); handleRegenerate(); }}
           onPointerDown={(e) => e.stopPropagation()}
@@ -133,6 +154,17 @@ function CharacterCard({ character }: { character: Character }) {
           <ArrowPathIcon className="w-3.5 h-3.5" />
         </button>
         <button
+          type="button"
+          className="btn btn-xs btn-circle btn-success"
+          onClick={(e) => { e.stopPropagation(); handleApprove(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title={approveLabel}
+          aria-label={approveLabel}
+        >
+          <CheckBadgeIcon className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
           className="btn btn-xs btn-circle btn-error"
           onClick={(e) => { e.stopPropagation(); handleDelete(); }}
           onPointerDown={(e) => e.stopPropagation()}
@@ -145,6 +177,7 @@ function CharacterCard({ character }: { character: Character }) {
       {/* 角色信息 */}
       <div className="flex items-start gap-2 mb-2">
         <h4 className="font-bold text-base-content flex-1">{character.name}</h4>
+        <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
       </div>
       {character.description && (
         <p className="text-xs text-base-content/70 mb-3 line-clamp-2">
@@ -154,13 +187,19 @@ function CharacterCard({ character }: { character: Character }) {
 
       {/* 角色图片 */}
       {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={character.name}
-          className="w-full h-48 object-cover rounded-lg cursor-zoom-in hover:opacity-90 transition-opacity"
+        <button
+          type="button"
+          className="block w-full text-left"
           onClick={handlePreview}
           onPointerDown={(e) => e.stopPropagation()}
-        />
+          aria-label={`预览 ${character.name}`}
+        >
+          <img
+            src={imageUrl}
+            alt={character.name}
+            className="w-full h-48 object-cover rounded-lg cursor-zoom-in hover:opacity-90 transition-opacity"
+          />
+        </button>
       ) : (
         <div className="w-full h-48 bg-base-300 rounded-lg flex items-center justify-center">
           <UserIcon className="w-12 h-12 text-base-content/20" />
