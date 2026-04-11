@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +21,24 @@ from app.ws.manager import ConnectionManager
 router = APIRouter(prefix="/projects")
 
 
-@router.post("/{project_id}/generate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED)
+def _agent_run_thread_id(run: AgentRun) -> str:
+    return f"agent-run-{run.id}" if run.id is not None else "agent-run-pending"
+
+
+def _serialize_active_run(run: AgentRun) -> dict[str, object]:
+    return {
+        "id": run.id,
+        "project_id": run.project_id,
+        "status": run.status,
+        "current_agent": run.current_agent,
+        "progress": run.progress,
+        "thread_id": _agent_run_thread_id(run),
+    }
+
+
+@router.post(
+    "/{project_id}/generate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED
+)
 async def generate_project(
     project_id: int,
     payload: GenerateRequest,
@@ -33,8 +51,28 @@ async def generate_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    res = await session.execute(
+        select(AgentRun)
+        .where(AgentRun.project_id == project_id)
+        .where(AgentRun.status.in_(["queued", "running"]))
+        .order_by(AgentRun.created_at.desc())
+        .limit(1)
+    )
+    active_run = res.scalars().first()
+    if active_run is not None:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": "Project already has an active run",
+                "available_actions": ["resume", "cancel"],
+                "active_run": _serialize_active_run(active_run),
+            },
+        )
+
     # 并发限制已移除，允许多个任务同时运行
-    run = AgentRun(project_id=project_id, status="running", current_agent="orchestrator", progress=0.0)
+    run = AgentRun(
+        project_id=project_id, status="running", current_agent="orchestrator", progress=0.0
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -42,7 +80,9 @@ async def generate_project(
     async def _task() -> None:
         try:
             async with async_session_maker() as task_session:
-                orchestrator = GenerationOrchestrator(settings=settings, ws=ws, session=task_session)
+                orchestrator = GenerationOrchestrator(
+                    settings=settings, ws=ws, session=task_session
+                )
                 await orchestrator.run(project_id=project_id, run_id=run.id, request=payload)
         except asyncio.CancelledError:
             # 任务被取消，更新数据库状态
@@ -93,10 +133,13 @@ async def cancel_project_run(
     await session.commit()
 
     # 通知前端任务已取消
-    await ws.send_event(project_id, {
-        "type": "run_cancelled",
-        "data": {"project_id": project_id, "cancelled_count": cancelled_count}
-    })
+    await ws.send_event(
+        project_id,
+        {
+            "type": "run_cancelled",
+            "data": {"project_id": project_id, "cancelled_count": cancelled_count},
+        },
+    )
 
     return {"status": "cancelled", "cancelled": cancelled_count}
 
@@ -139,7 +182,9 @@ async def feedback_project(
     async def _task() -> None:
         try:
             async with async_session_maker() as task_session:
-                orchestrator = GenerationOrchestrator(settings=settings, ws=ws, session=task_session)
+                orchestrator = GenerationOrchestrator(
+                    settings=settings, ws=ws, session=task_session
+                )
                 await orchestrator.run_from_agent(
                     project_id=project_id,
                     run_id=run.id,

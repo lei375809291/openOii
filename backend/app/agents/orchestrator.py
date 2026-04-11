@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, UTC
+from typing import Any, cast
 
 import redis.asyncio as redis
+from langgraph.types import Command
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +22,10 @@ from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
+from app.orchestration.graph import build_phase2_graph
+from app.orchestration.persistence import build_postgres_checkpointer
+from app.orchestration.runtime import build_graph_config, build_phase2_runtime_context
+from app.orchestration.state import Phase2Stage
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
 from app.services.text_factory import create_text_service
@@ -37,6 +43,17 @@ AGENT_STAGE_MAP = {
     "video_generator": "animate",
     "video_merger": "deploy",
     "review": "ideate",
+}
+
+GRAPH_STAGE_FOR_AGENT = {
+    "onboarding": "ideate",
+    "director": "ideate",
+    "scriptwriter": "script",
+    "character_artist": "character",
+    "storyboard_artist": "storyboard",
+    "video_generator": "clip",
+    "video_merger": "merge",
+    "review": "review",
 }
 
 # Agent 完成后的描述信息
@@ -233,7 +250,9 @@ class GenerationOrchestrator:
             proj.video_url = None
             self.session.add(proj)
 
-    async def _cleanup_for_rerun(self, project_id: int, start_agent: str, mode: str = "full") -> None:
+    async def _cleanup_for_rerun(
+        self, project_id: int, start_agent: str, mode: str = "full"
+    ) -> None:
         """清理逻辑：根据重新运行的 agent 和模式清理数据
 
         Args:
@@ -305,7 +324,11 @@ class GenerationOrchestrator:
                 project_id,
                 {
                     "type": "data_cleared",
-                    "data": {"cleared_types": cleared_types, "start_agent": start_agent, "mode": mode},
+                    "data": {
+                        "cleared_types": cleared_types,
+                        "start_agent": start_agent,
+                        "mode": mode,
+                    },
                 },
             )
 
@@ -391,6 +414,120 @@ class GenerationOrchestrator:
 
         return None
 
+    def _build_agent_context(
+        self,
+        *,
+        project: Project,
+        run: AgentRun,
+        request: GenerateRequest,
+    ) -> AgentContext:
+        return AgentContext(
+            settings=self.settings,
+            session=self.session,
+            ws=self.ws,
+            project=project,
+            run=run,
+            llm=cast(Any, create_text_service(self.settings)),
+            image=ImageService(self.settings),
+            video=cast(Any, create_video_service(self.settings)),
+        )
+
+    def _build_phase2_state(
+        self,
+        *,
+        project_id: int,
+        run_id: int,
+        thread_id: str,
+        start_stage: str,
+    ) -> dict[str, Any]:
+        return {
+            "project_id": project_id,
+            "run_id": run_id,
+            "thread_id": thread_id,
+            "current_stage": start_stage,
+            "stage_history": [],
+            "approval_history": [],
+            "artifact_lineage": [],
+            "review_requested": False,
+            "approval_feedback": "",
+            "route_stage": start_stage,
+            "route_mode": "full",
+        }
+
+    async def _run_phase2_graph(
+        self,
+        *,
+        project: Project,
+        run: AgentRun,
+        request: GenerateRequest,
+        ctx: AgentContext,
+        agent_name: str,
+        auto_mode: bool,
+    ) -> None:
+        if agent_name not in GRAPH_STAGE_FOR_AGENT:
+            raise ValueError(f"Unsupported agent for graph execution: {agent_name}")
+
+        if agent_name == "review":
+            latest_feedback = (ctx.user_feedback or request.notes or "").strip()
+            if latest_feedback:
+                ctx.user_feedback = latest_feedback
+
+        start_stage = cast(Phase2Stage, GRAPH_STAGE_FOR_AGENT[agent_name])
+        if project.id is None or run.id is None:
+            raise RuntimeError("Project and run must be persisted before graph execution")
+        project_pk = int(project.id)
+        run_pk = int(run.id)
+        graph_config = cast(Any, build_graph_config(run))
+        thread_id = graph_config["configurable"]["thread_id"]
+        runtime_context = build_phase2_runtime_context(
+            orchestrator=self,
+            agent_context=ctx,
+            start_stage=start_stage,
+            auto_mode=auto_mode,
+        )
+        initial_state = self._build_phase2_state(
+            project_id=project_pk,
+            run_id=run_pk,
+            thread_id=thread_id,
+            start_stage=start_stage,
+        )
+
+        async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
+            compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
+
+            payload: Any = initial_state
+            while True:
+                result = await compiled_graph.ainvoke(
+                    payload, graph_config, context=runtime_context
+                )
+                if not isinstance(result, dict):
+                    break
+
+                interrupts = result.get("__interrupt__") or []
+                if not interrupts:
+                    break
+
+                interrupt_value = getattr(interrupts[0], "value", None)
+                gate_agent = None
+                if isinstance(interrupt_value, dict):
+                    gate_agent = interrupt_value.get("gate")
+
+                if not isinstance(gate_agent, str) or not gate_agent.strip():
+                    raise RuntimeError("LangGraph approval gate did not include a valid gate name")
+
+                feedback = ""
+                if not auto_mode:
+                    feedback = (
+                        await self._wait_for_confirm(project_pk, run_pk, gate_agent.strip()) or ""
+                    )
+
+                payload = Command(resume=feedback)
+
+        await self.session.refresh(ctx.project)
+        ctx.project.status = "ready"
+        self.session.add(ctx.project)
+        await self.session.commit()
+
     async def run_from_agent(
         self,
         *,
@@ -422,33 +559,23 @@ class GenerationOrchestrator:
                 content=f"Generate started from {agent_name}: {request!r}",
             )
 
-            ctx = AgentContext(
-                settings=self.settings,
-                session=self.session,
-                ws=self.ws,
-                project=project,
-                run=run,
-                llm=create_text_service(self.settings),
-                image=ImageService(self.settings),
-                video=create_video_service(self.settings),
-            )
+            ctx = self._build_agent_context(project=project, run=run, request=request)
 
             # 初始化当前 run 已存在的用户反馈消息（避免后续确认不带反馈时误读历史反馈）
             res = await ctx.session.execute(
                 select(AgentMessage.id)
-                .where(AgentMessage.run_id == ctx.run.id)
+                .where(AgentMessage.run_id == run.id)
                 .where(AgentMessage.role == "user")
                 .order_by(AgentMessage.created_at.desc())
                 .limit(1)
             )
             self._last_user_feedback_id = res.scalar_one_or_none()
 
-            prev_handoff_agent: str | None = None
             if agent_name == "review":
                 # 让后续 agent 能直接读取用户反馈（例如编剧需要遵循数量限制等）
                 res = await ctx.session.execute(
                     select(AgentMessage)
-                    .where(AgentMessage.run_id == ctx.run.id)
+                    .where(AgentMessage.run_id == run.id)
                     .where(AgentMessage.role == "user")
                     .order_by(AgentMessage.created_at.desc())
                     .limit(1)
@@ -459,7 +586,6 @@ class GenerationOrchestrator:
                 elif request.notes and request.notes.strip():
                     ctx.user_feedback = request.notes.strip()
 
-                prev_handoff_agent = "review"
                 review_agent = self.agents[self._agent_index("review")]
 
                 await self._set_run(run, current_agent=review_agent.name, progress=0.0)
@@ -488,7 +614,6 @@ class GenerationOrchestrator:
                     start_agent = "scriptwriter"
                 agent_name = start_agent.strip()
                 self._agent_index(agent_name)  # validate
-                # 保存 mode 到 ctx 供 scriptwriter 使用
                 ctx.rerun_mode = mode
                 await self._log(
                     run_id,
@@ -497,111 +622,21 @@ class GenerationOrchestrator:
                     content=f"Review routed to {agent_name} (mode={mode}): {routing!r}",
                 )
 
-            await self._cleanup_for_rerun(project_id, agent_name, mode=getattr(ctx, 'rerun_mode', 'full'))
+            await self._cleanup_for_rerun(
+                project_id, agent_name, mode=getattr(ctx, "rerun_mode", "full")
+            )
 
             # 刷新 project 对象，因为 cleanup 可能修改了它
             await self.session.refresh(ctx.project)
 
-            start_idx = self._agent_index(agent_name)
-            plan = [a.name for a in self.agents[start_idx:] if a.name != "review"]
-
-            i = 0
-            while i < len(plan):
-                cur_name = plan[i]
-                cur_idx = self._agent_index(cur_name)
-                agent = self.agents[cur_idx]
-
-                # 发送 Agent 邀请消息
-                prev_agent_name: str | None = None
-                if i > 0:
-                    prev_agent_name = plan[i - 1]
-                elif prev_handoff_agent:
-                    prev_agent_name = prev_handoff_agent
-
-                if prev_agent_name:
-                    await self.ws.send_event(
-                        project_id,
-                        {
-                            "type": "agent_handoff",
-                            "data": {
-                                "from_agent": prev_agent_name,
-                                "to_agent": agent.name,
-                                "message": f"@{prev_agent_name} 邀请 @{agent.name} 加入了群聊",
-                            },
-                        },
-                    )
-
-                progress = i / max(len(plan), 1)
-                await self._set_run(run, current_agent=agent.name, progress=progress)
-                await self.ws.send_event(
-                    project_id,
-                    {
-                        "type": "run_progress",
-                        "data": {
-                            "run_id": run_id,
-                            "current_agent": agent.name,
-                            "stage": AGENT_STAGE_MAP.get(agent.name, "ideate"),
-                            "progress": progress,
-                        },
-                    },
-                )
-
-                await agent.run(ctx)
-
-                # 最后一个 agent 完成后，设置项目状态为 ready
-                if i == len(plan) - 1:
-                    ctx.project.status = "ready"
-                    ctx.session.add(ctx.project)
-                    await ctx.session.commit()
-
-                if not auto_mode and i < (len(plan) - 1):
-                    feedback = await self._wait_for_confirm(project_id, run_id, agent.name)
-                    if feedback:
-                        # 用户提供了反馈，跳转到 review agent 处理
-                        ctx.user_feedback = feedback
-                        await self._log(
-                            run_id,
-                            agent="orchestrator",
-                            role="system",
-                            content=f"User feedback received, routing to review: {feedback[:100]}...",
-                        )
-
-                        # 调用 review agent 分析反馈并决定从哪个 agent 重新开始
-                        review_agent = self.agents[self._agent_index("review")]
-                        routing = await review_agent.run(ctx)
-                        start_agent = (
-                            routing.get("start_agent") if isinstance(routing, dict) else None
-                        )
-                        # 直接从 routing 读取 mode（review.py 已经解析好了）
-                        mode = "full"
-                        if isinstance(routing, dict):
-                            m = routing.get("mode")
-                            if isinstance(m, str) and m.strip() in ("incremental", "full"):
-                                mode = m.strip()
-                        if not (isinstance(start_agent, str) and start_agent.strip()):
-                            start_agent = "scriptwriter"
-                        agent_name = start_agent.strip()
-                        self._agent_index(agent_name)  # validate
-                        # 保存 mode 到 ctx 供 scriptwriter 使用
-                        ctx.rerun_mode = mode
-                        await self._log(
-                            run_id,
-                            agent="orchestrator",
-                            role="system",
-                            content=f"Review routed to {agent_name} (mode={mode}): {routing!r}",
-                        )
-
-                        # 清理并重新规划
-                        await self._cleanup_for_rerun(project_id, agent_name, mode=mode)
-                        # 刷新 project 对象，因为 cleanup 可能修改了它
-                        await self.session.refresh(ctx.project)
-                        start_idx = self._agent_index(agent_name)
-                        plan = [a.name for a in self.agents[start_idx:] if a.name != "review"]
-                        i = 0
-                        prev_handoff_agent = "review"
-                        continue
-
-                i += 1
+            await self._run_phase2_graph(
+                project=project,
+                run=run,
+                request=request,
+                ctx=ctx,
+                agent_name=agent_name,
+                auto_mode=auto_mode,
+            )
 
             await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
             await self.ws.send_event(
