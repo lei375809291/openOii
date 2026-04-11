@@ -5,7 +5,7 @@ from datetime import datetime, UTC
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import AgentContext, TargetIds
@@ -17,7 +17,7 @@ from app.api.deps import SessionDep, SettingsDep, WsManagerDep
 from app.config import Settings
 from app.db.session import async_session_maker
 from app.models.agent_run import AgentRun
-from app.models.project import Project, Shot
+from app.models.project import Character, Project, Shot, ShotCharacterBinding
 from app.schemas.project import AgentRunRead, RegenerateRequest, ShotRead, ShotUpdate
 from app.services.file_cleaner import delete_file
 from app.services.image import ImageService
@@ -44,7 +44,78 @@ def _shot_payload(shot: Shot) -> dict[str, Any]:
         "image_url": shot.image_url,
         "video_url": shot.video_url,
         "duration": shot.duration,
+        "camera": shot.camera,
+        "motion_note": shot.motion_note,
+        "character_ids": list(shot.character_ids),
+        "approval_state": shot.approval_state,
+        "approval_version": shot.approval_version,
+        "approved_at": shot.approved_at,
+        "approved_description": shot.approved_description,
+        "approved_prompt": shot.approved_prompt,
+        "approved_image_prompt": shot.approved_image_prompt,
+        "approved_duration": shot.approved_duration,
+        "approved_camera": shot.approved_camera,
+        "approved_motion_note": shot.approved_motion_note,
+        "approved_character_ids": list(shot.approved_character_ids),
     }
+
+
+def _validate_shot_approval_ready(shot: Shot) -> None:
+    missing = []
+    if not shot.description:
+        missing.append("description")
+    if not shot.prompt:
+        missing.append("prompt")
+    if not shot.image_prompt:
+        missing.append("image_prompt")
+    if shot.duration is None:
+        missing.append("duration")
+    if not shot.camera:
+        missing.append("camera")
+    if not shot.motion_note:
+        missing.append("motion_note")
+    if not shot.character_ids:
+        missing.append("character_ids")
+
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail="Shot approval requires structured intent, duration, camera, motion note, and bound cast",
+        )
+
+
+async def _sync_shot_character_bindings(session: AsyncSession, shot: Shot) -> None:
+    await session.execute(
+        delete(ShotCharacterBinding).where(ShotCharacterBinding.shot_id == shot.id)
+    )
+    if shot.character_ids:
+        session.add_all(
+            [
+                ShotCharacterBinding(shot_id=shot.id, character_id=character_id)
+                for character_id in shot.character_ids
+            ]
+        )
+
+
+async def _validate_shot_character_ids(
+    session: AsyncSession, project_id: int, character_ids: list[int]
+) -> None:
+    if not character_ids:
+        return
+
+    res = await session.execute(
+        select(Character.id).where(
+            Character.project_id == project_id,
+            Character.id.in_(character_ids),
+        )
+    )
+    found_ids = {row[0] for row in res.all()}
+    missing_ids = [character_id for character_id in character_ids if character_id not in found_ids]
+    if missing_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown character_ids for project: {missing_ids}",
+        )
 
 
 async def _run_agent_plan(
@@ -155,10 +226,20 @@ async def update_shot(
     project_id = shot.project_id
 
     data = payload.model_dump(exclude_unset=True)
+    character_ids_updated = False
+    if "character_ids" in data:
+        character_ids = list(
+            dict.fromkeys(int(character_id) for character_id in data.pop("character_ids") or [])
+        )
+        await _validate_shot_character_ids(session, project_id, character_ids)
+        shot.character_ids = character_ids
+        character_ids_updated = True
     for k, v in data.items():
         setattr(shot, k, v)
 
     session.add(shot)
+    if character_ids_updated:
+        await _sync_shot_character_bindings(session, shot)
     await session.commit()
     await session.refresh(shot)
 
@@ -166,10 +247,36 @@ async def update_shot(
         project_id,
         {"type": "shot_updated", "data": {"shot": _shot_payload(shot)}},
     )
-    return ShotRead.model_validate(shot)
+    return _shot_payload(shot)
 
 
-@router.post("/{shot_id}/regenerate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED)
+@router.post("/{shot_id}/approve", response_model=ShotRead)
+async def approve_shot(
+    shot_id: int,
+    session: AsyncSession = SessionDep,
+    ws: ConnectionManager = WsManagerDep,
+):
+    shot = await session.get(Shot, shot_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+
+    _validate_shot_approval_ready(shot)
+    shot.freeze_approval()
+    session.add(shot)
+    await session.commit()
+    await session.refresh(shot)
+
+    payload = _shot_payload(shot)
+    await ws.send_event(
+        shot.project_id,
+        {"type": "shot_updated", "data": {"shot": payload}},
+    )
+    return payload
+
+
+@router.post(
+    "/{shot_id}/regenerate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED
+)
 async def regenerate_shot(
     shot_id: int,
     payload: RegenerateRequest | None = None,
@@ -247,7 +354,7 @@ async def regenerate_shot(
         progress=0.0,
         error=None,
         resource_type="shot",  # 设置资源类型
-        resource_id=shot_id,   # 设置资源 ID
+        resource_id=shot_id,  # 设置资源 ID
     )
     session.add(run)
     await session.commit()

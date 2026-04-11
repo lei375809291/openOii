@@ -8,9 +8,11 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from app.schemas.ws import (
+    CharacterUpdatedEventData,
     RunAwaitingConfirmEventData,
     RunConfirmedEventData,
     RunProgressEventData,
+    ShotUpdatedEventData,
     WsEvent,
 )
 
@@ -19,6 +21,8 @@ _EVENT_DATA_MODELS: dict[str, type[Any]] = {
     "run_progress": RunProgressEventData,
     "run_awaiting_confirm": RunAwaitingConfirmEventData,
     "run_confirmed": RunConfirmedEventData,
+    "character_updated": CharacterUpdatedEventData,
+    "shot_updated": ShotUpdatedEventData,
 }
 
 

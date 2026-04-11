@@ -43,6 +43,12 @@ def _character_payload(character: Character) -> dict[str, Any]:
         "name": character.name,
         "description": character.description,
         "image_url": character.image_url,
+        "approval_state": character.approval_state,
+        "approval_version": character.approval_version,
+        "approved_at": character.approved_at,
+        "approved_name": character.approved_name,
+        "approved_description": character.approved_description,
+        "approved_image_url": character.approved_image_url,
     }
 
 
@@ -161,7 +167,30 @@ async def update_character(
         character.project_id,
         {"type": "character_updated", "data": {"character": _character_payload(character)}},
     )
-    return CharacterRead.model_validate(character)
+    return _character_payload(character)
+
+
+@router.post("/{character_id}/approve", response_model=CharacterRead)
+async def approve_character(
+    character_id: int,
+    session: AsyncSession = SessionDep,
+    ws: ConnectionManager = WsManagerDep,
+):
+    character = await session.get(Character, character_id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    character.freeze_approval()
+    session.add(character)
+    await session.commit()
+    await session.refresh(character)
+
+    payload = _character_payload(character)
+    await ws.send_event(
+        character.project_id,
+        {"type": "character_updated", "data": {"character": payload}},
+    )
+    return payload
 
 
 @router.post(
@@ -177,7 +206,9 @@ async def regenerate_character(
     ws: ConnectionManager = WsManagerDep,
 ):
     if payload.type != "image":
-        raise HTTPException(status_code=400, detail="Character regeneration only supports type=image")
+        raise HTTPException(
+            status_code=400, detail="Character regeneration only supports type=image"
+        )
 
     character = await session.get(Character, character_id)
     if not character:
@@ -194,9 +225,7 @@ async def regenerate_character(
         .limit(1)
     )
     if res.scalars().first() is not None:
-        raise HTTPException(
-            status_code=409, detail="This character is already being regenerated"
-        )
+        raise HTTPException(status_code=409, detail="This character is already being regenerated")
 
     delete_file(character.image_url)
     character.image_url = None
@@ -217,7 +246,7 @@ async def regenerate_character(
         progress=0.0,
         error=None,
         resource_type="character",  # 设置资源类型
-        resource_id=character_id,   # 设置资源 ID
+        resource_id=character_id,  # 设置资源 ID
     )
     session.add(run)
     await session.commit()
@@ -256,6 +285,8 @@ async def delete_character(
     await session.commit()
 
     # 发送 WebSocket 事件
-    await ws.send_event(project_id, {"type": "character_deleted", "data": {"character_id": character_id}})
+    await ws.send_event(
+        project_id, {"type": "character_deleted", "data": {"character_id": character_id}}
+    )
 
     return None

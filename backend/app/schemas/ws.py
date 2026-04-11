@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .project import RecoverySummaryRead
+from .project import CharacterRead, RecoverySummaryRead, ShotRead
 
 
 WsEventType = Literal[
@@ -67,6 +67,14 @@ class RunConfirmedEventData(BaseModel):
     stage: str | None = None
     next_stage: str | None = None
     recovery_summary: RecoverySummaryRead | None = None
+
+
+class CharacterUpdatedEventData(BaseModel):
+    character: CharacterRead
+
+
+class ShotUpdatedEventData(BaseModel):
+    shot: ShotRead
 
 
 class WsEvent(BaseModel):
