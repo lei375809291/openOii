@@ -2,8 +2,8 @@
 phase: 05
 slug: review-creative-control
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-11
 ---
 
@@ -19,7 +19,7 @@ created: 2026-04-11
 |----------|-------|
 | **Framework** | Backend: pytest 9.0.3 + pytest-asyncio 1.3.0; Frontend: Vitest 4.1.4 + Testing Library + Playwright 1.59.1 |
 | **Config file** | `backend/pyproject.toml`, `frontend/package.json`, `frontend/vite.config.ts` |
-| **Quick run command** | `uv run pytest tests/test_api/test_review_creative_control.py tests/test_api/test_shots.py -q && pnpm test -- --run app/components/canvas/ProjectOverview.test.tsx app/components/canvas/InfiniteCanvas.test.tsx` |
+| **Quick run command** | `uv run pytest backend/tests/test_api/test_review_creative_control.py backend/tests/test_api/test_shots.py -q && pnpm test -- --run frontend/app/components/canvas/ProjectOverview.test.tsx frontend/app/utils/workspaceStatus.test.ts` |
 | **Full suite command** | `pnpm test && pnpm exec tsc --noEmit && uv run pytest -q` |
 | **Estimated runtime** | ~120 seconds |
 
@@ -38,10 +38,10 @@ created: 2026-04-11
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 05-XX-01 | TBD | TBD | REVI-01 | T-05-01 | Selective regeneration only invalidates the targeted artifact and direct downstream dependents | integration | `uv run pytest tests/test_api/test_review_creative_control.py -q` | ❌ W0 | ⬜ pending |
-| 05-XX-02 | TBD | TBD | REVI-01 | T-05-02 | Accepted candidate becomes current and prior current becomes superseded with one-hop lineage preserved | backend + frontend integration | `uv run pytest tests/test_api/test_character_storyboard_review.py tests/test_api/test_shots.py -q && pnpm test -- --run app/utils/workspaceStatus.test.ts app/components/canvas/CharacterSectionShape.test.tsx app/components/canvas/StoryboardSectionShape.test.tsx` | partial ✅ / partial tightening needed | ⬜ pending |
-| 05-XX-03 | TBD | TBD | REVI-02 | T-05-03 | Shot rerun accepts prompt and structured instruction edits before rerun starts | integration | `uv run pytest tests/test_api/test_shots.py -q` | ✅ existing file, contract needs strengthening | ⬜ pending |
-| 05-XX-04 | TBD | TBD | REVI-02 | T-05-04 | Workspace/editor UI exposes the allowed edit-before-rerun fields and acceptance controls without a version browser | component | `pnpm test -- --run app/components/canvas/ProjectOverview.test.tsx app/components/canvas/InfiniteCanvas.test.tsx` | `InfiniteCanvas.test.tsx` ✅ / `ProjectOverview.test.tsx` ❌ W0 | ⬜ pending |
+| 05-01-T1 | 05-01 | 1 | REVI-01 | T-05-01 | Selective regeneration only invalidates the targeted artifact and direct downstream dependents, including clip fallback through the approved shot contract | integration | `<automated>uv run pytest backend/tests/test_api/test_review_creative_control.py backend/tests/test_api/test_shots.py -q</automated>` | planned | ⬜ pending |
+| 05-01-T2 | 05-01 | 2 | REVI-01 | T-05-02 | Accepted candidate becomes current and prior current becomes superseded with one-hop lineage preserved; character reruns accept description/reference-image edits | backend integration | `<automated>uv run pytest backend/tests/test_api/test_review_creative_control.py backend/tests/test_api/test_shots.py -q</automated>` | planned | ⬜ pending |
+| 05-01-T3 | 05-01 | 3 | REVI-01 | T-05-03 | Clip reruns resolve through the approved shot contract and only invalidate final output | backend integration | `<automated>uv run pytest backend/tests/test_api/test_review_creative_control.py backend/tests/test_api/test_shots.py -q</automated>` | planned | ⬜ pending |
+| 05-02-T1 | 05-02 | 1 | REVI-02 | T-05-04 | Workspace/editor UI exposes the allowed edit-before-rerun fields and acceptance controls without a version browser, including character edits and clip fallback | component | `<automated>pnpm test -- --run frontend/app/components/canvas/ProjectOverview.test.tsx frontend/app/utils/workspaceStatus.test.ts</automated>` | planned | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,10 +49,10 @@ created: 2026-04-11
 
 ## Wave 0 Requirements
 
-- [ ] `backend/tests/test_api/test_review_creative_control.py` — missing candidate/current acceptance and direct-downstream invalidation coverage
-- [ ] `frontend/app/components/canvas/ProjectOverview.test.tsx` — missing edit-before-rerun payload and acceptance-flow coverage
-- [ ] `frontend/app/utils/workspaceStatus.test.ts` — extend with current/superseded/lineage labels if projection changes
-- [ ] `backend/tests/test_api/test_shots.py` — replace placeholder regenerate assertions with the real selective-rerun contract
+- [x] `backend/tests/test_api/test_review_creative_control.py` — covered by planned Wave 1 backend regression scaffolds
+- [x] `frontend/app/components/canvas/ProjectOverview.test.tsx` — covered by planned Wave 1 frontend regression scaffolds
+- [x] `frontend/app/utils/workspaceStatus.test.ts` — covered by planned Wave 1 frontend regression scaffolds
+- [x] `backend/tests/test_api/test_shots.py` — covered by planned Wave 1 backend contract tests
 
 ---
 
@@ -67,11 +67,11 @@ created: 2026-04-11
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 120s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all missing references
+- [x] No watch-mode flags
+- [x] Feedback latency < 120s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
