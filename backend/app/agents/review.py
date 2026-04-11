@@ -21,6 +21,9 @@ ALLOWED_START_AGENTS = {
 }
 
 
+_RETRY_MERGE_KEYWORDS = ("retry merge", "重新拼接最终视频", "重新合并最终视频", "final-output")
+
+
 def _fallback_start_agent(feedback_type: str | None) -> str:
     if feedback_type == "character":
         return "character_artist"
@@ -30,6 +33,11 @@ def _fallback_start_agent(feedback_type: str | None) -> str:
         return "video_merger"
     # scene|style|story|general|unknown
     return "scriptwriter"
+
+
+def _is_retry_merge_feedback(feedback: str) -> bool:
+    normalized = feedback.strip().lower()
+    return any(keyword in normalized for keyword in _RETRY_MERGE_KEYWORDS)
 
 
 class ReviewAgent(BaseAgent):
@@ -59,6 +67,8 @@ class ReviewAgent(BaseAgent):
         if not feedback:
             await self.send_message(ctx, "未找到用户反馈内容，将默认从编剧开始重新生成。")
             return {"start_agent": "scriptwriter", "reason": "未提供具体反馈"}
+
+        retry_merge_requested = _is_retry_merge_feedback(feedback)
 
         state = await self._get_project_state(ctx)
         user_prompt = json.dumps({"feedback": feedback, "state": state}, ensure_ascii=False)
@@ -102,6 +112,11 @@ class ReviewAgent(BaseAgent):
             start_agent = _fallback_start_agent(feedback_type)
             if not reason:
                 reason = "未识别到有效的路由结果，采用默认路由策略"
+
+        if retry_merge_requested:
+            start_agent = "video_merger"
+            mode = "incremental"
+            reason = reason or "检测到最终拼接重试请求，直接路由到视频拼接"
 
         mode_desc = "增量更新" if mode == "incremental" else "重新生成"
         msg_summary = summary or "已收到您的反馈"

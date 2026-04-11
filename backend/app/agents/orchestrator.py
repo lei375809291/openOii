@@ -271,17 +271,6 @@ class GenerationOrchestrator:
             shot.video_url = None
             self.session.add(shot)
 
-    async def _clear_project_video(self, project_id: int) -> None:
-        """清空项目最终视频（先删除文件再清空 URL）"""
-        project = await self.session.execute(select(Project).where(Project.id == project_id))
-        proj = project.scalars().first()
-        if proj:
-            # 先删除文件
-            delete_file(proj.video_url)
-            # 再清空 URL
-            proj.video_url = None
-            self.session.add(proj)
-
     async def _cleanup_for_rerun(
         self, project_id: int, start_agent: str, mode: str = "full"
     ) -> None:
@@ -301,22 +290,18 @@ class GenerationOrchestrator:
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
                 # 不发送 data_cleared 事件，因为数据结构保留
             elif start_agent == "character_artist":
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
             elif start_agent == "storyboard_artist":
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
             elif start_agent == "video_generator":
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
             elif start_agent == "video_merger":
-                await self._clear_project_video(project_id)
+                pass
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
         else:
@@ -325,26 +310,22 @@ class GenerationOrchestrator:
                 # 从头开始：删除角色、镜头
                 await self._delete_project_shots(project_id)
                 await self._delete_project_characters(project_id)
-                await self._clear_project_video(project_id)
                 cleared_types = ["characters", "shots"]
             elif start_agent == "character_artist":
                 # 重新生成角色图片，并清空下游产物
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
             elif start_agent == "storyboard_artist":
                 # 重新生成分镜首帧，并清空下游产物
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
             elif start_agent == "video_generator":
                 # 重新生成分镜视频，并清空下游产物
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
             elif start_agent == "video_merger":
-                # 重新拼接视频：清空 Project.video_url
-                await self._clear_project_video(project_id)
+                # 重新拼接视频：保留现有最终视频，直到新的拼接成功覆盖它
+                pass
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
 

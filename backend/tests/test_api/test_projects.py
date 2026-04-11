@@ -96,9 +96,9 @@ async def test_get_final_video_download(async_client, test_session, monkeypatch,
     final_file = tmp_path / "merged-final.mp4"
     final_file.write_bytes(b"fake video bytes")
 
-    from app.services import file_cleaner
+    from app.api.v1.routes import projects as projects_routes
 
-    monkeypatch.setattr(file_cleaner, "get_local_path", lambda url: final_file)
+    monkeypatch.setattr(projects_routes, "get_local_path", lambda url: final_file)
     project.video_url = "http://cdn.example.com/static/videos/merged-final.mp4"
     test_session.add(project)
     await test_session.commit()

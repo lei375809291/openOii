@@ -25,6 +25,7 @@ from app.schemas.project import (
 )
 from app.services.creative_control import (
     apply_character_rerun_edits,
+    collect_project_blocking_clips,
     invalidate_character_downstream_outputs,
 )
 from app.services.file_cleaner import delete_file
@@ -258,6 +259,7 @@ async def regenerate_character(
     await session.commit()
     await session.refresh(character)
     await session.refresh(project)
+    blocking_clips = await collect_project_blocking_clips(session, project)
 
     await ws.send_event(
         project_id,
@@ -265,7 +267,17 @@ async def regenerate_character(
     )
     await ws.send_event(
         project_id,
-        {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
+        {
+            "type": "project_updated",
+            "data": {
+                "project": {
+                    "id": project_id,
+                    "video_url": project.video_url,
+                    "status": project.status,
+                    "blocking_clips": blocking_clips,
+                }
+            },
+        },
     )
 
     agent_plan: list[Any] = [SingleCharacterArtistAgent(character_id)]

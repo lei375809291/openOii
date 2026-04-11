@@ -91,7 +91,8 @@ async def test_character_regenerate_accepts_edit_payload_and_promotes_on_approva
     await test_session.refresh(unrelated_shot)
     await test_session.refresh(project)
     assert related_shot.video_url is None
-    assert project.video_url is None
+    assert project.video_url == "http://test.com/final-project.mp4"
+    assert project.status == "superseded"
     assert unrelated_shot.video_url == "http://test.com/unrelated-shot.mp4"
 
     second_approve = await async_client.post(f"/api/v1/characters/{character.id}/approve")

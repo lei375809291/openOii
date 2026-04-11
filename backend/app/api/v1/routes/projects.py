@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, UTC
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +20,7 @@ from app.schemas.project import (
     ProjectUpdate,
     ShotRead,
 )
-from app.services.file_cleaner import delete_file, delete_files
+from app.services.file_cleaner import delete_file, delete_files, get_local_path
 
 router = APIRouter()
 
@@ -28,24 +29,18 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-async def _delete_project_files(
-    session: AsyncSession, project: Project, project_id: int
-) -> None:
+async def _delete_project_files(session: AsyncSession, project: Project, project_id: int) -> None:
     """删除项目关联的所有文件（视频、角色图片、分镜图片/视频）"""
     # 删除项目最终视频
     delete_file(project.video_url)
 
     # 删除角色图片
-    chars_res = await session.execute(
-        select(Character).where(Character.project_id == project_id)
-    )
+    chars_res = await session.execute(select(Character).where(Character.project_id == project_id))
     chars = chars_res.scalars().all()
     delete_files([c.image_url for c in chars])
 
     # 删除分镜图片和视频
-    shots_res = await session.execute(
-        select(Shot).where(Shot.project_id == project_id)
-    )
+    shots_res = await session.execute(select(Shot).where(Shot.project_id == project_id))
     shots = shots_res.scalars().all()
     delete_files([s.image_url for s in shots])
     delete_files([s.video_url for s in shots])
@@ -100,9 +95,24 @@ async def get_project(project_id: int, session: AsyncSession = SessionDep):
     return ProjectRead.model_validate(project)
 
 
+@router.get("/{project_id}/final-video")
+async def download_final_video(project_id: int, session: AsyncSession = SessionDep):
+    project = await session.get(Project, project_id)
+    if not project or not project.video_url:
+        raise HTTPException(status_code=404, detail="Final video not found")
+
+    path = get_local_path(project.video_url)
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail="Final video not found")
+
+    return FileResponse(path, filename=path.name)
+
+
 @router.put("/{project_id}", response_model=ProjectRead)
 @router.patch("/{project_id}", response_model=ProjectRead)
-async def update_project(project_id: int, payload: ProjectUpdate, session: AsyncSession = SessionDep):
+async def update_project(
+    project_id: int, payload: ProjectUpdate, session: AsyncSession = SessionDep
+):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -160,9 +170,7 @@ async def list_shots(project_id: int, session: AsyncSession = SessionDep):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     res = await session.execute(
-        select(Shot)
-        .where(Shot.project_id == project_id)
-        .order_by(Shot.order.asc())
+        select(Shot).where(Shot.project_id == project_id).order_by(Shot.order.asc())
     )
     return [ShotRead.model_validate(s) for s in res.scalars().all()]
 
@@ -174,8 +182,6 @@ async def list_messages(project_id: int, session: AsyncSession = SessionDep):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     res = await session.execute(
-        select(Message)
-        .where(Message.project_id == project_id)
-        .order_by(Message.created_at.asc())
+        select(Message).where(Message.project_id == project_id).order_by(Message.created_at.asc())
     )
     return [MessageRead.model_validate(m) for m in res.scalars().all()]

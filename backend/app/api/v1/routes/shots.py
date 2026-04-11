@@ -20,6 +20,7 @@ from app.models.agent_run import AgentRun
 from app.models.project import Character, Project, Shot, ShotCharacterBinding
 from app.schemas.project import AgentRunRead, RegenerateRequest, ShotRead, ShotUpdate
 from app.services.creative_control import (
+    collect_project_blocking_clips,
     invalidate_shot_clip_output,
     invalidate_shot_storyboard_outputs,
 )
@@ -337,6 +338,7 @@ async def regenerate_shot(
         await session.commit()
         await session.refresh(shot)
         await session.refresh(project)
+        blocking_clips = await collect_project_blocking_clips(session, project)
 
         await ws.send_event(
             project_id,
@@ -344,7 +346,17 @@ async def regenerate_shot(
         )
         await ws.send_event(
             project_id,
-            {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
+            {
+                "type": "project_updated",
+                "data": {
+                    "project": {
+                        "id": project_id,
+                        "video_url": project.video_url,
+                        "status": project.status,
+                        "blocking_clips": blocking_clips,
+                    }
+                },
+            },
         )
 
         agent_plan = [StoryboardArtistAgent()]
@@ -352,10 +364,21 @@ async def regenerate_shot(
         await invalidate_shot_clip_output(session, project)
         await session.commit()
         await session.refresh(project)
+        blocking_clips = await collect_project_blocking_clips(session, project)
 
         await ws.send_event(
             project_id,
-            {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
+            {
+                "type": "project_updated",
+                "data": {
+                    "project": {
+                        "id": project_id,
+                        "video_url": project.video_url,
+                        "status": project.status,
+                        "blocking_clips": blocking_clips,
+                    }
+                },
+            },
         )
 
         agent_plan = [VideoMergerAgent()]
