@@ -10,6 +10,7 @@ import { ProjectOverview } from "./ProjectOverview";
 vi.mock("~/services/api", () => ({
 	projectsApi: {
 		get: vi.fn(),
+		feedback: vi.fn(),
 	},
 	shotsApi: {
 		update: vi.fn(),
@@ -176,7 +177,7 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 		});
 	});
 
-	it("opens character rerun editing from the approved reference image before rerunning", async () => {
+  it("opens character rerun editing from the approved reference image before rerunning", async () => {
 		const user = userEvent.setup();
 		useEditorStore.getState().setCharacters([
 			{
@@ -230,6 +231,54 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 				image_url: "/static/characters/11-approved.png",
 			});
 			expect(charactersApi.regenerate).toHaveBeenCalledWith(11);
-		});
-	});
+      });
+  });
+
+  it("keeps the final merged video visible with preview, download, and retry controls", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      blob: async () => new Blob(["final-video"]),
+    } as never);
+
+    useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
+    useEditorStore.getState().setCurrentRunId(42);
+    useEditorStore.getState().setRecoverySummary({
+      project_id: 7,
+      run_id: 42,
+      thread_id: "thread_42",
+      current_stage: "deploy",
+      next_stage: null,
+      preserved_stages: [],
+      stage_history: [],
+      resumable: true,
+    });
+
+    const feedbackSpy = vi.mocked(projectsApi.feedback).mockResolvedValue({
+      status: "accepted",
+    } as never);
+
+    renderOverview();
+
+    await screen.findByText("来源：当前成片");
+    expect(screen.getByRole("button", { name: "预览最终视频" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下载最终视频" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试合成" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "预览最终视频" }));
+    expect(screen.getByRole("dialog", { hidden: true })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "下载最终视频" }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/projects/7/final-video");
+
+    await user.click(screen.getByRole("button", { name: "重试合成" }));
+    await waitFor(() => {
+      expect(feedbackSpy).toHaveBeenCalledWith(
+        7,
+        expect.stringContaining("thread_42"),
+        42
+      );
+    });
+
+    fetchMock.mockRestore();
+  });
 });

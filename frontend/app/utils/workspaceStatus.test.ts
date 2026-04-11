@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorkspaceStatus,
+  getWorkspaceFinalOutputMeta,
   getWorkspaceSectionStatusBadgeClass,
   getWorkspaceSectionStatusLabel,
   toCreatorStageLabel,
@@ -186,6 +187,93 @@ describe("buildWorkspaceStatus", () => {
     expect(getWorkspaceSectionStatusLabel("superseded")).toBe("已失效");
     expect(getWorkspaceSectionStatusBadgeClass("complete")).toBe("badge-success");
     expect(getWorkspaceSectionStatusBadgeClass("superseded")).toBe("badge-error");
+  });
+
+  it("keeps the final output marked as current or stale without losing provenance copy", () => {
+    const currentMeta = getWorkspaceFinalOutputMeta({
+      ...baseInput,
+      project: {
+        ...baseInput.project,
+        video_url: "/static/videos/final-current.mp4",
+      },
+      shots: [
+        {
+          id: 11,
+          project_id: 1,
+          order: 1,
+          description: "镜头 1",
+          prompt: null,
+          image_prompt: null,
+          image_url: null,
+          video_url: "/static/shots/11.mp4",
+          duration: 6,
+          camera: null,
+          motion_note: null,
+          character_ids: [],
+          approval_state: "approved",
+          approval_version: 1,
+          approved_at: null,
+          approved_description: null,
+          approved_prompt: null,
+          approved_image_prompt: null,
+          approved_duration: null,
+          approved_camera: null,
+          approved_motion_note: null,
+          approved_character_ids: [],
+        },
+      ],
+    });
+
+    const staleMeta = getWorkspaceFinalOutputMeta({
+      ...baseInput,
+      project: {
+        ...baseInput.project,
+        status: "superseded",
+        video_url: "/static/videos/final-stale.mp4",
+      },
+      shots: [
+        {
+          id: 11,
+          project_id: 1,
+          order: 1,
+          description: "镜头 1",
+          prompt: null,
+          image_prompt: null,
+          image_url: null,
+          video_url: "/static/shots/11.mp4",
+          duration: 6,
+          camera: null,
+          motion_note: null,
+          character_ids: [],
+          approval_state: "approved",
+          approval_version: 1,
+          approved_at: null,
+          approved_description: null,
+          approved_prompt: null,
+          approved_image_prompt: null,
+          approved_duration: null,
+          approved_camera: null,
+          approved_motion_note: null,
+          approved_character_ids: [],
+        },
+      ],
+    });
+
+    expect(currentMeta.sectionState).toBe("complete");
+    expect(currentMeta.statusLabel).toBe("已完成");
+    expect(currentMeta.provenanceText).toContain("当前成片");
+
+    expect(staleMeta.sectionState).toBe("superseded");
+    expect(staleMeta.statusLabel).toBe("已失效");
+    expect(staleMeta.provenanceText).toContain("已被新版本替代");
+  });
+
+  it("surfaces blocking copy when the final output is still waiting on clips", () => {
+    const meta = getWorkspaceFinalOutputMeta(baseInput);
+
+    expect(meta.sectionState).toBe("blocked");
+    expect(meta.blockingText).toContain("分镜");
+    expect(meta.downloadUrl).toBe("/api/v1/projects/1/final-video");
   });
 });
 
