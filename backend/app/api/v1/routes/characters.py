@@ -23,6 +23,10 @@ from app.schemas.project import (
     CharacterUpdate,
     RegenerateRequest,
 )
+from app.services.creative_control import (
+    apply_character_rerun_edits,
+    invalidate_character_downstream_outputs,
+)
 from app.services.file_cleaner import delete_file
 from app.services.image import ImageService
 from app.services.llm import LLMService
@@ -221,6 +225,9 @@ async def regenerate_character(
     character = await session.get(Character, character_id)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+    project = await session.get(Project, character.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
     project_id = character.project_id
 
     # 检查是否有针对该角色的运行中任务（细粒度锁）
@@ -241,15 +248,24 @@ async def regenerate_character(
     if res.scalars().first() is not None:
         raise HTTPException(status_code=409, detail="This character is already being regenerated")
 
-    delete_file(character.image_url)
-    character.image_url = None
-    session.add(character)
+    await apply_character_rerun_edits(
+        session,
+        character,
+        description=payload.description,
+        image_url=payload.image_url,
+    )
+    await invalidate_character_downstream_outputs(session, project, character_id)
     await session.commit()
     await session.refresh(character)
+    await session.refresh(project)
 
     await ws.send_event(
         project_id,
         {"type": "character_updated", "data": {"character": _character_payload(character)}},
+    )
+    await ws.send_event(
+        project_id,
+        {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
     )
 
     agent_plan: list[Any] = [SingleCharacterArtistAgent(character_id)]

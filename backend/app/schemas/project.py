@@ -101,6 +101,8 @@ class CharacterUpdate(BaseModel):
 
 class RegenerateRequest(BaseModel):
     type: Literal["image", "video"]
+    description: str | None = None
+    image_url: str | None = None
 
 
 class GenerateRequest(BaseModel):

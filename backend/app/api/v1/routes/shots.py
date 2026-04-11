@@ -12,7 +12,6 @@ from sqlalchemy.orm import InstrumentedAttribute
 from app.agents.base import AgentContext, TargetIds
 from app.agents.orchestrator import AGENT_STAGE_MAP
 from app.agents.storyboard_artist import StoryboardArtistAgent
-from app.agents.video_generator import VideoGeneratorAgent
 from app.agents.video_merger import VideoMergerAgent
 from app.api.deps import SessionDep, SettingsDep, WsManagerDep
 from app.config import Settings
@@ -20,6 +19,10 @@ from app.db.session import async_session_maker
 from app.models.agent_run import AgentRun
 from app.models.project import Character, Project, Shot, ShotCharacterBinding
 from app.schemas.project import AgentRunRead, RegenerateRequest, ShotRead, ShotUpdate
+from app.services.creative_control import (
+    invalidate_shot_clip_output,
+    invalidate_shot_storyboard_outputs,
+)
 from app.services.file_cleaner import delete_file
 from app.services.image import ImageService
 from app.services.llm import LLMService
@@ -273,6 +276,7 @@ async def approve_shot(
         raise HTTPException(status_code=404, detail="Shot not found")
 
     _validate_shot_approval_ready(shot)
+    await _validate_shot_character_ids(session, shot.project_id, list(shot.character_ids))
     shot.freeze_approval()
     session.add(shot)
     await session.commit()
@@ -329,30 +333,10 @@ async def regenerate_shot(
     agent_plan: list[Any]
     target_ids = TargetIds(shot_ids=[shot_id])
     if payload.type == "image":
-        delete_file(shot.image_url)
-        shot.image_url = None
-        session.add(shot)
+        await invalidate_shot_storyboard_outputs(session, project, shot)
         await session.commit()
         await session.refresh(shot)
-
-        await ws.send_event(
-            project_id,
-            {"type": "shot_updated", "data": {"shot": _shot_payload(shot)}},
-        )
-
-        agent_plan = [StoryboardArtistAgent()]
-    else:
-        delete_file(shot.video_url)
-        shot.video_url = None
-        shot.duration = None
-
-        delete_file(project.video_url)
-        project.video_url = None
-
-        session.add(shot)
-        session.add(project)
-        await session.commit()
-        await session.refresh(shot)
+        await session.refresh(project)
 
         await ws.send_event(
             project_id,
@@ -363,7 +347,18 @@ async def regenerate_shot(
             {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
         )
 
-        agent_plan = [VideoGeneratorAgent(), VideoMergerAgent()]
+        agent_plan = [StoryboardArtistAgent()]
+    else:
+        await invalidate_shot_clip_output(session, project)
+        await session.commit()
+        await session.refresh(project)
+
+        await ws.send_event(
+            project_id,
+            {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
+        )
+
+        agent_plan = [VideoMergerAgent()]
 
     run = AgentRun(
         project_id=project_id,
