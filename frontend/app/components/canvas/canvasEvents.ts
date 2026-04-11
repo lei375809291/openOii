@@ -10,9 +10,11 @@ export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
   "edit-character": Character;
+  "approve-character": { id: number };
   "regenerate-character": number;
   "delete-character": Character;
   "edit-shot": Shot;
+  "approve-shot": { id: number };
   "regenerate-shot": { id: number; type: "image" | "video" };
   "delete-shot": Shot;
 }

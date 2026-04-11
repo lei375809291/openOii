@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useEditorStore } from '~/stores/editorStore';
 import { applyWsEvent } from '~/hooks/useWebSocket';
+import type { Character, Shot } from '~/types';
 
 describe('applyWsEvent review hydration', () => {
   beforeEach(() => {
@@ -9,7 +10,7 @@ describe('applyWsEvent review hydration', () => {
   });
 
   it('hydrates character approval state from websocket updates', () => {
-    const character = {
+    const character: Character = {
       id: 1,
       project_id: 9,
       name: 'Mika Prime',
@@ -32,7 +33,7 @@ describe('applyWsEvent review hydration', () => {
   });
 
   it('hydrates shot approval state from websocket updates', () => {
-    const shot = {
+    const shot: Shot = {
       id: 11,
       project_id: 9,
       order: 1,

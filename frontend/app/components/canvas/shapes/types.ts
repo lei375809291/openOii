@@ -1,5 +1,31 @@
 import type { TLBaseShape } from "tldraw";
-import type { Character, Shot } from "~/types";
+import type { Character, ReviewState, Shot } from "~/types";
+
+export interface CharacterReviewSnapshot {
+  approval_state: ReviewState;
+  approval_version: number;
+  approved_at: string | null;
+  approved_name: string | null;
+  approved_description: string | null;
+  approved_image_url: string | null;
+}
+
+export type ReviewedCharacter = Character & CharacterReviewSnapshot;
+
+export interface ShotReviewSnapshot {
+  approval_state: ReviewState;
+  approval_version: number;
+  approved_at: string | null;
+  approved_description: string | null;
+  approved_prompt: string | null;
+  approved_image_prompt: string | null;
+  approved_duration: number | null;
+  approved_camera: string | null;
+  approved_motion_note: string | null;
+  approved_character_ids: number[];
+}
+
+export type ReviewedShot = Shot & ShotReviewSnapshot;
 
 // Shape 类型常量
 export const SHAPE_TYPES = {
@@ -17,8 +43,8 @@ export type ScriptSectionShape = TLBaseShape<
     w: number;
     h: number;
     summary: string;
-    characters: Character[];
-    shots: Shot[];
+    characters: ReviewedCharacter[];
+    shots: ReviewedShot[];
   }
 >;
 
@@ -28,7 +54,7 @@ export type CharacterSectionShape = TLBaseShape<
   {
     w: number;
     h: number;
-    characters: Character[];
+    characters: ReviewedCharacter[];
   }
 >;
 
@@ -38,7 +64,7 @@ export type StoryboardSectionShape = TLBaseShape<
   {
     w: number;
     h: number;
-    shots: Shot[];
+    shots: ReviewedShot[];
   }
 >;
 

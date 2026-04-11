@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useEditorStore } from '~/stores/editorStore';
+import type { Character, Shot } from '~/types';
 
 describe('useEditorStore review contract', () => {
   beforeEach(() => {
@@ -8,7 +9,7 @@ describe('useEditorStore review contract', () => {
   });
 
   it('stores server-authored character approval state', () => {
-    const draftCharacter = {
+    const draftCharacter: Character = {
       id: 1,
       project_id: 9,
       name: 'Mika',
@@ -22,7 +23,7 @@ describe('useEditorStore review contract', () => {
       approved_image_url: null,
     };
 
-    const approvedCharacter = {
+    const approvedCharacter: Character = {
       ...draftCharacter,
       name: 'Mika Prime',
       image_url: '/static/characters/mika-approved.png',
@@ -41,7 +42,7 @@ describe('useEditorStore review contract', () => {
   });
 
   it('stores server-authored shot approval state', () => {
-    const draftShot = {
+    const draftShot: Shot = {
       id: 11,
       project_id: 9,
       order: 1,
@@ -66,7 +67,7 @@ describe('useEditorStore review contract', () => {
       approved_character_ids: [],
     };
 
-    const supersededShot = {
+    const supersededShot: Shot = {
       ...draftShot,
       description: 'Opening shot, tightened',
       prompt: 'A tighter opening at dawn',
