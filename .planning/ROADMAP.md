@@ -26,9 +26,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Nothing (first phase)
 **Requirements**: PROJ-01, PROJ-02
 **Success Criteria** (what must be TRUE):
-  1. Creator can create a project by entering title, story idea, and style direction, and the project is persisted in PostgreSQL
+  1. Creator can create a project by entering title, story idea, and style direction via the existing project form, and the project is persisted in PostgreSQL
   2. Creator can configure text, image, and video providers for a project via a configuration surface
-  3. LangGraph StateGraph skeleton exists with defined state schema, reducers, and project_id/run_id/thread_id mapping
+  3. LangGraph StateGraph skeleton exists with defined state schema, reducers, and project_id/run_id/thread_id mapping, with Run.thread_id as the persisted ownership boundary
   4. Domain models for Project, Run, Stage, and Artifact exist with parent-child lineage tracking
   5. Alembic migrations are configured and can create/update the schema from scratch
 **Plans**: 3
@@ -48,7 +48,12 @@ Plans:
   3. LangGraph persistent checkpointer is configured with PostgreSQL and checkpoints are tied to real thread_id values
   4. Graph nodes use idempotent side effects — re-running a completed stage produces the same result without duplication
   5. interrupt() / resume flows exist at review gates (e.g., after character approval, after storyboard review)
-**Plans**: TBD
+**Plans**: 4
+Plans:
+- [x] 02-01-PLAN.md — Lock the durable-execution regression contract before production changes
+- [x] 02-02-PLAN.md — Move the generation engine onto a durable LangGraph pipeline
+- [x] 02-03-PLAN.md — Expose resumable-run recovery and active-run control on the backend
+- [x] 02-04-PLAN.md — Surface resumable-run recovery and active-run control in the creator UI
 
 ### Phase 3: Character & Storyboard Workflow
 **Goal**: Character identity is consistently preserved across storyboard and video outputs, and creators can review storyboards per shot
