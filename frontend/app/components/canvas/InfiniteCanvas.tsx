@@ -91,6 +91,13 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     mutationFn: (id: number) => charactersApi.regenerate(id),
   });
 
+  const approveCharacterMutation = useMutation({
+    mutationFn: (id: number) => charactersApi.approve(id),
+    onSuccess: (approvedCharacter) => {
+      updateCharacter(approvedCharacter);
+    },
+  });
+
   const deleteCharacterMutation = useMutation({
     mutationFn: (id: number) => charactersApi.delete(id),
     onSuccess: (_, deletedId) => {
@@ -111,6 +118,13 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
   const regenerateShotMutation = useMutation({
     mutationFn: ({ id, type }: { id: number; type: "image" | "video" }) =>
       shotsApi.regenerate(id, type),
+  });
+
+  const approveShotMutation = useMutation({
+    mutationFn: (id: number) => shotsApi.approve(id),
+    onSuccess: (approvedShot) => {
+      updateShot(approvedShot);
+    },
   });
 
   const deleteShotMutation = useMutation({
@@ -140,11 +154,17 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
       canvasEvents.on("preview-image", setPreviewImage),
       canvasEvents.on("preview-video", setPreviewVideo),
       canvasEvents.on("edit-character", setEditingCharacter),
+      canvasEvents.on("approve-character", (data) => {
+        approveCharacterMutation.mutate(data.id);
+      }),
       canvasEvents.on("regenerate-character", (id) => {
         regenerateCharacterMutation.mutate(id);
       }),
       canvasEvents.on("delete-character", setDeletingCharacter),
       canvasEvents.on("edit-shot", setEditingShot),
+      canvasEvents.on("approve-shot", (data) => {
+        approveShotMutation.mutate(data.id);
+      }),
       canvasEvents.on("regenerate-shot", (data) => {
         regenerateShotMutation.mutate(data);
       }),
@@ -152,9 +172,11 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     ];
 
     return () => {
-      unsubscribers.forEach((unsub) => unsub());
+      unsubscribers.forEach((unsub) => {
+        unsub();
+      });
     };
-  }, [regenerateCharacterMutation, regenerateShotMutation]);
+  }, [approveCharacterMutation, approveShotMutation, regenerateCharacterMutation, regenerateShotMutation]);
 
   // 初始化画布
   const handleMount = useCallback(
@@ -215,7 +237,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
       <div className="h-full flex items-center justify-center">
         <div className="text-center text-base-content/70 max-w-sm">
           <div className="w-20 h-20 rounded-full bg-base-300/70 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
