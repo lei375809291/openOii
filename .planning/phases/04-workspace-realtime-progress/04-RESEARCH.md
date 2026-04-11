@@ -259,17 +259,15 @@ const mutation = useMutation({
 |---|-------|---------|---------------|
 | — | None | — | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How should the empty workspace be seeded when a project exists but no generation run has produced artifacts yet?**
-   - What we know: canonical slots may appear before content exists, and the canvas must still show the pipeline shape [VERIFIED: CONTEXT.md].
-   - What's unclear: whether the empty state should be derived only from project metadata, from the current run summary, or from a dedicated projection DTO [VERIFIED: repo].
-   - Recommendation: plan a backend projection helper that always emits the canonical slots with empty/loading status, even when artifacts are absent [VERIFIED: CONTEXT.md].
+1. **RESOLVED — How should the empty workspace be seeded when a project exists but no generation run has produced artifacts yet?**
+   - Resolution: the workspace should be seeded from a backend-authored projection that always emits the canonical section slots, even when no artifacts exist yet.
+   - Why: Phase 4 explicitly locked canonical placeholders and a refresh-safe backend projection, so the empty state is part of the product contract rather than an absence of data [VERIFIED: CONTEXT.md].
 
-2. **How granular should blocked status be on downstream cards?**
-   - What we know: blocked / not started should be visible when upstream approval pauses stop the run [VERIFIED: CONTEXT.md].
-   - What's unclear: whether blocked should be inferred from stage history alone or also from artifact-level readiness flags [VERIFIED: repo].
-   - Recommendation: derive blocked from the recovery/stage summary first, then let artifact presence refine the badge text [VERIFIED: repo].
+2. **RESOLVED — How granular should blocked status be on downstream cards?**
+   - Resolution: blocked status should be derived from the run/stage/review summary first, then reflected on the downstream artifact slots as blocked / not started until the gate clears.
+   - Why: Phase 4 explicitly locked a run-level waiting-for-review surface plus downstream blocked cards, so blocked is a projection concern layered on top of stage-oriented run state [VERIFIED: CONTEXT.md].
 
 ## Environment Availability
 
