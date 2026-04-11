@@ -13,6 +13,7 @@ import {
   RocketLaunchIcon,
   StopIcon,
 } from "@heroicons/react/24/outline";
+import { toCreatorStageLabel } from "~/utils/workspaceStatus";
 
 interface ChatPanelProps {
   onSendFeedback: (content: string) => void;
@@ -64,6 +65,16 @@ const agentNameMap: Record<string, string> = {
   video_merger: "视频合成器",
 };
 
+const runStateLabelMap: Record<string, string> = {
+  draft: "待生成",
+  generating: "生成中",
+  blocked: "已阻塞",
+  failed: "生成失败",
+  complete: "已完成",
+  superseded: "已失效",
+  "waiting-for-review": "待审核",
+};
+
 
 export function ChatPanel({
   onSendFeedback,
@@ -112,6 +123,8 @@ export function ChatPanel({
   const hasMessages = messages.length > 0;
   const agentDisplayName = awaitingAgent ? agentNameMap[awaitingAgent] || awaitingAgent : "";
   const currentAgentDisplayName = currentAgent ? agentNameMap[currentAgent] || currentAgent : "";
+  const runState = awaitingConfirm ? "awaiting_confirm" : isGenerating ? "running" : currentRunId ? "blocked" : "completed";
+  const statusLabel = runStateLabelMap[toCreatorStageLabel({ runState })] ?? "待生成";
 
   return (
     <div className="flex flex-col h-full bg-base-200 rounded-box shadow-lg">
@@ -125,14 +138,21 @@ export function ChatPanel({
         </h3>
         <p className="text-xs sm:text-sm text-base-content/80">{info.description}</p>
 
-        {isGenerating && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between gap-2 text-sm text-base-content/70">
+        <div className="mt-3 flex flex-col gap-2 text-sm text-base-content/70">
+          {(awaitingConfirm || (!isGenerating && currentRunId)) && (
+            <span className="badge badge-warning badge-outline gap-1 w-fit">
+              <PauseIcon className="w-4 h-4" aria-hidden="true" />
+              {statusLabel}
+            </span>
+          )}
+
+          {isGenerating && (
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 {awaitingConfirm ? (
                   <span className="text-warning font-medium inline-flex items-center gap-1">
                     <PauseIcon className="w-5 h-5" aria-hidden="true" />
-                    等待您的确认
+                    {statusLabel}
                   </span>
                 ) : (
                   <>
@@ -154,8 +174,8 @@ export function ChatPanel({
                 </Button>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Content Area */}

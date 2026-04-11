@@ -191,6 +191,15 @@ function clearLoadingStates(
   }
 }
 
+function resolveEventStage(data: Record<string, unknown>): WorkflowStage | undefined {
+  const stage = data.stage ?? data.current_stage;
+  if (stage === "ideate" || stage === "visualize" || stage === "animate" || stage === "deploy") {
+    return stage;
+  }
+
+  return undefined;
+}
+
 export function applyWsEvent(
   event: WsEvent,
   store: ReturnType<typeof useEditorStore.getState>
@@ -215,8 +224,11 @@ export function applyWsEvent(
       store.setCurrentRunId(event.data.run_id as number);
       store.setAwaitingConfirm(false);
       store.setRecoveryGate(null);
-      if (event.data.stage) {
-        store.setCurrentStage(event.data.stage as WorkflowStage);
+      {
+        const stage = resolveEventStage(event.data);
+        if (stage) {
+          store.setCurrentStage(stage);
+        }
       }
       if (event.data.recovery_summary) {
         store.setRecoverySummary(event.data.recovery_summary as RecoverySummaryRead);
@@ -231,8 +243,11 @@ export function applyWsEvent(
           store.setRecoverySummary(progressEvent.recovery_summary);
         }
       }
-      if (event.data.stage) {
-        store.setCurrentStage(event.data.stage as WorkflowStage);
+      {
+        const stage = resolveEventStage(event.data);
+        if (stage) {
+          store.setCurrentStage(stage);
+        }
       }
       break;
     case "run_message":
@@ -280,8 +295,11 @@ export function applyWsEvent(
         store.setAwaitingConfirm(true, gateEvent.agent, gateEvent.run_id);
         store.setRecoveryGate(gateEvent);
         store.setRecoverySummary(gateEvent.recovery_summary);
-        if (gateEvent.stage) {
-          store.setCurrentStage(gateEvent.stage as WorkflowStage);
+        {
+          const stage = resolveEventStage(event.data);
+          if (stage) {
+            store.setCurrentStage(stage);
+          }
         }
       }
       store.addMessage({
@@ -300,6 +318,12 @@ export function applyWsEvent(
         store.setRecoveryGate(null);
         if (confirmedEvent.recovery_summary) {
           store.setRecoverySummary(confirmedEvent.recovery_summary);
+        }
+        {
+          const stage = resolveEventStage(event.data);
+          if (stage) {
+            store.setCurrentStage(stage);
+          }
         }
       }
       store.addMessage({
