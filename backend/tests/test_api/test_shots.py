@@ -59,8 +59,32 @@ async def test_regenerate_shot(async_client, test_session, monkeypatch):
     monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
 
     project = await create_project(test_session)
-    shot = await create_shot(test_session, project_id=project.id)
+    project.video_url = "http://test.com/project-final.mp4"
+    test_session.add(project)
+    await test_session.commit()
+    await test_session.refresh(project)
 
-    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate")
-    # The actual implementation might return different status codes
-    assert res.status_code in [200, 201, 202, 404]  # Adjust based on actual implementation
+    shot = await create_shot(
+        test_session,
+        project_id=project.id,
+        description="Approved shot",
+        prompt="Approved prompt",
+        image_url="http://test.com/approved-shot.png",
+        video_url="http://test.com/approved-shot.mp4",
+    )
+
+    shot.freeze_approval()
+    test_session.add(shot)
+    await test_session.commit()
+    await test_session.refresh(shot)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate", json={"type": "video"})
+    assert res.status_code == 201
+    body = res.json()
+    assert body["resource_type"] == "shot"
+    assert body["resource_id"] == shot.id
+
+    await test_session.refresh(shot)
+    await test_session.refresh(project)
+    assert shot.video_url == "http://test.com/approved-shot.mp4"
+    assert project.video_url is None
