@@ -345,15 +345,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		// 更新或创建 shapes
 		shapes.forEach((shape) => {
 			if (currentIds.has(shape.id)) {
-				editor.updateShape({
-					id: shape.id,
-					type: shape.type,
-					x: shape.x,
-					y: shape.y,
-					props: shape.props,
-				});
+				editor.updateShapes([shape]);
 			} else {
-				editor.createShape(shape);
+				editor.createShapes([shape]);
 			}
 		});
 
