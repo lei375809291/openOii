@@ -82,7 +82,12 @@ Plans:
   3. Creator can see the current stage, progress, and status changes of a generation run in real time via WebSocket updates
   4. Canvas state is a projection of backend metadata — refreshing the browser restores the same workspace view with accurate artifact states
   5. Creator can click on any artifact card to preview its content (image, text, or video)
-**Plans**: TBD
+**Plans**: 4
+Plans:
+- [ ] 04-01-PLAN.md — Establish the shared workspace status contract
+- [ ] 04-02-PLAN.md — Render canonical canvas slots and status badges
+- [ ] 04-03-PLAN.md — Sync realtime progress labels, hydration, and websocket drift
+- [ ] 04-04-PLAN.md — Wire the projected workspace shell and refresh-safe fallback
 **UI hint**: yes
 
 ### Phase 5: Review & Creative Control
@@ -120,6 +125,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation & Project Bootstrap | 0/0 | Not started | - |
 | 2. LangGraph Orchestration & Durable Execution | 0/0 | Not started | - |
 | 3. Character & Storyboard Workflow | 0/0 | Not started | - |
-| 4. Workspace & Realtime Progress | 0/0 | Not started | - |
+| 4. Workspace & Realtime Progress | 0/4 | Not started | - |
 | 5. Review & Creative Control | 0/0 | Not started | - |
 | 6. Final Assembly & Delivery | 0/0 | Not started | - |
