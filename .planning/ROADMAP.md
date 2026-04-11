@@ -84,10 +84,10 @@ Plans:
   5. Creator can click on any artifact card to preview its content (image, text, or video)
 **Plans**: 4
 Plans:
-- [ ] 04-01-PLAN.md — Establish the shared workspace status contract
-- [ ] 04-02-PLAN.md — Render canonical canvas slots and status badges
-- [ ] 04-03-PLAN.md — Sync realtime progress labels, hydration, and websocket drift
-- [ ] 04-04-PLAN.md — Wire the projected workspace shell and refresh-safe fallback
+- [x] 04-01-PLAN.md — Establish the shared workspace status contract
+- [x] 04-02-PLAN.md — Render canonical canvas slots and status badges
+- [x] 04-03-PLAN.md — Sync realtime progress labels, hydration, and websocket drift
+- [x] 04-04-PLAN.md — Wire the projected workspace shell and refresh-safe fallback
 **UI hint**: yes
 
 ### Phase 5: Review & Creative Control

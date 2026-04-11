@@ -16,10 +16,10 @@ An independent creator can go from a raw story idea to a coherent final video in
 
 - [x] The system can orchestrate multiple AI roles and tools to produce script, characters, storyboards, video clips, and a merged final video with resumable progress. — Validated in Phase 02 (LangGraph durable execution, stage-level recovery, same-thread resume control).
 - [x] The workspace can present script, character, storyboard, and video artifacts with clear status, previewability, and lineage across the generation flow. — Validated in Phase 03 for character/storyboard approval state, shot-bound cast, current approved/superseded visibility, and canvas review controls.
+- [x] A creator can start a project from a story idea and style direction, then see the full generation pipeline progress in one place. — Validated by the combined Phase 01 + Phase 04 flow: project bootstrap exists, workspace projection is backend-authored, and realtime progress is visible in one shell.
 
 ### Active
 
-- [ ] A creator can start a project from a story idea and style direction, then see the full generation pipeline progress in one place.
 - [ ] The creator can review outputs at each stage and selectively re-run targeted assets without restarting the entire pipeline.
 - [ ] The platform can swap among configured text, image, and video providers without breaking the creator workflow.
 
@@ -37,6 +37,7 @@ An independent creator can go from a raw story idea to a coherent final video in
 - The current planning workflow is intentionally research-heavy: research, plan-check, and verifier are all enabled.
 - Phase 02 established LangGraph-backed durable execution, same-thread resume, stage-oriented recovery summaries, and a creator-facing recovery control surface in the project page.
 - Phase 03 established shot-bound character references, per-character and per-shot approval contracts, storyboard-to-video gating, and canvas-level review controls for the current approved/superseded state.
+- Phase 04 established a backend-authored workspace projection with canonical placeholder slots, creator-friendly realtime progress labels, and a stable canvas shell that reconstructs from backend metadata on refresh.
 
 ## Constraints
 
@@ -56,6 +57,7 @@ An independent creator can go from a raw story idea to a coherent final video in
 | Prioritize end-to-end idea-to-final-video closure | This is the main product proof point for v1 | — Pending |
 | Fully migrate the agent framework to LangGraph in v1 | User explicitly requested LangGraph as the primary agent framework | Phase 02 established the durable LangGraph execution path; later phases continue building product flow on top |
 | Preserve identity through explicit shot-bound cast and structured shot intent | Prevents character/storyboard/video drift and keeps creator approvals meaningful | Locked in Phase 03 and implemented through approval-aware character/shot contracts |
+| Keep the workspace backend-authored and section-first in v1 | Avoids layout drift and keeps refresh/realtime projection deterministic | Locked in Phase 04 and implemented through canonical section projection + progress shell |
 | Keep planning interactive and research-driven | User prefers visible checkpoints and higher planning confidence | — Pending |
 | Track `.planning` documents in git | Planning history should remain durable and reviewable | — Pending |
 
@@ -77,4 +79,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after Phase 03 completion*
+*Last updated: 2026-04-11 after Phase 04 completion*
