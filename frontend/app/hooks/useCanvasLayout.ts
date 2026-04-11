@@ -6,6 +6,7 @@ import {
   CANONICAL_SECTIONS,
   getWorkspaceSectionPlaceholderText,
   getWorkspaceSectionStatusLabel,
+  type WorkspaceFinalOutputMeta,
   type WorkspaceSectionKey,
   type WorkspaceSectionState,
   type WorkspaceStatus,
@@ -26,22 +27,26 @@ const DEFAULT_CONFIG: LayoutConfig = {
 };
 
 interface UseCanvasLayoutProps {
+  projectId: number;
   summary: string | null;
   characters: Character[];
   shots: Shot[];
   videoUrl: string | null;
   videoTitle: string;
   workspaceStatus?: WorkspaceStatus;
+  finalOutputMeta?: WorkspaceFinalOutputMeta | null;
   config?: Partial<LayoutConfig>;
 }
 
 export function useCanvasLayout({
+  projectId,
   summary,
   characters,
   shots,
   videoUrl,
   videoTitle,
   workspaceStatus,
+  finalOutputMeta,
   config: customConfig,
 }: UseCanvasLayoutProps) {
   const config = useMemo(
@@ -105,8 +110,18 @@ export function useCanvasLayout({
         sectionTitle: "片段",
       },
       "final-output": {
+        projectId,
         videoUrl: videoUrl || "",
         title: videoTitle,
+        downloadUrl: finalOutputMeta?.downloadUrl || "",
+        previewLabel: finalOutputMeta?.previewLabel || "预览最终视频",
+        downloadLabel: finalOutputMeta?.downloadLabel || "下载最终视频",
+        retryLabel: finalOutputMeta?.retryLabel || "重试合成",
+        provenanceText: finalOutputMeta?.provenanceText || "",
+        blockingText: finalOutputMeta?.blockingText || "",
+        retryFeedback: finalOutputMeta?.retryFeedback || "",
+        retryRunId: finalOutputMeta?.retryRunId ?? null,
+        retryThreadId: finalOutputMeta?.retryThreadId ?? null,
       },
     };
 
@@ -161,7 +176,17 @@ export function useCanvasLayout({
     });
 
     return result;
-  }, [summary, characters, shots, videoUrl, videoTitle, config, sectionStatuses]);
+  }, [
+    summary,
+    characters,
+    shots,
+    videoUrl,
+    videoTitle,
+    config,
+    sectionStatuses,
+    projectId,
+    finalOutputMeta,
+  ]);
 
   return shapes;
 }

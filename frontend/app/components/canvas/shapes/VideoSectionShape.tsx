@@ -8,6 +8,7 @@ import {
 } from "tldraw";
 import { type VideoSectionShape } from "./types";
 import { FireIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { canvasEvents } from "../canvasEvents";
 import {
   getWorkspaceSectionPlaceholderText,
   getWorkspaceSectionStatusBadgeClass,
@@ -20,8 +21,18 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
   static override props: RecordProps<VideoSectionShape> = {
     w: T.number,
     h: T.number,
+    projectId: T.number,
     videoUrl: T.string,
     title: T.string,
+    downloadUrl: T.string,
+    previewLabel: T.string,
+    downloadLabel: T.string,
+    retryLabel: T.string,
+    provenanceText: T.string,
+    blockingText: T.string,
+    retryFeedback: T.string,
+    retryRunId: T.any,
+    retryThreadId: T.any,
     sectionState: T.string,
     placeholder: T.boolean,
     statusLabel: T.string,
@@ -32,8 +43,18 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
     return {
       w: 600,
       h: 450,
+      projectId: 0,
       videoUrl: "",
       title: "最终视频",
+      downloadUrl: "",
+      previewLabel: "预览最终视频",
+      downloadLabel: "下载最终视频",
+      retryLabel: "重试合成",
+      provenanceText: "来源：等待分镜片段完成后生成最终视频",
+      blockingText: "",
+      retryFeedback: "请基于当前最终视频重新合成。",
+      retryRunId: null,
+      retryThreadId: null,
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
@@ -67,19 +88,37 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
 
   component(shape: VideoSectionShape) {
     const {
+      projectId,
       videoUrl,
       title,
+      downloadUrl,
+      previewLabel,
+      downloadLabel,
+      retryLabel,
+      provenanceText,
+      blockingText,
+      retryFeedback,
+      retryRunId,
+      retryThreadId,
       placeholder,
       placeholderText,
       statusLabel,
       sectionState,
     } = shape.props;
 
+    const handlePreview = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (videoUrl) {
+        canvasEvents.emit("preview-video", { src: videoUrl, title });
+      }
+    };
+
     const handleDownload = async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       try {
-        const response = await fetch(videoUrl);
+        const response = await fetch(downloadUrl || videoUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -91,8 +130,19 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
         document.body.removeChild(a);
       } catch (err) {
         console.error("下载失败:", err);
-        window.open(videoUrl, "_blank");
+        window.open(downloadUrl || videoUrl, "_blank");
       }
+    };
+
+    const handleRetry = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      canvasEvents.emit("retry-final-output", {
+        projectId,
+        feedback: retryFeedback,
+        runId: retryRunId ?? null,
+        threadId: retryThreadId ?? null,
+      });
     };
 
     return (
@@ -137,27 +187,40 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
                     `WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`
                   )}`}
                 />
-              </video>
-              {/* 下载按钮 */}
-              <button
-                type="button"
-                onClick={handleDownload}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="mt-3 w-full btn btn-outline btn-primary gap-2"
-                aria-label="导出视频"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-4 h-4"
-                  aria-hidden="true"
-                >
-                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
-                </svg>
-                导出视频
-              </button>
+                </video>
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-base-content/70">{provenanceText}</p>
+                {blockingText && <p className="text-xs text-warning-content">{blockingText}</p>}
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePreview}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="btn btn-outline btn-secondary gap-2"
+                    aria-label={previewLabel}
+                  >
+                    预览
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="btn btn-outline btn-primary gap-2"
+                    aria-label={downloadLabel}
+                  >
+                    下载
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="btn btn-outline btn-warning gap-2"
+                    aria-label={retryLabel}
+                  >
+                    重试
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="text-center py-12 text-base-content/50">

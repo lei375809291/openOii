@@ -18,12 +18,16 @@ import {
 } from "~/services/api";
 import { useEditorStore } from "~/stores/editorStore";
 import type {
-	Character,
-	CharacterUpdatePayload,
-	Shot,
-	ShotUpdatePayload,
+  Character,
+  CharacterUpdatePayload,
+  Shot,
+  ShotUpdatePayload,
 } from "~/types";
-import { buildWorkspaceStatus } from "~/utils/workspaceStatus";
+import { toast } from "~/utils/toast";
+import {
+  buildWorkspaceStatus,
+  getWorkspaceFinalOutputMeta,
+} from "~/utils/workspaceStatus";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { canvasEvents } from "./canvasEvents";
 import { ImagePreviewModal, VideoPreviewModal } from "./PreviewModals";
@@ -133,6 +137,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		currentStage,
 		isGenerating,
 		recoverySummary,
+		currentRunId,
 		updateCharacter,
 		updateShot,
 		removeCharacter,
@@ -233,9 +238,34 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	// 视频 URL
 	const rawVideoUrl = projectVideoUrl || project?.video_url;
 	const finalVideoUrl = rawVideoUrl ? getStaticUrl(rawVideoUrl) : null;
+	const finalOutputProject = useMemo(() => {
+		if (!project) {
+			return null;
+		}
+
+		return {
+			...project,
+			video_url: rawVideoUrl || null,
+		};
+	}, [project, rawVideoUrl]);
+	const finalOutputMeta = useMemo(() => {
+		if (!finalOutputProject) {
+			return null;
+		}
+
+		return getWorkspaceFinalOutputMeta({
+			project: finalOutputProject,
+			currentStage: recoverySummary?.current_stage ?? currentStage,
+			runState: finalOutputProject.status || (isGenerating ? "running" : "draft"),
+			characters,
+			shots,
+			recoverySummary,
+		});
+	}, [finalOutputProject, recoverySummary, currentStage, isGenerating, characters, shots]);
 
 	// 计算布局
 	const shapes = useCanvasLayout({
+		projectId,
 		summary: project?.summary || null,
 		characters,
 		shots,
@@ -262,6 +292,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			characters,
 			shots,
 		]),
+		finalOutputMeta,
 	});
 	const shapesSignature = useMemo(() => JSON.stringify(shapes), [shapes]);
 	shapesRef.current = shapes;
@@ -272,6 +303,26 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		const unsubscribers = [
 			canvasEvents.on("preview-image", setPreviewImage),
 			canvasEvents.on("preview-video", setPreviewVideo),
+			canvasEvents.on("retry-final-output", async ({ feedback, runId, threadId }) => {
+				try {
+					await projectsApi.feedback(
+						projectId,
+						`${feedback}${threadId ? `（thread: ${threadId}）` : ""}`,
+						runId ?? currentRunId ?? recoverySummary?.run_id ?? undefined
+					);
+					toast.success({
+						title: "重试已提交",
+						message: "最终合成请求已发送",
+						duration: 2000,
+					});
+				} catch (error) {
+					console.error("[Canvas] final output retry failed", error);
+					toast.error({
+						title: "重试失败",
+						message: "无法提交最终合成重试，请稍后再试",
+					});
+				}
+			}),
 			canvasEvents.on("edit-character", setEditingCharacter),
 			canvasEvents.on("approve-character", (data) => {
 				approveCharacterMutation.mutate(data.id);
@@ -301,7 +352,15 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 				unsub();
 			});
 		};
-	}, [approveCharacterMutation, approveShotMutation, characters, shots]);
+	}, [
+		approveCharacterMutation,
+		approveShotMutation,
+		characters,
+		shots,
+		projectId,
+		currentRunId,
+		recoverySummary?.run_id,
+	]);
 
 	// 初始化画布
 	const handleMount = useCallback((editor: Editor) => {

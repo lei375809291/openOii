@@ -37,6 +37,20 @@ export interface WorkspaceStatus {
   sections: WorkspaceSectionStatus[];
 }
 
+export interface WorkspaceFinalOutputMeta {
+  sectionState: WorkspaceSectionState;
+  statusLabel: string;
+  provenanceText: string;
+  blockingText: string;
+  downloadUrl: string;
+  previewLabel: string;
+  downloadLabel: string;
+  retryLabel: string;
+  retryFeedback: string;
+  retryRunId: number | null;
+  retryThreadId: string | null;
+}
+
 export const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
   { key: "script", title: "剧本" },
   { key: "characters", title: "角色" },
@@ -106,18 +120,14 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
     return "waiting-for-review";
   }
 
-  if (runState === "blocked") {
-    return "blocked";
-  }
+	if (runState === "blocked") {
+		return "blocked";
+	}
 
-  if (project.video_url && key === "final-output") {
-    return "complete";
-  }
-
-  if (key === "script") {
-    if (!project.summary) {
-      return "draft";
-    }
+	if (key === "script") {
+		if (!project.summary) {
+			return "draft";
+		}
 
     return isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key]) ? "generating" : "draft";
   }
@@ -157,6 +167,14 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
 
     return "draft";
   }
+
+	if (project.status === "superseded") {
+		return "superseded";
+	}
+
+	if (project.video_url && key === "final-output") {
+		return "complete";
+	}
 
   if (project.video_url) {
     return "complete";
@@ -252,4 +270,87 @@ export function getWorkspaceSectionStatusBadgeClass(state: WorkspaceSectionState
 
 export function getWorkspaceSectionPlaceholderText(key: WorkspaceSectionKey) {
   return SECTION_PLACEHOLDERS[key];
+}
+
+export function getProjectFinalVideoDownloadUrl(projectId: number) {
+  return `/api/v1/projects/${projectId}/final-video`;
+}
+
+export function getWorkspaceFinalOutputMeta(
+  input: WorkspaceProjectionInput
+): WorkspaceFinalOutputMeta {
+  const sectionState = resolveSectionState(input, "final-output");
+  const runId = input.recoverySummary?.run_id ?? null;
+  const threadId = input.recoverySummary?.thread_id ?? null;
+
+  return {
+    sectionState,
+    statusLabel: getWorkspaceSectionStatusLabel(sectionState),
+    provenanceText: getFinalOutputProvenanceText(sectionState),
+    blockingText: getFinalOutputBlockingText(sectionState),
+    downloadUrl: getProjectFinalVideoDownloadUrl(input.project.id),
+    previewLabel: "预览最终视频",
+    downloadLabel: "下载最终视频",
+    retryLabel: "重试合成",
+    retryFeedback: buildFinalOutputRetryFeedback({
+      sectionState,
+      runId,
+      threadId,
+      currentStage: input.currentStage,
+    }),
+    retryRunId: runId,
+    retryThreadId: threadId,
+  };
+}
+
+function getFinalOutputProvenanceText(state: WorkspaceSectionState) {
+  if (state === "superseded") {
+    return "来源：上一次合成结果，已被新版本替代";
+  }
+
+  if (state === "complete") {
+    return "来源：当前成片";
+  }
+
+  if (state === "failed") {
+    return "来源：合成失败，需要重试";
+  }
+
+  return "来源：等待分镜片段完成后生成最终视频";
+}
+
+function getFinalOutputBlockingText(state: WorkspaceSectionState) {
+  if (state === "blocked") {
+    return "当前仍在等待分镜片段完成，完成后会自动生成最终视频。";
+  }
+
+  if (state === "superseded") {
+    return "当前成片已失效，但仍可预览和下载历史版本。";
+  }
+
+  return "";
+}
+
+function buildFinalOutputRetryFeedback(input: {
+  sectionState: WorkspaceSectionState;
+  runId: number | null;
+  threadId: string | null;
+  currentStage: string;
+}) {
+  const { sectionState, runId, threadId, currentStage } = input;
+
+  if (sectionState === "blocked") {
+    return `最终视频仍在等待分镜片段完成，请在 ${currentStage} 之后继续合成。`;
+  }
+
+  const contextParts = [
+    threadId ? `thread ${threadId}` : null,
+    runId ? `run ${runId}` : null,
+  ].filter((part): part is string => Boolean(part));
+
+  if (contextParts.length === 0) {
+    return "请基于当前最终视频重新合成，保留现有镜头与审批上下文。";
+  }
+
+  return `请基于当前最终视频重新合成，沿用 ${contextParts.join(" / ")} 的上下文。`;
 }

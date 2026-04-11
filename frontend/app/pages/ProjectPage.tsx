@@ -85,60 +85,71 @@ export function ProjectPage() {
 
 	// 当项目数据加载完成后，更新到 store（依赖 projectId 确保切换时重新加载）
 	useEffect(() => {
-		if (characters) store.setCharacters(characters);
-	}, [characters, store]);
+		if (characters) {
+			useEditorStore.getState().setCharacters(characters);
+		}
+	}, [characters]);
 
 	useEffect(() => {
-		if (shots) store.setShots(shots);
-	}, [shots, store]);
+		if (shots) {
+			useEditorStore.getState().setShots(shots);
+		}
+	}, [shots]);
 
 	// 初始化 projectVideoUrl
 	useEffect(() => {
 		if (project?.video_url) {
-			store.setProjectVideoUrl(project.video_url);
+			useEditorStore.getState().setProjectVideoUrl(project.video_url);
 		}
-	}, [project?.video_url, store]);
+	}, [project?.video_url]);
 
 	// 加载历史消息（只在数据加载完成后执行一次）
 	const messagesLoadedRef = useRef(false);
 
 	// 当项目 ID 变化时，立即清空状态，确保项目完全独立
 	useEffect(() => {
+		if (projectId <= 0) {
+			return;
+		}
+
+		const editorStore = useEditorStore.getState();
+
 		// 重置消息加载标记
 		messagesLoadedRef.current = false;
 
 		// 清空消息
-		store.clearMessages();
+		editorStore.clearMessages();
 
 		// 清空生成状态
-		store.setGenerating(false);
-		store.setProgress(0);
-		store.setCurrentAgent(null);
-		store.setCurrentStage("ideate");
+		editorStore.setGenerating(false);
+		editorStore.setProgress(0);
+		editorStore.setCurrentAgent(null);
+		editorStore.setCurrentStage("ideate");
 
 		// 清空确认状态
-		store.setAwaitingConfirm(false, null, null);
-		store.setCurrentRunId(null);
+		editorStore.setAwaitingConfirm(false, null, null);
+		editorStore.setCurrentRunId(null);
 
 		// 清空选中状态
-		store.setSelectedShot(null);
-		store.setSelectedCharacter(null);
-		store.setHighlightedMessage(null);
+		editorStore.setSelectedShot(null);
+		editorStore.setSelectedCharacter(null);
+		editorStore.setHighlightedMessage(null);
 
 		// 清空项目视频
-		store.setProjectVideoUrl(null);
+		editorStore.setProjectVideoUrl(null);
 
 		// 注意：不清空画布数据（characters/shots），让 React Query 的数据自然覆盖
 		// 避免竞态条件导致数据被清空
-	}, [store]);
+	}, [projectId]);
 
 	// 当新项目的消息加载完成后，恢复历史消息
 	useEffect(() => {
 		if (messages && !messagesLoadedRef.current) {
 			messagesLoadedRef.current = true;
+			const editorStore = useEditorStore.getState();
 			// 加载历史消息（使用数据库 ID 作为消息 ID）
 			messages.forEach((msg) => {
-				store.addMessage({
+				editorStore.addMessage({
 					id: `db_${msg.id}`,
 					agent: msg.agent,
 					role: msg.role,
@@ -149,7 +160,7 @@ export function ProjectPage() {
 				});
 			});
 		}
-	}, [messages, store]);
+	}, [messages]);
 
 	const generateMutation = useMutation({
 		mutationFn: () => projectsApi.generate(projectId),

@@ -82,8 +82,18 @@ export type VideoSectionShape = TLBaseShape<
   {
     w: number;
     h: number;
+    projectId: number;
     videoUrl: string;
     title: string;
+    downloadUrl: string;
+    previewLabel: string;
+    downloadLabel: string;
+    retryLabel: string;
+    provenanceText: string;
+    blockingText: string;
+    retryFeedback: string;
+    retryRunId: number | null;
+    retryThreadId: string | null;
   } & CanvasSectionStatusProps
 >;
 

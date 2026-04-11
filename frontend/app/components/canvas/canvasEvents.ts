@@ -9,6 +9,12 @@ import type { Character, Shot } from "~/types";
 export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
+  "retry-final-output": {
+    projectId: number;
+    feedback: string;
+    runId: number | null;
+    threadId: string | null;
+  };
   "edit-character": Character;
   "approve-character": { id: number };
   "regenerate-character": number;

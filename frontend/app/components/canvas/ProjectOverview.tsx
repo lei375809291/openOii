@@ -12,7 +12,7 @@ import {
 	VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { EditModal } from "~/components/ui/EditModal";
 import {
@@ -38,6 +38,9 @@ import {
 	PreviewableImage,
 	VideoPreviewModal,
 } from "./PreviewModals";
+import {
+	getWorkspaceFinalOutputMeta,
+} from "~/utils/workspaceStatus";
 
 interface ProjectOverviewProps {
 	projectId: number;
@@ -139,6 +142,9 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		characters,
 		shots,
 		projectVideoUrl,
+		currentStage,
+		currentRunId,
+		recoverySummary,
 		updateCharacter,
 		updateShot,
 		removeCharacter,
@@ -175,6 +181,34 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		queryKey: ["project", projectId],
 		queryFn: () => projectsApi.get(projectId),
 	});
+
+	const projectFinalVideoSource = projectVideoUrl || project?.video_url || null;
+	const finalVideoUrl = projectFinalVideoSource ? getStaticUrl(projectFinalVideoSource) : null;
+	const finalOutputProject = useMemo(() => {
+		if (!project) {
+			return null;
+		}
+
+		return {
+			...project,
+			video_url: projectFinalVideoSource,
+		};
+	}, [project, projectFinalVideoSource]);
+
+	const finalOutputMeta = useMemo(() => {
+		if (!finalOutputProject) {
+			return null;
+		}
+
+		return getWorkspaceFinalOutputMeta({
+			project: finalOutputProject,
+			currentStage,
+			runState: finalOutputProject.status || "draft",
+			characters,
+			shots,
+			recoverySummary,
+		});
+	}, [finalOutputProject, currentStage, characters, shots, recoverySummary]);
 
 	// 监听分镜更新，清除加载状态
 	useEffect(() => {
@@ -262,11 +296,6 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		},
 	});
 
-	// 使用 store 中的 videoUrl 或 project 中的 video_url，并转换为完整 URL
-	const rawVideoUrl = projectVideoUrl || project?.video_url;
-	// 只有当 URL 存在且不为空字符串时才显示最终视频
-	const finalVideoUrl = rawVideoUrl ? getStaticUrl(rawVideoUrl) : null;
-
 	const orderedShots = [...shots].sort((a, b) => a.order - b.order);
 
 	const hasContent =
@@ -286,6 +315,38 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
 	const closeVideoPreview = () => {
 		setPreviewVideo(null);
+	};
+
+	const handleFinalVideoDownload = async () => {
+		if (!finalOutputMeta?.downloadUrl) return;
+
+		try {
+			const response = await fetch(finalOutputMeta.downloadUrl);
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = `${project?.title || "video"}.mp4`;
+			document.body.appendChild(link);
+			link.click();
+			window.URL.revokeObjectURL(url);
+			document.body.removeChild(link);
+		} catch (error) {
+			console.error("下载失败:", error);
+			window.open(finalOutputMeta.downloadUrl, "_blank");
+		}
+	};
+
+	const handleFinalVideoRetry = async () => {
+		if (!finalOutputMeta) return;
+
+		const runId =
+			finalOutputMeta.retryRunId ?? currentRunId ?? recoverySummary?.run_id ?? undefined;
+		const feedback = `${finalOutputMeta.retryFeedback}${
+			finalOutputMeta.retryThreadId ? `（thread: ${finalOutputMeta.retryThreadId}）` : ""
+		}`;
+
+		await projectsApi.feedback(projectId, feedback, runId);
 	};
 
 	// 角色操作
@@ -499,65 +560,50 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 				</Section>
 
 				{/* 最终视频 */}
-				{finalVideoUrl && (
+				{finalVideoUrl && finalOutputMeta && (
 					<Section
 						title="最终视频"
 						icon={<VideoCameraIcon className="w-5 h-5" aria-hidden="true" />}
 					>
 						<div className="card-doodle bg-base-100 overflow-hidden max-w-2xl">
-							{/* 视频容器 - 内嵌下载按钮 */}
 							<div className="relative aspect-video bg-black">
-								<video
-									className="w-full h-full object-contain"
-									src={finalVideoUrl}
-									controls
-								>
+								<video className="w-full h-full object-contain" src={finalVideoUrl} controls>
 									<track kind="captions" label="中文字幕" src="" />
 								</video>
-								{/* 底部下载栏 */}
-								<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-4 py-3 pt-10 pointer-events-none">
-									<div className="flex items-center justify-between pointer-events-auto">
-										<div className="min-w-0 flex-1 mr-4">
-											<p className="font-bold text-sm truncate text-white">
-												{project?.title || "我的视频"}
-											</p>
-										</div>
-										<button
-											type="button"
-											onClick={async (e) => {
-												e.preventDefault();
-												try {
-													const response = await fetch(finalVideoUrl);
-													const blob = await response.blob();
-													const url = window.URL.createObjectURL(blob);
-													const a = document.createElement("a");
-													a.href = url;
-													a.download = `${project?.title || "video"}.mp4`;
-													document.body.appendChild(a);
-													a.click();
-													window.URL.revokeObjectURL(url);
-													document.body.removeChild(a);
-												} catch (err) {
-													console.error("下载失败:", err);
-													// 降级为直接打开链接
-													window.open(finalVideoUrl, "_blank");
-												}
-											}}
-											className="btn btn-primary btn-sm gap-2 border-2 border-black shadow-brutal-sm hover:shadow-brutal hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold shrink-0"
-										>
-											<svg
-												aria-hidden="true"
-												xmlns="http://www.w3.org/2000/svg"
-												viewBox="0 0 20 20"
-												fill="currentColor"
-												className="w-4 h-4"
-											>
-												<path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-												<path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
-											</svg>
-											下载
-										</button>
-									</div>
+							</div>
+							<div className="p-4 space-y-3">
+								<div className="flex flex-wrap items-center gap-2">
+									<span className="badge badge-success">{finalOutputMeta.statusLabel}</span>
+									<p className="text-sm font-medium text-base-content/80 truncate">
+										{project?.title || "我的视频"}
+									</p>
+								</div>
+								<p className="text-sm text-base-content/70">{finalOutputMeta.provenanceText}</p>
+								{finalOutputMeta.blockingText && (
+									<p className="text-sm text-warning">{finalOutputMeta.blockingText}</p>
+								)}
+								<div className="flex flex-wrap gap-2">
+									<button
+										type="button"
+										className="btn btn-secondary btn-sm"
+										onClick={() => handleVideoPreview(finalVideoUrl, project?.title || "最终视频")}
+									>
+										{finalOutputMeta.previewLabel}
+									</button>
+									<button
+										type="button"
+										className="btn btn-primary btn-sm"
+										onClick={handleFinalVideoDownload}
+									>
+										{finalOutputMeta.downloadLabel}
+									</button>
+									<button
+										type="button"
+										className="btn btn-warning btn-sm"
+										onClick={handleFinalVideoRetry}
+									>
+										{finalOutputMeta.retryLabel}
+									</button>
 								</div>
 							</div>
 						</div>
