@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, UTC
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.base import AgentContext
 from app.agents.character_artist import SingleCharacterArtistAgent
@@ -33,7 +34,14 @@ router = APIRouter()
 
 
 def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _require_run_id(run: AgentRun) -> int:
+    run_id = run.id
+    if run_id is None:
+        raise RuntimeError("Persisted AgentRun is missing an id")
+    return run_id
 
 
 def _character_payload(character: Character) -> dict[str, Any]:
@@ -216,12 +224,18 @@ async def regenerate_character(
     project_id = character.project_id
 
     # 检查是否有针对该角色的运行中任务（细粒度锁）
+    project_id_col = cast(InstrumentedAttribute[int], cast(object, AgentRun.project_id))
+    status_col = cast(InstrumentedAttribute[str], cast(object, AgentRun.status))
+    resource_type_col = cast(
+        InstrumentedAttribute[str | None], cast(object, AgentRun.resource_type)
+    )
+    resource_id_col = cast(InstrumentedAttribute[int | None], cast(object, AgentRun.resource_id))
     res = await session.execute(
         select(AgentRun)
-        .where(AgentRun.project_id == project_id)
-        .where(AgentRun.status.in_(["queued", "running"]))
-        .where(AgentRun.resource_type == "character")
-        .where(AgentRun.resource_id == character_id)
+        .where(project_id_col == project_id)
+        .where(status_col.in_(("queued", "running")))
+        .where(resource_type_col == "character")
+        .where(resource_id_col == character_id)
         .limit(1)
     )
     if res.scalars().first() is not None:
@@ -251,11 +265,12 @@ async def regenerate_character(
     session.add(run)
     await session.commit()
     await session.refresh(run)
+    run_id = _require_run_id(run)
 
     task = asyncio.create_task(
         _run_agent_plan(
             project_id=project_id,
-            run_id=run.id,
+            run_id=run_id,
             agent_plan=agent_plan,
             settings=settings,
             ws=ws,

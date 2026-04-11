@@ -1,12 +1,13 @@
-from datetime import datetime, UTC
-from typing import Optional, List
+from datetime import datetime, timezone
+from typing import List, Optional, cast
 
 from sqlalchemy import Column, JSON
+from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, Relationship, SQLModel
 
 
 def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Project(SQLModel, table=True):
@@ -130,7 +131,7 @@ class Shot(SQLModel, table=True):
 
 
 class ShotCharacterBinding(SQLModel, table=True):
-    __tablename__ = "shot_character_binding"
+    __tablename__ = cast("declared_attr[str]", cast(object, "shot_character_binding"))
 
     shot_id: int = Field(foreign_key="shot.id", primary_key=True, index=True)
     character_id: int = Field(foreign_key="character.id", primary_key=True, index=True)

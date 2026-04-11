@@ -47,11 +47,12 @@ Storyboard and video generation now resolve characters from the frozen shot cont
 
 ## Deviations from Plan
 
-None.
+- Post-execution aggregate static verification surfaced basedpyright errors in `backend/app/services/approval_gate.py` and `backend/app/services/shot_binding.py`. Fixed them with typed SQLAlchemy attribute bindings only; runtime behavior did not change.
 
 ## Notes
 
 - Local backend dev dependencies needed a `uv sync` before verification because `pytest_asyncio` was missing from the active environment.
+- The phase-level type cleanup commit is recorded after aggregate verification so the execution summaries stay aligned with the final verified source state.
 
 ## Self-Check: PASSED
 
