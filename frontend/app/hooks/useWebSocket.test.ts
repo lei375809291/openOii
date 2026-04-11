@@ -2,11 +2,63 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useEditorStore } from '~/stores/editorStore';
 import { applyWsEvent } from '~/hooks/useWebSocket';
-import type { Character, Shot } from '~/types';
+import type { Character, RecoverySummaryRead, Shot } from '~/types';
 
 describe('applyWsEvent review hydration', () => {
   beforeEach(() => {
     useEditorStore.getState().reset();
+  });
+
+  it('hydrates currentStage from backend current_stage fields during progress and confirm events', () => {
+    applyWsEvent(
+      {
+        type: 'run_progress',
+        data: {
+          run_id: 7,
+          project_id: 9,
+          current_agent: 'director',
+          current_stage: 'visualize',
+          progress: 0.42,
+        },
+      },
+      useEditorStore.getState()
+    );
+
+    expect(useEditorStore.getState().currentStage).toBe('visualize');
+    expect(useEditorStore.getState().currentAgent).toBe('director');
+    expect(useEditorStore.getState().progress).toBe(0.42);
+
+    const recoverySummary: RecoverySummaryRead = {
+      project_id: 9,
+      run_id: 7,
+      thread_id: 'agent-run-7',
+      current_stage: 'animate',
+      next_stage: 'deploy',
+      preserved_stages: ['ideate'],
+      stage_history: [],
+      resumable: true,
+    };
+
+    applyWsEvent(
+      {
+        type: 'run_awaiting_confirm',
+        data: {
+          run_id: 7,
+          project_id: 9,
+          agent: 'director',
+          gate: 'director',
+          current_stage: 'animate',
+          recovery_summary: recoverySummary,
+          preserved_stages: ['ideate'],
+          message: '需要你确认下一步',
+        },
+      },
+      useEditorStore.getState()
+    );
+
+    expect(useEditorStore.getState().awaitingConfirm).toBe(true);
+    expect(useEditorStore.getState().currentStage).toBe('animate');
+    expect(useEditorStore.getState().recoverySummary).toEqual(recoverySummary);
   });
 
   it('hydrates character approval state from websocket updates', () => {
