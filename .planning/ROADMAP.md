@@ -67,10 +67,10 @@ Plans:
   5. Video generation nodes consume approved character references and shot intent metadata, not just free-form prompts
 **Plans**: 4
 Plans:
-- [ ] 03-01-PLAN.md — Persist character approvals and shot-bound review state
-- [ ] 03-02-PLAN.md — Gate storyboard/video execution on approved shot bindings
-- [ ] 03-03-PLAN.md — Add typed review state to frontend contracts and stores
-- [ ] 03-04-PLAN.md — Render per-character and per-shot approval controls in the canvas
+- [x] 03-01-PLAN.md — Persist character approvals and shot-bound review state
+- [x] 03-02-PLAN.md — Gate storyboard/video execution on approved shot bindings
+- [x] 03-03-PLAN.md — Add typed review state to frontend contracts and stores
+- [x] 03-04-PLAN.md — Render per-character and per-shot approval controls in the canvas
 
 ### Phase 4: Workspace & Realtime Progress
 **Goal**: The creator can see all project artifacts on an infinite canvas with clear status and watch generation progress in real time
