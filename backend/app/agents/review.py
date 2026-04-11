@@ -5,11 +5,11 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.agents.base import AgentContext, BaseAgent, TargetIds
+from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.review import SYSTEM_PROMPT
 from app.agents.utils import extract_json
 from app.models.agent_run import AgentMessage
-from app.models.project import Character, Shot
+from app.services.creative_control import build_review_state, infer_feedback_targets
 
 
 ALLOWED_START_AGENTS = {
@@ -27,7 +27,7 @@ def _fallback_start_agent(feedback_type: str | None) -> str:
     if feedback_type == "shot":
         return "storyboard_artist"
     if feedback_type == "video":
-        return "video_generator"
+        return "video_merger"
     # scene|style|story|general|unknown
     return "scriptwriter"
 
@@ -47,48 +47,7 @@ class ReviewAgent(BaseAgent):
         return msg.content if msg else ""
 
     async def _get_project_state(self, ctx: AgentContext) -> dict[str, Any]:
-        char_res = await ctx.session.execute(select(Character).where(Character.project_id == ctx.project.id))
-        characters = list(char_res.scalars().all())
-
-        shot_res = await ctx.session.execute(
-            select(Shot)
-            .where(Shot.project_id == ctx.project.id)
-            .order_by(Shot.order.asc())
-        )
-        shots = list(shot_res.scalars().all())
-
-        return {
-            "project": {
-                "id": ctx.project.id,
-                "title": ctx.project.title,
-                "story": ctx.project.story,
-                "style": ctx.project.style,
-                "status": ctx.project.status,
-                "video_url": ctx.project.video_url,
-            },
-            "characters": [
-                {
-                    "id": c.id,
-                    "name": c.name,
-                    "description": c.description,
-                    "image_url": c.image_url,
-                }
-                for c in characters
-            ],
-            "shots": [
-                {
-                    "id": sh.id,
-                    "order": sh.order,
-                    "description": sh.description,
-                    "prompt": sh.prompt,
-                    "image_prompt": sh.image_prompt,
-                    "image_url": sh.image_url,
-                    "video_url": sh.video_url,
-                    "duration": sh.duration,
-                }
-                for sh in shots
-            ],
-        }
+        return await build_review_state(ctx.session, ctx.project)
 
     async def run(self, ctx: AgentContext) -> dict[str, Any]:
         # 优先使用 ctx.user_feedback（orchestrator 已设置），DB 查询作为兜底
@@ -104,7 +63,9 @@ class ReviewAgent(BaseAgent):
         state = await self._get_project_state(ctx)
         user_prompt = json.dumps({"feedback": feedback, "state": state}, ensure_ascii=False)
 
-        resp = await self.call_llm(ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=2048)
+        resp = await self.call_llm(
+            ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=2048
+        )
         data = extract_json(resp.text)
 
         analysis = data.get("analysis") if isinstance(data, dict) else None
@@ -135,20 +96,7 @@ class ReviewAgent(BaseAgent):
             if isinstance(m, str) and m.strip() in ("incremental", "full"):
                 mode = m.strip()
 
-        # 解析 target_ids（精细化控制）
-        target_ids: TargetIds | None = None
-        raw_target_ids = data.get("target_ids") if isinstance(data, dict) else None
-        if isinstance(raw_target_ids, dict):
-            character_ids = raw_target_ids.get("character_ids") or []
-            shot_ids = raw_target_ids.get("shot_ids") or []
-            # 确保都是整数列表
-            character_ids = [int(x) for x in character_ids if isinstance(x, (int, float))]
-            shot_ids = [int(x) for x in shot_ids if isinstance(x, (int, float))]
-            if character_ids or shot_ids:
-                target_ids = TargetIds(
-                    character_ids=character_ids,
-                    shot_ids=shot_ids,
-                )
+        target_ids = infer_feedback_targets(data if isinstance(data, dict) else {}, state)
 
         if start_agent not in ALLOWED_START_AGENTS:
             start_agent = _fallback_start_agent(feedback_type)
@@ -169,7 +117,10 @@ class ReviewAgent(BaseAgent):
                 parts.append(f"{len(target_ids.shot_ids)} 个分镜")
             target_info = f"（仅处理 {', '.join(parts)}）"
 
-        await self.send_message(ctx, f"{msg_summary}。将从 @{start_agent} 开始{mode_desc}{target_info}。{msg_reason}".strip())
+        await self.send_message(
+            ctx,
+            f"{msg_summary}。将从 @{start_agent} 开始{mode_desc}{target_info}。{msg_reason}".strip(),
+        )
 
         return {
             "start_agent": start_agent,
