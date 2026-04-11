@@ -94,9 +94,37 @@ class AgentRunRead(BaseModel):
     progress: float
     error: str | None
     resource_type: str | None  # 资源类型：character|shot|project
-    resource_id: int | None    # 资源 ID
+    resource_id: int | None  # 资源 ID
     created_at: datetime
     updated_at: datetime
+
+
+class RecoveryStageRead(BaseModel):
+    name: str
+    status: Literal["completed", "current", "pending", "blocked"]
+    artifact_count: int = 0
+
+
+class RecoverySummaryRead(BaseModel):
+    project_id: int
+    run_id: int
+    thread_id: str
+    current_stage: str
+    next_stage: str | None = None
+    preserved_stages: list[str] = Field(default_factory=list)
+    stage_history: list[RecoveryStageRead] = Field(default_factory=list)
+    resumable: bool = True
+
+
+class RecoveryControlRead(BaseModel):
+    state: Literal["active", "recoverable"]
+    detail: str
+    available_actions: list[Literal["resume", "cancel"]] = Field(
+        default_factory=lambda: ["resume", "cancel"]
+    )
+    thread_id: str
+    active_run: AgentRunRead
+    recovery_summary: RecoverySummaryRead
 
 
 class FeedbackRequest(BaseModel):

@@ -15,6 +15,7 @@ from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Project
 from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest
+from app.services.run_recovery import build_recovery_control_surface
 from app.services.task_manager import task_manager
 from app.ws.manager import ConnectionManager
 
@@ -36,6 +37,19 @@ def _serialize_active_run(run: AgentRun) -> dict[str, object]:
     }
 
 
+async def _latest_run_for_project(
+    session: AsyncSession, project_id: int, statuses: tuple[str, ...]
+) -> AgentRun | None:
+    res = await session.execute(
+        select(AgentRun)
+        .where(AgentRun.project_id == project_id)
+        .where(AgentRun.status.in_(list(statuses)))
+        .order_by(AgentRun.created_at.desc())
+        .limit(1)
+    )
+    return res.scalars().first()
+
+
 @router.post(
     "/{project_id}/generate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED
 )
@@ -51,25 +65,32 @@ async def generate_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    res = await session.execute(
-        select(AgentRun)
-        .where(AgentRun.project_id == project_id)
-        .where(AgentRun.status.in_(["queued", "running"]))
-        .order_by(AgentRun.created_at.desc())
-        .limit(1)
-    )
-    active_run = res.scalars().first()
+    active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
     if active_run is not None:
+        control = await build_recovery_control_surface(
+            session=session,
+            database_url=settings.database_url,
+            run=active_run,
+            state="active",
+        )
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "detail": "Project already has an active run",
-                "available_actions": ["resume", "cancel"],
-                "active_run": _serialize_active_run(active_run),
-            },
+            content=control.model_dump(mode="json"),
         )
 
-    # 并发限制已移除，允许多个任务同时运行
+    resumable_run = await _latest_run_for_project(session, project_id, ("failed", "cancelled"))
+    if resumable_run is not None:
+        control = await build_recovery_control_surface(
+            session=session,
+            database_url=settings.database_url,
+            run=resumable_run,
+            state="recoverable",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=control.model_dump(mode="json"),
+        )
+
     run = AgentRun(
         project_id=project_id, status="running", current_agent="orchestrator", progress=0.0
     )
