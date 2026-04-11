@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 import asyncio
 
 import pytest
 from sqlmodel import select
 
+from app.agents.review import ReviewAgent
 from app.api.v1.routes import generation as generation_routes
 from app.models.agent_run import AgentRun
-from tests.factories import create_project, create_run
+from tests.agent_fixtures import FakeLLM, make_context
+from tests.factories import create_project, create_run, create_shot
 
 
 def _immediate_task(coro):
@@ -79,3 +82,39 @@ async def test_feedback_project_success(async_client, test_session, monkeypatch)
     messages = res.scalars().all()
     assert len(messages) == 1
     assert messages[0].content == "Please adjust tone"
+
+
+@pytest.mark.asyncio
+async def test_review_agent_routes_retry_merge_back_to_video_merger(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    await create_shot(test_session, project_id=project.id, video_url="http://video.test/1.mp4")
+
+    llm_payload = {
+        "analysis": {
+            "feedback_type": "video",
+            "summary": "需要重新拼接最终视频",
+            "target_items": ["最终视频"],
+            "suggested_changes": "重新拼接成片",
+        },
+        "routing": {
+            "start_agent": "scriptwriter",
+            "mode": "full",
+            "reason": "模型误判",
+        },
+        "target_ids": {},
+    }
+    ctx = await make_context(
+        test_session,
+        test_settings,
+        project=project,
+        run=run,
+        llm=FakeLLM(json.dumps(llm_payload, ensure_ascii=False)),
+    )
+    ctx.user_feedback = "retry merge"
+
+    agent = ReviewAgent()
+    routing = await agent.run(ctx)
+
+    assert routing["start_agent"] == "video_merger"
+    assert routing["mode"] == "incremental"

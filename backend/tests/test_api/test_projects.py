@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.models.project import Project
 from tests.factories import create_project
 
 
@@ -27,15 +28,27 @@ async def test_list_projects_with_data(async_client, test_session):
 
 
 @pytest.mark.asyncio
-async def test_create_project(async_client):
-    res = await async_client.post(
-        "/api/v1/projects",
-        json={"title": "New Project", "description": "Test", "story": "Once upon a time"},
-    )
+async def test_create_project_persists_bootstrap_payload(async_client, test_session):
+    payload = {
+        "title": "New Project",
+        "story": "Once upon a time",
+        "style": "cinematic",
+    }
+
+    res = await async_client.post("/api/v1/projects", json=payload)
     assert res.status_code == 201
     data = res.json()
     assert data["title"] == "New Project"
+    assert data["story"] == "Once upon a time"
+    assert data["style"] == "cinematic"
     assert data["status"] == "draft"
+    assert isinstance(data["id"], int)
+
+    project = await test_session.get(Project, data["id"])
+    assert project is not None
+    assert project.story == payload["story"]
+    assert project.style == payload["style"]
+    assert project.status == "draft"
 
 
 @pytest.mark.asyncio
@@ -75,3 +88,24 @@ async def test_delete_project(async_client, test_session):
 
     res = await async_client.get(f"/api/v1/projects/{project.id}")
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_final_video_download(async_client, test_session, monkeypatch, tmp_path):
+    project = await create_project(test_session)
+    final_file = tmp_path / "merged-final.mp4"
+    final_file.write_bytes(b"fake video bytes")
+
+    from app.services import file_cleaner
+
+    monkeypatch.setattr(file_cleaner, "get_local_path", lambda url: final_file)
+    project.video_url = "http://cdn.example.com/static/videos/merged-final.mp4"
+    test_session.add(project)
+    await test_session.commit()
+    await test_session.refresh(project)
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}/final-video")
+
+    assert res.status_code == 200
+    content_disposition = res.headers.get("content-disposition", "")
+    assert "merged-final.mp4" in content_disposition
