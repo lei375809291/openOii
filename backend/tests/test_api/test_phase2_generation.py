@@ -104,3 +104,61 @@ async def test_generate_project_conflict_is_explicit_about_resume_or_cancel(
     assert data["available_actions"] == ["resume", "cancel"]
     assert data["thread_id"] == f"agent-run-{resumable_run.id}"
     assert data["recovery_summary"]["preserved_stages"] == ["ideate"]
+
+
+@pytest.mark.asyncio
+async def test_resume_project_run_returns_existing_live_run(
+    async_client, test_session, monkeypatch
+):
+    project = await create_project(test_session)
+    active_run = await create_run(test_session, project_id=project.id, status="running")
+
+    monkeypatch.setattr(generation_routes.task_manager, "is_running", lambda _project_id: True)
+
+    def _fail_if_spawned(_coro):
+        raise AssertionError("resume endpoint should not spawn a duplicate task")
+
+    monkeypatch.setattr(generation_routes.asyncio, "create_task", _fail_if_spawned)
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/resume", json={"run_id": active_run.id}
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == active_run.id
+    assert data["project_id"] == project.id
+
+
+@pytest.mark.asyncio
+async def test_resume_project_run_starts_resume_task_for_recoverable_run(
+    async_client, test_session, monkeypatch
+):
+    project = await create_project(test_session)
+    resumable_run = await create_run(test_session, project_id=project.id, status="failed")
+
+    captured: dict[str, int] = {}
+
+    async def _fake_resume(self, *, project_id: int, run_id: int, auto_mode: bool = False):
+        captured["project_id"] = project_id
+        captured["run_id"] = run_id
+
+    monkeypatch.setattr(
+        generation_routes.GenerationOrchestrator,
+        "resume_from_recovery",
+        _fake_resume,
+    )
+
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(generation_routes.asyncio, "create_task", loop.create_task)
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/resume", json={"run_id": resumable_run.id}
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == resumable_run.id
+
+    await asyncio.sleep(0)
+    assert captured == {"project_id": project.id, "run_id": resumable_run.id}
