@@ -9,7 +9,7 @@ vi.mock("~/services/api", () => ({
 }));
 
 describe("StoryboardSectionShape", () => {
-  const shapeUtil = new StoryboardSectionShapeUtil();
+  const shapeUtil = new StoryboardSectionShapeUtil({} as never);
 
   const createShape = (props: Partial<StoryboardSectionShape["props"]> = {}) =>
     ({

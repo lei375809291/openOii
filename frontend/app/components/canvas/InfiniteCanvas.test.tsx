@@ -22,15 +22,41 @@ vi.mock("@tanstack/react-query", () => ({
       updated_at: "2026-04-11T00:00:00Z",
     },
   }),
-  useMutation: (config: any) => ({
-    mutate: vi.fn(),
-    mutateAsync: config?.mutationFn,
-    isPending: false,
-  }),
+  useMutation: (config: any) => {
+    const mutate = vi.fn((variables: any, callbacks?: any) => {
+      const result = config?.mutationFn?.(variables);
+
+      if (result && typeof result.then === "function") {
+        return result.then((value: any) => {
+          config?.onSuccess?.(value, variables, undefined);
+          callbacks?.onSuccess?.(value);
+          return value;
+        });
+      }
+
+      config?.onSuccess?.(result, variables, undefined);
+      callbacks?.onSuccess?.(result);
+      return result;
+    });
+
+    return {
+      mutate,
+      mutateAsync: async (variables: any) => {
+        const value = await config?.mutationFn?.(variables);
+        config?.onSuccess?.(value, variables, undefined);
+        return value;
+      },
+      isPending: false,
+    };
+  },
 }));
 
 vi.mock("tldraw", () => ({
   Tldraw: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("./CanvasToolbar", () => ({
+  CanvasToolbar: () => <div data-testid="canvas-toolbar" />,
 }));
 
 vi.mock("./shapes", () => ({
