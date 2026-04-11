@@ -106,7 +106,7 @@ Plans:
 - [x] 05-02-PLAN.md — Surface edit-before-rerun controls and lineage labels in the workspace UI
 
 ### Phase 6: Final Assembly & Delivery
-**Goal**: The creator can preview and download the final merged video when all required clips complete successfully
+**Goal**: The creator can preview, retry-merge, and download the final merged video when all required clips complete successfully, while stale finals stay visible and blocking clips are surfaced clearly
 **Depends on**: Phase 5
 **Requirements**: PIPE-03, DELIV-01, DELIV-02
 **Success Criteria** (what must be TRUE):
@@ -115,7 +115,10 @@ Plans:
   3. Creator can download the final merged video file from the product
   4. The merged video artifact is linked back to its source clip versions for provenance
   5. Failed clip generation prevents final merge and clearly indicates which clips are blocking
-**Plans**: TBD
+**Plans**: 2
+Plans:
+- [ ] 06-01-PLAN.md — Gate final merge on current clips, keep stale finals visible, and add controlled download delivery on the backend
+- [ ] 06-02-PLAN.md — Surface current/stale final video preview, retry, and download UX in the workspace
 **UI hint**: yes
 
 ## Progress
@@ -130,4 +133,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Character & Storyboard Workflow | 0/0 | Not started | - |
 | 4. Workspace & Realtime Progress | 0/4 | Not started | - |
 | 5. Review & Creative Control | 0/0 | Not started | - |
-| 6. Final Assembly & Delivery | 0/0 | Not started | - |
+| 6. Final Assembly & Delivery | 0/2 | Not started | - |

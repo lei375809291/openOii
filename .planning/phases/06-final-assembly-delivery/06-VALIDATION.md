@@ -2,8 +2,8 @@
 phase: 06
 slug: final-assembly-delivery
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-11
 ---
 
@@ -19,7 +19,7 @@ created: 2026-04-11
 |----------|-------|
 | **Framework** | Backend: pytest 9.0.3 + pytest-asyncio 1.3.0; Frontend: Vitest 4.1.4 + Playwright 1.59.1 |
 | **Config file** | `backend/pyproject.toml`, `backend/tests/conftest.py`, `frontend/vite.config.ts`, `frontend/playwright.config.ts` |
-| **Quick run command** | `uv run pytest tests/test_agents/test_video_merger.py tests/test_api/test_projects.py -q && pnpm exec vitest run app/utils/workspaceStatus.test.ts` |
+| **Quick run command** | `uv run pytest tests/test_agents/test_video_merger.py tests/test_api/test_projects.py tests/test_api/test_review_creative_control.py tests/test_api/test_generation.py -q && pnpm exec vitest run app/utils/workspaceStatus.test.ts app/components/canvas/VideoSectionShape.test.tsx app/components/canvas/ProjectOverview.test.tsx` |
 | **Full suite command** | `pnpm test && pnpm e2e && uv run pytest -q` |
 | **Estimated runtime** | ~120 seconds |
 
@@ -38,9 +38,10 @@ created: 2026-04-11
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 06-XX-01 | TBD | TBD | PIPE-03 | T-06-01 | Final merge auto-starts only when every required current clip is ready, and blocks cleanly otherwise | backend unit/integration | `<automated>uv run pytest tests/test_agents/test_video_merger.py tests/test_api/test_projects.py -q</automated>` | partial ✅ / needs new cases | ⬜ pending |
-| 06-XX-02 | TBD | TBD | DELIV-01 | T-06-02 | Final-output card renders previewable current/stale states and clear blocking status inside the existing workspace | frontend component | `<automated>pnpm exec vitest run app/utils/workspaceStatus.test.ts app/components/canvas/shapes/VideoSectionShape.test.tsx</automated>` | partial ✅ / `VideoSectionShape.test.tsx` missing | ⬜ pending |
-| 06-XX-03 | TBD | TBD | DELIV-02 | T-06-03 | Final video download works through the canonical delivery surface and preserves safe server-side mapping | backend + e2e | `<automated>uv run pytest tests/test_api/test_projects.py -q && pnpm e2e</automated>` | partial ✅ / e2e missing | ⬜ pending |
+| 06-01-01 | 06-01 | 1 | PIPE-03, DELIV-02 | T-06-01, T-06-03 | Final merge stays blocked until every current clip is successful; stale finals remain visible with blocking clip context; retry-merge feedback re-enters the same review/run boundary | backend unit/integration | `<automated>uv run pytest tests/test_agents/test_video_merger.py tests/test_api/test_review_creative_control.py tests/test_api/test_projects.py tests/test_api/test_generation.py -q</automated>` | partial ✅ / needs new cases | ⬜ pending |
+| 06-01-02 | 06-01 | 1 | PIPE-03, DELIV-02 | T-06-01, T-06-03 | Merge-gate logic, retry routing, and controlled download delivery preserve the canonical final asset state | backend integration | `<automated>uv run pytest tests/test_agents/test_video_merger.py tests/test_api/test_generation.py tests/test_api/test_projects.py -q</automated>` | partial ✅ / implementation pending | ⬜ pending |
+| 06-02-01 | 06-02 | 2 | DELIV-01, DELIV-02 | T-06-04, T-06-05 | Final-output card renders previewable current/stale states, provenance copy, download affordances, and retry-merge controls in the existing workspace | frontend component | `<automated>pnpm exec vitest run app/utils/workspaceStatus.test.ts app/components/canvas/VideoSectionShape.test.tsx app/components/canvas/ProjectOverview.test.tsx</automated>` | partial ✅ / `VideoSectionShape.test.tsx` missing | ⬜ pending |
+| 06-02-02 | 06-02 | 2 | DELIV-01, DELIV-02 | T-06-05, T-06-06 | Browser smoke verifies preview/download/retry from the workspace while websocket hydration keeps stale/current state in sync | frontend component / e2e | `<automated>pnpm exec vitest run app/utils/workspaceStatus.test.ts app/components/canvas/VideoSectionShape.test.tsx app/components/canvas/ProjectOverview.test.tsx && pnpm exec playwright test tests/e2e/final-delivery.spec.ts</automated>` | partial ✅ / e2e missing | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -48,6 +49,8 @@ created: 2026-04-11
 
 ## Wave 0 Requirements
 
+- [ ] `backend/tests/test_api/test_review_creative_control.py` — add stale-final retention and blocking-clip surfacing cases
+- [ ] `backend/tests/test_api/test_generation.py` — add final-output retry-merge feedback coverage through the existing review/recovery flow
 - [ ] `backend/tests/test_agents/test_video_merger.py` — add blocked / stale / retry / eligibility cases for merge
 - [ ] `backend/tests/test_api/test_projects.py` — add preview/download route coverage and stale-final semantics
 - [ ] `frontend/app/components/canvas/shapes/VideoSectionShape.test.tsx` — add current/stale/blocked preview and download UI assertions
@@ -60,7 +63,7 @@ created: 2026-04-11
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | Stale final is understandable and not mistaken for the current one | PIPE-03, DELIV-01 | Requires visual judgment on stale/outdated labeling and provenance copy | Trigger a clip change after a final exists, confirm the old final remains previewable but is clearly marked stale/outdated, and verify the replacement state is understandable |
-| Final-output card is a sufficient delivery surface | DELIV-01, DELIV-02 | Needs browser-level UX confirmation that preview, download, blockers, and retry all feel coherent in one place | Use the workspace final-output card to preview and download a merged video, then simulate a blocking clip or failed merge and confirm the same card explains the issue and surfaces retry |
+| Final-output card is a sufficient delivery surface | DELIV-01, DELIV-02 | Needs browser-level UX confirmation that preview, download, blockers, and retry all feel coherent in one place | Use the workspace final-output card to preview, download, and retry a merged video, then simulate a blocking clip or failed merge and confirm the same card explains the issue and surfaces retry |
 
 ---
 
