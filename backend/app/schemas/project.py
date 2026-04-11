@@ -47,6 +47,12 @@ class CharacterRead(BaseModel):
     name: str
     description: str | None
     image_url: str | None
+    approval_state: Literal["draft", "approved", "superseded"]
+    approval_version: int
+    approved_at: datetime | None
+    approved_name: str | None
+    approved_description: str | None
+    approved_image_url: str | None
 
 
 class ShotRead(BaseModel):
@@ -61,6 +67,19 @@ class ShotRead(BaseModel):
     image_url: str | None
     video_url: str | None
     duration: float | None
+    camera: str | None
+    motion_note: str | None
+    character_ids: list[int]
+    approval_state: Literal["draft", "approved", "superseded"]
+    approval_version: int
+    approved_at: datetime | None
+    approved_description: str | None
+    approved_prompt: str | None
+    approved_image_prompt: str | None
+    approved_duration: float | None
+    approved_camera: str | None
+    approved_motion_note: str | None
+    approved_character_ids: list[int]
 
 
 class ShotUpdate(BaseModel):
@@ -68,11 +87,16 @@ class ShotUpdate(BaseModel):
     description: str | None = None
     prompt: str | None = None
     image_prompt: str | None = None
+    duration: float | None = Field(default=None, gt=0)
+    camera: str | None = None
+    motion_note: str | None = None
+    character_ids: list[int] | None = None
 
 
 class CharacterUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     description: str | None = None
+    image_url: str | None = None
 
 
 class RegenerateRequest(BaseModel):
