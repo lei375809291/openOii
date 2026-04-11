@@ -80,6 +80,53 @@ async def test_websocket_manager_enriches_recovery_payloads():
 
 
 @pytest.mark.asyncio
+async def test_websocket_manager_scopes_project_updated_events_to_project_connections():
+    fake_ws_1 = _FakeWebSocket()
+    fake_ws_2 = _FakeWebSocket()
+    ws_manager._conns.clear()
+    ws_manager._conns[1].add(fake_ws_1)
+    ws_manager._conns[2].add(fake_ws_2)
+
+    await ws_manager.send_event(
+        1,
+        {
+            "type": "project_updated",
+            "data": {
+                "project": {
+                    "id": 1,
+                    "title": "Realtime Story",
+                    "video_url": "https://cdn.example.com/final.mp4",
+                },
+            },
+        },
+    )
+
+    assert len(fake_ws_1.sent) == 1
+    assert fake_ws_1.sent[0]["type"] == "project_updated"
+    assert fake_ws_1.sent[0]["data"]["project"]["id"] == 1
+    assert fake_ws_1.sent[0]["data"]["project"]["video_url"] == "https://cdn.example.com/final.mp4"
+    assert fake_ws_2.sent == []
+
+
+@pytest.mark.asyncio
+async def test_websocket_manager_rejects_invalid_project_updated_payload():
+    ws_manager._conns.clear()
+
+    with pytest.raises(ValidationError):
+        await ws_manager.send_event(
+            1,
+            {
+                "type": "project_updated",
+                "data": {
+                    "project": {
+                        "video_url": "https://cdn.example.com/final.mp4",
+                    },
+                },
+            },
+        )
+
+
+@pytest.mark.asyncio
 async def test_websocket_manager_rejects_invalid_outbound_payload():
     ws_manager._conns.clear()
 

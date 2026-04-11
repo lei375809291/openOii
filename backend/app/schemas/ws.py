@@ -77,6 +77,20 @@ class ShotUpdatedEventData(BaseModel):
     shot: ShotRead
 
 
+class ProjectUpdatedPayload(BaseModel):
+    id: int
+    title: str | None = None
+    story: str | None = None
+    style: str | None = None
+    summary: str | None = None
+    video_url: str | None = None
+    status: str | None = None
+
+
+class ProjectUpdatedEventData(BaseModel):
+    project: ProjectUpdatedPayload
+
+
 class WsEvent(BaseModel):
     type: WsEventType
     data: dict[str, Any] = Field(default_factory=dict)

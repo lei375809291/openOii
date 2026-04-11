@@ -9,6 +9,7 @@ from starlette.websockets import WebSocketState
 
 from app.schemas.ws import (
     CharacterUpdatedEventData,
+    ProjectUpdatedEventData,
     RunAwaitingConfirmEventData,
     RunConfirmedEventData,
     RunProgressEventData,
@@ -23,6 +24,7 @@ _EVENT_DATA_MODELS: dict[str, type[Any]] = {
     "run_confirmed": RunConfirmedEventData,
     "character_updated": CharacterUpdatedEventData,
     "shot_updated": ShotUpdatedEventData,
+    "project_updated": ProjectUpdatedEventData,
 }
 
 
