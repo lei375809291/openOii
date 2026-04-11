@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
+from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from app.ws.manager import ws_manager
@@ -11,9 +14,9 @@ class _FakeWebSocket:
     client_state = WebSocketState.CONNECTED
 
     def __init__(self) -> None:
-        self.sent: list[dict[str, object]] = []
+        self.sent: list[dict[str, Any]] = []
 
-    async def send_json(self, payload):
+    async def send_json(self, payload: dict[str, Any]) -> None:
         self.sent.append(payload)
 
 
@@ -37,7 +40,7 @@ def test_websocket_ping_echo(ws_client):
 async def test_websocket_manager_enriches_recovery_payloads():
     fake_ws = _FakeWebSocket()
     ws_manager._conns.clear()
-    ws_manager._conns[1].add(fake_ws)
+    ws_manager._conns[1].add(cast(WebSocket, cast(object, fake_ws)))
 
     await ws_manager.send_event(
         1,
@@ -74,9 +77,12 @@ async def test_websocket_manager_enriches_recovery_payloads():
         },
     )
 
-    assert fake_ws.sent[0]["type"] == "run_awaiting_confirm"
-    assert fake_ws.sent[0]["data"]["recovery_summary"]["next_stage"] == "character"
-    assert fake_ws.sent[0]["data"]["current_stage"] == "script"
+    payload = fake_ws.sent[0]
+    data = cast(dict[str, Any], payload["data"])
+    recovery_summary = cast(dict[str, Any], data["recovery_summary"])
+    assert payload["type"] == "run_awaiting_confirm"
+    assert recovery_summary["next_stage"] == "character"
+    assert data["current_stage"] == "script"
 
 
 @pytest.mark.asyncio
@@ -84,8 +90,8 @@ async def test_websocket_manager_scopes_project_updated_events_to_project_connec
     fake_ws_1 = _FakeWebSocket()
     fake_ws_2 = _FakeWebSocket()
     ws_manager._conns.clear()
-    ws_manager._conns[1].add(fake_ws_1)
-    ws_manager._conns[2].add(fake_ws_2)
+    ws_manager._conns[1].add(cast(WebSocket, cast(object, fake_ws_1)))
+    ws_manager._conns[2].add(cast(WebSocket, cast(object, fake_ws_2)))
 
     await ws_manager.send_event(
         1,
@@ -102,9 +108,12 @@ async def test_websocket_manager_scopes_project_updated_events_to_project_connec
     )
 
     assert len(fake_ws_1.sent) == 1
-    assert fake_ws_1.sent[0]["type"] == "project_updated"
-    assert fake_ws_1.sent[0]["data"]["project"]["id"] == 1
-    assert fake_ws_1.sent[0]["data"]["project"]["video_url"] == "https://cdn.example.com/final.mp4"
+    payload = fake_ws_1.sent[0]
+    data = cast(dict[str, Any], payload["data"])
+    project = cast(dict[str, Any], data["project"])
+    assert payload["type"] == "project_updated"
+    assert project["id"] == 1
+    assert project["video_url"] == "https://cdn.example.com/final.mp4"
     assert fake_ws_2.sent == []
 
 

@@ -108,6 +108,11 @@ Each task was committed atomically:
 **Total deviations:** 2 auto-fixed (1 bug, 1 missing critical validation)
 **Impact on plan:** Required for correctness and payload safety; no scope creep.
 
+## Post-Execution Fixes
+
+- Aggregate static verification surfaced basedpyright errors in `backend/tests/test_api/test_websocket.py` around the fake websocket test double and nested payload indexing.
+- Fixed them with type-safe test payload annotations plus explicit cast narrowing only; runtime behavior and assertions stayed unchanged.
+
 ## Issues Encountered
 
 - The initial ProjectPage regression test triggered a store subscription loop; the test harness was narrowed to a stable mock store to keep the cache-invalidation assertion focused.
