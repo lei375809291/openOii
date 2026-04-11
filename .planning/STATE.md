@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-04-SUMMARY.md
-last_updated: "2026-04-11T14:42:01.903Z"
-last_activity: 2026-04-11 -- Phase 05 planning complete
+stopped_at: Completed 05-01-SUMMARY.md
+last_updated: "2026-04-11T15:38:22.130Z"
+last_activity: 2026-04-11
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 17
-  completed_plans: 15
-  percent: 88
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow.
-**Current focus:** Phase 04 — workspace-realtime-progress
+**Current focus:** Phase 05 — review-creative-control
 
 ## Current Position
 
-Phase: 5
+Phase: 6
 Plan: Not started
 Status: Ready to execute
-Last activity: 2026-04-11 -- Phase 05 planning complete
+Last activity: 2026-04-11
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 14
 - Average duration: —
 - Total execution time: —
 
@@ -48,6 +48,7 @@ Progress: [░░░░░░░░░░] 0%
 | 02 | 4 | - | - |
 | 03 | 4 | - | - |
 | 04 | 4 | - | - |
+| 05 | 2 | - | - |
 
 **Recent Trend:**
 
@@ -55,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 03 P04 | ~1 session | 3 tasks | 6 files |
+| Phase 05 P01 | 29min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -68,6 +70,9 @@ Recent decisions affecting current work:
 - **Solo-creator focus**: v1 optimized for independent creators, not multi-user team collaboration.
 - [Phase 03]: Kept the canvas on the current approved/superseded state only; no version browser or history switcher.
 - [Phase 03]: Used typed approve events plus API mutations so review state cannot be faked locally.
+- [Phase 05]: Character reruns stage description/reference-image edits server-side before approval and invalidate direct downstream outputs.
+- [Phase 05]: Shot clip reruns preserve approved shot sources and only clear the final merged project output.
+- [Phase 05]: Video feedback defaults to the clip-safe merge path rather than per-shot regeneration.
 
 ### Pending Todos
 
@@ -81,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T11:42:50.955Z
-Stopped at: Completed 03-04-SUMMARY.md
+Last session: 2026-04-11T15:12:20.069Z
+Stopped at: Completed 05-01-SUMMARY.md
 Resume file: None

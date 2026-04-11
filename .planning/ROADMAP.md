@@ -102,8 +102,8 @@ Plans:
   5. Superseded artifacts are visually distinguished from current/approved artifacts in the workspace
 **Plans**: 2
 Plans:
-- [ ] 05-01-PLAN.md — Codify selective rerun and candidate/current promotion on the backend
-- [ ] 05-02-PLAN.md — Surface edit-before-rerun controls and lineage labels in the workspace UI
+- [x] 05-01-PLAN.md — Codify selective rerun and candidate/current promotion on the backend
+- [x] 05-02-PLAN.md — Surface edit-before-rerun controls and lineage labels in the workspace UI
 
 ### Phase 6: Final Assembly & Delivery
 **Goal**: The creator can preview and download the final merged video when all required clips complete successfully
