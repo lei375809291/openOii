@@ -65,7 +65,12 @@ Plans:
   3. Creator can review each storyboard shot individually and mark it as approved before downstream video generation proceeds
   4. Approved character references and storyboard shots are stored as versioned artifacts with lineage metadata
   5. Video generation nodes consume approved character references and shot intent metadata, not just free-form prompts
-**Plans**: TBD
+**Plans**: 4
+Plans:
+- [ ] 03-01-PLAN.md — Persist character approvals and shot-bound review state
+- [ ] 03-02-PLAN.md — Gate storyboard/video execution on approved shot bindings
+- [ ] 03-03-PLAN.md — Add typed review state to frontend contracts and stores
+- [ ] 03-04-PLAN.md — Render per-character and per-shot approval controls in the canvas
 
 ### Phase 4: Workspace & Realtime Progress
 **Goal**: The creator can see all project artifacts on an infinite canvas with clear status and watch generation progress in real time

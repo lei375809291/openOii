@@ -41,7 +41,7 @@ created: 2026-04-11
 | 03-XX-01 | TBD | TBD | CHAR-01 | T-03-01 | Character reference create/update/replace keeps approved reference frozen for downstream stages | backend API/unit | `uv run pytest backend/tests/test_api/test_characters.py -q` | ✅ existing file, coverage incomplete | ⬜ pending |
 | 03-XX-02 | TBD | TBD | CHAR-02 | T-03-02 | Storyboard/video prompt construction consumes only approved shot-bound character references | backend integration | `uv run pytest backend/tests/test_orchestration/test_phase3_graph.py -q` | ❌ W0 | ⬜ pending |
 | 03-XX-03 | TBD | TBD | SHOT-01 | T-03-03 | Video generation remains blocked until all required storyboard shots are approved | backend API/orchestration | `uv run pytest backend/tests/test_api/test_shots.py -q` | ✅ existing file, coverage incomplete | ⬜ pending |
-| 03-XX-04 | TBD | TBD | SHOT-01 | T-03-04 | Project/canvas UI shows per-shot review state and approval transitions correctly | frontend unit | `pnpm test -- --run` | ❌ W0 | ⬜ pending |
+| 03-XX-04 | TBD | TBD | SHOT-01 | T-03-04 | WebSocket-driven review-state transitions (mapped to 03-03 Task 1/2) hydrate the store and keep the current approved/superseded state visible in the UI | frontend unit | `pnpm test -- --run frontend/app/stores/editorStore.test.ts frontend/app/hooks/useWebSocket.test.ts` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,9 +51,9 @@ created: 2026-04-11
 
 - [ ] `backend/tests/test_orchestration/test_phase3_graph.py` — covers CHAR-02 and SHOT-01 approval gating
 - [ ] `backend/tests/test_api/test_character_storyboard_review.py` — covers character/shot approval payloads and updated read models
-- [ ] `frontend/app/components/canvas/shapes/CharacterSectionShape.test.tsx` — covers approval badge and state rendering
-- [ ] `frontend/app/components/canvas/shapes/StoryboardSectionShape.test.tsx` — covers per-shot approval controls and blocking UI
-- [ ] `frontend/app/pages/ProjectPage.test.tsx` (or equivalent) — covers websocket-driven review-state transitions
+- [ ] `frontend/app/components/canvas/CharacterSectionShape.test.tsx` — covers approval badge and state rendering
+- [ ] `frontend/app/components/canvas/StoryboardSectionShape.test.tsx` — covers per-shot approval controls and blocking UI
+- [ ] `frontend/app/stores/editorStore.test.ts` + `frontend/app/hooks/useWebSocket.test.ts` — covers websocket-driven review-state transitions and store hydration
 
 ---
 
