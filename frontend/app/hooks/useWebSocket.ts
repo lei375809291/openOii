@@ -1,10 +1,12 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore } from "~/stores/editorStore";
 import type {
+  Character,
   RecoverySummaryRead,
   RunAwaitingConfirmEventData,
   RunConfirmedEventData,
   RunProgressEventData,
+  Shot,
   WsEvent,
   WorkflowStage,
 } from "~/types";
@@ -65,7 +67,7 @@ export function useProjectWebSocket(projectId: number | null) {
     ws.onmessage = (event) => {
       try {
         const data: WsEvent = JSON.parse(event.data);
-        handleWsEvent(data, useEditorStore.getState());
+        applyWsEvent(data, useEditorStore.getState());
       } catch (e) {
         if (import.meta.env.DEV) {
           console.error("[WS] 解析错误:", e);
@@ -189,7 +191,10 @@ function clearLoadingStates(
   }
 }
 
-function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.getState>) {
+export function applyWsEvent(
+  event: WsEvent,
+  store: ReturnType<typeof useEditorStore.getState>
+): void {
   switch (event.type) {
     case "connected":
       if (import.meta.env.DEV) {
@@ -356,36 +361,16 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
     case "character_updated":
       // 实时更新角色数据
       if (event.data.character) {
-        const character = event.data.character as any;
-        const currentCharacters = store.characters;
-        const existingIndex = currentCharacters.findIndex((c) => c.id === character.id);
-        if (existingIndex >= 0) {
-          // 更新现有角色
-          const newCharacters = [...currentCharacters];
-          newCharacters[existingIndex] = character;
-          store.setCharacters(newCharacters);
-        } else {
-          // 添加新角色
-          store.setCharacters([...currentCharacters, character]);
-        }
+        const character = event.data.character as Character;
+        store.updateCharacter(character);
       }
       break;
     case "shot_created":
     case "shot_updated":
       // 实时更新分镜数据
       if (event.data.shot) {
-        const shot = event.data.shot as any;
-        const currentShots = store.shots;
-        const existingIndex = currentShots.findIndex((s) => s.id === shot.id);
-        if (existingIndex >= 0) {
-          // 更新现有分镜
-          const newShots = [...currentShots];
-          newShots[existingIndex] = shot;
-          store.setShots(newShots);
-        } else {
-          // 添加新分镜
-          store.setShots([...currentShots, shot]);
-        }
+        const shot = event.data.shot as Shot;
+        store.updateShot(shot);
       }
       break;
     case "character_deleted":

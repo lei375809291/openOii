@@ -118,15 +118,15 @@ export const useEditorStore = create<EditorState>((set) => ({
   // 精细化控制 Actions
   updateCharacter: (character) =>
     set((state) => ({
-      characters: state.characters.map((c) =>
-        c.id === character.id ? character : c
-      ),
+      characters: state.characters.some((c) => c.id === character.id)
+        ? state.characters.map((c) => (c.id === character.id ? character : c))
+        : [...state.characters, character],
     })),
   updateShot: (shot) =>
     set((state) => ({
-      shots: state.shots.map((s) =>
-        s.id === shot.id ? shot : s
-      ),
+      shots: state.shots.some((s) => s.id === shot.id)
+        ? state.shots.map((s) => (s.id === shot.id ? shot : s))
+        : [...state.shots, shot],
     })),
   removeCharacter: (characterId) =>
     set((state) => ({

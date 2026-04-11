@@ -1,4 +1,11 @@
 import { ApiError } from "~/types/errors";
+import type {
+  Character,
+  CharacterUpdatePayload,
+  Project,
+  Shot,
+  ShotUpdatePayload,
+} from "~/types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:18765";
 
@@ -119,20 +126,20 @@ async function fetchApi<T>(
 // Projects API
 export const projectsApi = {
   list: async () => {
-    const data = await fetchApi<{ items: import("~/types").Project[]; total: number }>("/api/v1/projects");
+    const data = await fetchApi<{ items: Project[]; total: number }>("/api/v1/projects");
     return data.items;
   },
   
-  get: (id: number) => fetchApi<import("~/types").Project>(`/api/v1/projects/${id}`),
+  get: (id: number) => fetchApi<Project>(`/api/v1/projects/${id}`),
   
   create: (data: { title: string; story?: string; style?: string }) =>
-    fetchApi<import("~/types").Project>("/api/v1/projects", {
+    fetchApi<Project>("/api/v1/projects", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   
-  update: (id: number, data: Partial<import("~/types").Project>) =>
-    fetchApi<import("~/types").Project>(`/api/v1/projects/${id}`, {
+  update: (id: number, data: Partial<Project>) =>
+    fetchApi<Project>(`/api/v1/projects/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -141,10 +148,10 @@ export const projectsApi = {
     fetchApi<void>(`/api/v1/projects/${id}`, { method: "DELETE" }),
   
   getCharacters: (id: number) =>
-    fetchApi<import("~/types").Character[]>(`/api/v1/projects/${id}/characters`),
+    fetchApi<Character[]>(`/api/v1/projects/${id}/characters`),
 
   getShots: (id: number) =>
-    fetchApi<import("~/types").Shot[]>(`/api/v1/projects/${id}/shots`),
+    fetchApi<Shot[]>(`/api/v1/projects/${id}/shots`),
 
   getMessages: (id: number) =>
     fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
@@ -175,10 +182,14 @@ export const projectsApi = {
 
 // Shots API
 export const shotsApi = {
-  update: (id: number, data: Partial<import("~/types").Shot>) =>
-    fetchApi<import("~/types").Shot>(`/api/v1/shots/${id}`, {
+  update: (id: number, data: ShotUpdatePayload) =>
+    fetchApi<Shot>(`/api/v1/shots/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+  approve: (id: number) =>
+    fetchApi<Shot>(`/api/v1/shots/${id}/approve`, {
+      method: "POST",
     }),
   regenerate: (id: number, type: "image" | "video") =>
     fetchApi<import("~/types").AgentRun>(`/api/v1/shots/${id}/regenerate`, {
@@ -191,10 +202,14 @@ export const shotsApi = {
 
 // Characters API
 export const charactersApi = {
-  update: (id: number, data: Partial<import("~/types").Character>) =>
-    fetchApi<import("~/types").Character>(`/api/v1/characters/${id}`, {
+  update: (id: number, data: CharacterUpdatePayload) =>
+    fetchApi<Character>(`/api/v1/characters/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+  approve: (id: number) =>
+    fetchApi<Character>(`/api/v1/characters/${id}/approve`, {
+      method: "POST",
     }),
   regenerate: (id: number) =>
     fetchApi<import("~/types").AgentRun>(`/api/v1/characters/${id}/regenerate`, {

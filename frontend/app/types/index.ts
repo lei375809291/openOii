@@ -19,6 +19,12 @@ export interface Character {
   name: string;
   description: string | null;
   image_url: string | null;
+  approval_state: ReviewState;
+  approval_version: number;
+  approved_at: string | null;
+  approved_name: string | null;
+  approved_description: string | null;
+  approved_image_url: string | null;
 }
 
 export interface Shot {
@@ -31,6 +37,38 @@ export interface Shot {
   image_url: string | null;     // 首帧图片
   video_url: string | null;     // 分镜视频
   duration: number | null;
+  camera: string | null;
+  motion_note: string | null;
+  character_ids: number[];
+  approval_state: ReviewState;
+  approval_version: number;
+  approved_at: string | null;
+  approved_description: string | null;
+  approved_prompt: string | null;
+  approved_image_prompt: string | null;
+  approved_duration: number | null;
+  approved_camera: string | null;
+  approved_motion_note: string | null;
+  approved_character_ids: number[];
+}
+
+export type ReviewState = "draft" | "approved" | "superseded";
+
+export interface CharacterUpdatePayload {
+  name?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+}
+
+export interface ShotUpdatePayload {
+  order?: number | null;
+  description?: string | null;
+  prompt?: string | null;
+  image_prompt?: string | null;
+  duration?: number | null;
+  camera?: string | null;
+  motion_note?: string | null;
+  character_ids?: number[] | null;
 }
 
 export interface AgentRun {
