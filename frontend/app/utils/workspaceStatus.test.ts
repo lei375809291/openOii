@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorkspaceStatus,
+  getWorkspaceSectionStatusBadgeClass,
+  getWorkspaceSectionStatusLabel,
   toCreatorStageLabel,
   type WorkspaceProjectionInput,
 } from "./workspaceStatus";
@@ -114,6 +116,76 @@ describe("buildWorkspaceStatus", () => {
         }),
       ])
     );
+  });
+
+  it("keeps superseded lineage visible while preserving current section states", () => {
+    const result = buildWorkspaceStatus({
+      ...baseInput,
+      project: {
+        ...baseInput.project,
+        status: "superseded",
+        summary: "一个已经被新版本替代的项目",
+      },
+      currentStage: "deploy",
+      runState: "completed",
+      characters: [
+        {
+          id: 2,
+          project_id: 1,
+          name: "阿宁",
+          description: "冷静的侦探",
+          image_url: "/static/characters/2.png",
+          approval_state: "approved",
+          approval_version: 2,
+          approved_at: "2026-04-11T09:00:00Z",
+          approved_name: "阿宁",
+          approved_description: "冷静的侦探",
+          approved_image_url: "/static/characters/2-approved.png",
+        },
+      ],
+      shots: [
+        {
+          id: 11,
+          project_id: 1,
+          order: 1,
+          description: "镜头 1",
+          prompt: "approved prompt",
+          image_prompt: "approved image prompt",
+          image_url: "/static/shots/11.png",
+          video_url: "/static/shots/11.mp4",
+          duration: 10,
+          camera: "wide",
+          motion_note: "slow pan",
+          character_ids: [2],
+          approval_state: "approved",
+          approval_version: 2,
+          approved_at: "2026-04-11T09:10:00Z",
+          approved_description: "镜头 1",
+          approved_prompt: "approved prompt",
+          approved_image_prompt: "approved image prompt",
+          approved_duration: 10,
+          approved_camera: "wide",
+          approved_motion_note: "slow pan",
+          approved_character_ids: [2],
+        },
+      ],
+    });
+
+    expect(result.stageLabel).toBe("superseded");
+    expect(result.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "characters", state: "complete" }),
+        expect.objectContaining({ key: "storyboards", state: "complete" }),
+        expect.objectContaining({ key: "clips", state: "complete" }),
+      ])
+    );
+  });
+
+  it("labels current and superseded workspace states distinctly", () => {
+    expect(getWorkspaceSectionStatusLabel("complete")).toBe("已完成");
+    expect(getWorkspaceSectionStatusLabel("superseded")).toBe("已失效");
+    expect(getWorkspaceSectionStatusBadgeClass("complete")).toBe("badge-success");
+    expect(getWorkspaceSectionStatusBadgeClass("superseded")).toBe("badge-error");
   });
 });
 
