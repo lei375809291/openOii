@@ -24,7 +24,8 @@ describe("useCanvasLayout", () => {
       type: SHAPE_TYPES.VIDEO_SECTION,
       props: expect.objectContaining({
         placeholder: true,
-        status: "blocked",
+        sectionState: "blocked",
+        statusLabel: "待生成",
         placeholderText: "等待最终输出...",
         title: "最终视频",
       }),

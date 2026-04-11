@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Tldraw, type Editor, type TLComponents } from "tldraw";
 import "tldraw/tldraw.css";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import {
 } from "~/services/api";
 import { customShapeUtils } from "./shapes";
 import { useCanvasLayout } from "~/hooks/useCanvasLayout";
+import { buildWorkspaceStatus } from "~/utils/workspaceStatus";
 import { CanvasToolbar } from "./CanvasToolbar";
 import type { Character, Shot } from "~/types";
 import { EditModal } from "~/components/ui/EditModal";
@@ -51,6 +52,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     characters,
     shots,
     projectVideoUrl,
+    currentStage,
+    isGenerating,
+    recoverySummary,
     updateCharacter,
     updateShot,
     removeCharacter,
@@ -146,6 +150,20 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     shots,
     videoUrl: finalVideoUrl,
     videoTitle: project?.title || "最终视频",
+    workspaceStatus: useMemo(() => {
+      if (!project) {
+        return undefined;
+      }
+
+      return buildWorkspaceStatus({
+        project,
+        currentStage: recoverySummary?.current_stage ?? currentStage,
+        runState: project.status || (isGenerating ? "running" : "draft"),
+        characters,
+        shots,
+        recoverySummary,
+      });
+    }, [project, recoverySummary, currentStage, isGenerating, characters, shots]),
   });
 
   // 监听类型安全的画布事件
@@ -229,24 +247,6 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
       }
     });
   }, [shapes, isInitialized]);
-
-  const hasContent = project?.summary || characters.length > 0 || shots.length > 0;
-
-  if (!hasContent) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center text-base-content/70 max-w-sm">
-          <div className="w-20 h-20 rounded-full bg-base-300/70 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <p className="text-lg font-medium mb-2">项目概览</p>
-          <p className="text-sm">开始生成后，故事内容将显示在这里</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>

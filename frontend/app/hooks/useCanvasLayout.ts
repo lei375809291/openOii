@@ -2,6 +2,14 @@ import { useMemo } from "react";
 import type { TLShapePartial } from "tldraw";
 import { SHAPE_TYPES } from "~/components/canvas/shapes";
 import type { Character, Shot } from "~/types";
+import {
+  CANONICAL_SECTIONS,
+  getWorkspaceSectionPlaceholderText,
+  getWorkspaceSectionStatusLabel,
+  type WorkspaceSectionKey,
+  type WorkspaceSectionState,
+  type WorkspaceStatus,
+} from "~/utils/workspaceStatus";
 
 interface LayoutConfig {
   startX: number;
@@ -23,6 +31,7 @@ interface UseCanvasLayoutProps {
   shots: Shot[];
   videoUrl: string | null;
   videoTitle: string;
+  workspaceStatus?: WorkspaceStatus;
   config?: Partial<LayoutConfig>;
 }
 
@@ -32,11 +41,24 @@ export function useCanvasLayout({
   shots,
   videoUrl,
   videoTitle,
+  workspaceStatus,
   config: customConfig,
 }: UseCanvasLayoutProps) {
   const config = useMemo(
     () => ({ ...DEFAULT_CONFIG, ...customConfig }),
     [customConfig]
+  );
+
+  const sectionStatuses = useMemo(
+    () =>
+      workspaceStatus?.sections ??
+      buildFallbackSectionStatuses({
+        summary,
+        characters,
+        shots,
+        videoUrl,
+      }),
+    [workspaceStatus, summary, characters, shots, videoUrl]
   );
 
   const shapes = useMemo(() => {
@@ -49,157 +71,152 @@ export function useCanvasLayout({
     const storyboardHeight = calculateStoryboardHeight(shots);
     const videoHeight = 450;
 
-    // 1. 剧本区域 (编剧)
-    const hasScriptContent = summary || characters.length > 0 || shots.length > 0;
-    if (hasScriptContent) {
+    const sectionHeights: Record<WorkspaceSectionKey, number> = {
+      script: scriptHeight,
+      characters: characterHeight,
+      storyboards: storyboardHeight,
+      clips: storyboardHeight,
+      "final-output": videoHeight,
+    };
+
+    const sectionWidths: Record<WorkspaceSectionKey, number> = {
+      script: config.sectionWidth,
+      characters: config.sectionWidth,
+      storyboards: config.sectionWidth,
+      clips: config.sectionWidth,
+      "final-output": 600,
+    };
+
+    const contentBySection: Record<WorkspaceSectionKey, Record<string, unknown>> = {
+      script: {
+        summary: summary || "",
+        characters,
+        shots,
+      },
+      characters: {
+        characters,
+      },
+      storyboards: {
+        shots,
+        sectionTitle: "分镜图",
+      },
+      clips: {
+        shots,
+        sectionTitle: "片段",
+      },
+      "final-output": {
+        videoUrl: videoUrl || "",
+        title: videoTitle,
+      },
+    };
+
+    const sectionShapeTypes: Record<WorkspaceSectionKey, string> = {
+      script: SHAPE_TYPES.SCRIPT_SECTION,
+      characters: SHAPE_TYPES.CHARACTER_SECTION,
+      storyboards: SHAPE_TYPES.STORYBOARD_SECTION,
+      clips: SHAPE_TYPES.STORYBOARD_SECTION,
+      "final-output": SHAPE_TYPES.VIDEO_SECTION,
+    };
+
+    CANONICAL_SECTIONS.forEach((section, index) => {
+      const status = sectionStatuses[index];
+      const width = sectionWidths[section.key];
+      const height = sectionHeights[section.key];
+      const x =
+        section.key === "final-output"
+          ? config.startX + (config.sectionWidth - width) / 2
+          : config.startX;
+
       result.push({
-        id: "shape:script-section" as any,
-        type: SHAPE_TYPES.SCRIPT_SECTION,
-        x: config.startX,
+        id: `shape:${section.key}` as any,
+        type: sectionShapeTypes[section.key] as (typeof SHAPE_TYPES)[keyof typeof SHAPE_TYPES],
+        x,
         y: currentY,
         props: {
-          w: config.sectionWidth,
-          h: scriptHeight,
-          summary: summary || "",
-          characters,
-          shots,
+          w: width,
+          h: height,
+          ...contentBySection[section.key],
+          sectionState: status.state,
+          placeholder: status.placeholder,
+          statusLabel: getWorkspaceSectionStatusLabel(status.state),
+          placeholderText: getWorkspaceSectionPlaceholderText(section.key),
         },
-      });
+      } as TLShapePartial);
 
-      currentY += scriptHeight + config.sectionGap;
-    }
-
-    // 2. 角色设计区域
-    if (characters.length > 0) {
-      result.push({
-        id: "shape:character-section" as any,
-        type: SHAPE_TYPES.CHARACTER_SECTION,
-        x: config.startX,
-        y: currentY,
-        props: {
-          w: config.sectionWidth,
-          h: characterHeight,
-          characters,
-        },
-      });
-
-      // 连接线: 剧本 -> 角色设计
-      if (hasScriptContent) {
+      if (index > 0) {
+        const previousSection = CANONICAL_SECTIONS[index - 1];
         result.push({
-          id: "shape:connector-1" as any,
+          id: `shape:connector-${index}` as any,
           type: SHAPE_TYPES.CONNECTOR,
           x: 0,
           y: 0,
           props: {
-            fromId: "shape:script-section",
-            toId: "shape:character-section",
+            fromId: `shape:${previousSection.key}`,
+            toId: `shape:${section.key}`,
           },
         });
       }
 
-      currentY += characterHeight + config.sectionGap;
-    }
-
-    // 3. 分镜图区域
-    const hasStoryboardImages = shots.some((s) => s.image_url);
-    if (hasStoryboardImages) {
-      result.push({
-        id: "shape:storyboard-section" as any,
-        type: SHAPE_TYPES.STORYBOARD_SECTION,
-        x: config.startX,
-        y: currentY,
-        props: {
-          w: config.sectionWidth,
-          h: storyboardHeight,
-          shots,
-        },
-      });
-
-      // 连接线: 角色设计 -> 分镜图
-      if (characters.length > 0) {
-        result.push({
-          id: "shape:connector-2" as any,
-          type: SHAPE_TYPES.CONNECTOR,
-          x: 0,
-          y: 0,
-          props: {
-            fromId: "shape:character-section",
-            toId: "shape:storyboard-section",
-          },
-        });
-      } else if (hasScriptContent) {
-        // 如果没有角色区域，直接从剧本连接到分镜
-        result.push({
-          id: "shape:connector-2" as any,
-          type: SHAPE_TYPES.CONNECTOR,
-          x: 0,
-          y: 0,
-          props: {
-            fromId: "shape:script-section",
-            toId: "shape:storyboard-section",
-          },
-        });
-      }
-
-      currentY += storyboardHeight + config.sectionGap;
-    }
-
-    // 4. 视频区域
-    if (videoUrl) {
-      result.push({
-        id: "shape:video-section" as any,
-        type: SHAPE_TYPES.VIDEO_SECTION,
-        x: config.startX + (config.sectionWidth - 600) / 2,
-        y: currentY,
-        props: {
-          w: 600,
-          h: videoHeight,
-          videoUrl,
-          title: videoTitle,
-        },
-      });
-
-      // 连接线: 分镜图/角色设计/剧本 -> 视频
-      if (hasStoryboardImages) {
-        result.push({
-          id: "shape:connector-3" as any,
-          type: SHAPE_TYPES.CONNECTOR,
-          x: 0,
-          y: 0,
-          props: {
-            fromId: "shape:storyboard-section",
-            toId: "shape:video-section",
-          },
-        });
-      } else if (characters.length > 0) {
-        result.push({
-          id: "shape:connector-3" as any,
-          type: SHAPE_TYPES.CONNECTOR,
-          x: 0,
-          y: 0,
-          props: {
-            fromId: "shape:character-section",
-            toId: "shape:video-section",
-          },
-        });
-      } else if (hasScriptContent) {
-        result.push({
-          id: "shape:connector-3" as any,
-          type: SHAPE_TYPES.CONNECTOR,
-          x: 0,
-          y: 0,
-          props: {
-            fromId: "shape:script-section",
-            toId: "shape:video-section",
-          },
-        });
-      }
-    }
+      currentY += height + config.sectionGap;
+    });
 
     return result;
-  }, [summary, characters, shots, videoUrl, videoTitle, config]);
+  }, [summary, characters, shots, videoUrl, videoTitle, config, sectionStatuses]);
 
   return shapes;
+}
+
+function buildFallbackSectionStatuses(input: {
+  summary: string | null;
+  characters: Character[];
+  shots: Shot[];
+  videoUrl: string | null;
+}): Array<{ key: WorkspaceSectionKey; state: WorkspaceSectionState; placeholder: boolean }> {
+  const { summary, characters, shots, videoUrl } = input;
+  const hasSummary = Boolean(summary);
+  const hasApprovedCharacter = characters.some((character) => character.approval_state === "approved");
+  const hasStoryboardImage = shots.some((shot) => Boolean(shot.image_url));
+  const hasClip = shots.some((shot) => Boolean(shot.video_url));
+
+  return CANONICAL_SECTIONS.map((section) => {
+    if (section.key === "script") {
+      return {
+        key: section.key,
+        state: hasSummary || characters.length > 0 || shots.length > 0 ? "generating" : "draft",
+        placeholder: !hasSummary && characters.length === 0 && shots.length === 0,
+      };
+    }
+
+    if (section.key === "characters") {
+      return {
+        key: section.key,
+        state: characters.length === 0 ? "blocked" : hasApprovedCharacter ? "complete" : "draft",
+        placeholder: characters.length === 0,
+      };
+    }
+
+    if (section.key === "storyboards") {
+      return {
+        key: section.key,
+        state: shots.length === 0 ? "blocked" : hasStoryboardImage ? "complete" : "generating",
+        placeholder: shots.length === 0 || !hasStoryboardImage,
+      };
+    }
+
+    if (section.key === "clips") {
+      return {
+        key: section.key,
+        state: shots.length === 0 ? "blocked" : hasClip ? "complete" : "generating",
+        placeholder: shots.length === 0 || !hasClip,
+      };
+    }
+
+    return {
+      key: section.key,
+      state: videoUrl ? "complete" : "blocked",
+      placeholder: !videoUrl,
+    };
+  });
 }
 
 // 计算剧本区域高度 - 宽松估算确保内容完全显示

@@ -1,6 +1,13 @@
 import type { TLBaseShape } from "tldraw";
 import type { Character, ReviewState, Shot } from "~/types";
 
+export interface CanvasSectionStatusProps {
+  sectionState: string;
+  placeholder: boolean;
+  statusLabel: string;
+  placeholderText: string;
+}
+
 export interface CharacterReviewSnapshot {
   approval_state: ReviewState;
   approval_version: number;
@@ -45,7 +52,7 @@ export type ScriptSectionShape = TLBaseShape<
     summary: string;
     characters: ReviewedCharacter[];
     shots: ReviewedShot[];
-  }
+  } & CanvasSectionStatusProps
 >;
 
 // 角色设计区域 Shape (角色图片)
@@ -55,7 +62,7 @@ export type CharacterSectionShape = TLBaseShape<
     w: number;
     h: number;
     characters: ReviewedCharacter[];
-  }
+  } & CanvasSectionStatusProps
 >;
 
 // 分镜图区域 Shape
@@ -65,7 +72,8 @@ export type StoryboardSectionShape = TLBaseShape<
     w: number;
     h: number;
     shots: ReviewedShot[];
-  }
+    sectionTitle: string;
+  } & CanvasSectionStatusProps
 >;
 
 // 视频区域 Shape
@@ -76,7 +84,7 @@ export type VideoSectionShape = TLBaseShape<
     h: number;
     videoUrl: string;
     title: string;
-  }
+  } & CanvasSectionStatusProps
 >;
 
 // 连接线 Shape

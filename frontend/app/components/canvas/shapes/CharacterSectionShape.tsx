@@ -18,6 +18,11 @@ import {
 import { getStaticUrl } from "~/services/api";
 import type { Character } from "~/types";
 import { canvasEvents } from "../canvasEvents";
+import {
+  getWorkspaceSectionPlaceholderText,
+  getWorkspaceSectionStatusBadgeClass,
+  getWorkspaceSectionStatusLabel,
+} from "~/utils/workspaceStatus";
 
 function getReviewStateMeta(state: Character["approval_state"]) {
   if (state === "approved") {
@@ -44,6 +49,10 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
     w: T.number,
     h: T.number,
     characters: T.any,
+    sectionState: T.string,
+    placeholder: T.boolean,
+    statusLabel: T.string,
+    placeholderText: T.string,
   };
 
   getDefaultProps(): CharacterSectionShape["props"] {
@@ -51,6 +60,10 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
       w: 800,
       h: 400,
       characters: [],
+      sectionState: "blocked",
+      placeholder: true,
+      statusLabel: getWorkspaceSectionStatusLabel("blocked"),
+      placeholderText: getWorkspaceSectionPlaceholderText("characters"),
     };
   }
 
@@ -79,7 +92,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
   }
 
   component(shape: CharacterSectionShape) {
-    const { characters } = shape.props;
+    const { characters, placeholder, placeholderText, statusLabel, sectionState } = shape.props;
 
     return (
       <HTMLContainer
@@ -90,7 +103,13 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
         }}
         className="h-full"
       >
-        <CharacterSectionContent characters={characters} />
+        <CharacterSectionContent
+          characters={characters}
+          placeholder={placeholder}
+          placeholderText={placeholderText}
+          statusLabel={statusLabel}
+          sectionState={sectionState}
+        />
       </HTMLContainer>
     );
   }
@@ -209,15 +228,32 @@ function CharacterCard({ character }: { character: Character }) {
   );
 }
 
-function CharacterSectionContent({ characters }: { characters: Character[] }) {
+function CharacterSectionContent({
+  characters,
+  placeholder,
+  placeholderText,
+  statusLabel,
+  sectionState,
+}: {
+  characters: Character[];
+  placeholder: boolean;
+  placeholderText: string;
+  statusLabel: string;
+  sectionState: CharacterSectionShape["props"]["sectionState"];
+}) {
   return (
     <div className="card-doodle bg-base-100 p-5 h-full">
       {/* 标题栏 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
-          <SparklesIcon className="w-4 h-4 text-warning" />
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
+            <SparklesIcon className="w-4 h-4 text-warning" />
+          </div>
+          <h2 className="text-lg font-heading font-bold text-base-content">角色设计师</h2>
         </div>
-        <h2 className="text-lg font-heading font-bold text-base-content">角色设计师</h2>
+        <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+          {statusLabel}
+        </span>
       </div>
 
       {/* 角色网格 */}
@@ -230,7 +266,7 @@ function CharacterSectionContent({ characters }: { characters: Character[] }) {
       ) : (
         <div className="text-center py-8 text-base-content/50">
           <UserIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">等待角色图生成...</p>
+          <p className="text-sm">{placeholder ? placeholderText : "等待角色图生成..."}</p>
         </div>
       )}
     </div>

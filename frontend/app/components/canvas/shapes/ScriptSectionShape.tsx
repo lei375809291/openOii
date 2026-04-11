@@ -9,6 +9,11 @@ import {
 import { type ScriptSectionShape } from "./types";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
 import type { Character, Shot } from "~/types";
+import {
+  getWorkspaceSectionPlaceholderText,
+  getWorkspaceSectionStatusBadgeClass,
+  getWorkspaceSectionStatusLabel,
+} from "~/utils/workspaceStatus";
 
 export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   static override type = "script-section" as const;
@@ -19,6 +24,10 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
     summary: T.string,
     characters: T.any,
     shots: T.any,
+    sectionState: T.string,
+    placeholder: T.boolean,
+    statusLabel: T.string,
+    placeholderText: T.string,
   };
 
   getDefaultProps(): ScriptSectionShape["props"] {
@@ -28,6 +37,10 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
       summary: "",
       characters: [],
       shots: [],
+      sectionState: "draft",
+      placeholder: true,
+      statusLabel: getWorkspaceSectionStatusLabel("draft"),
+      placeholderText: getWorkspaceSectionPlaceholderText("script"),
     };
   }
 
@@ -56,7 +69,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   }
 
   component(shape: ScriptSectionShape) {
-    const { summary, characters, shots } = shape.props;
+    const { summary, characters, shots, placeholder, placeholderText, statusLabel, sectionState } = shape.props;
 
     return (
       <HTMLContainer
@@ -71,6 +84,10 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
           summary={summary}
           characters={characters}
           shots={shots}
+          placeholder={placeholder}
+          placeholderText={placeholderText}
+          statusLabel={statusLabel}
+          sectionState={sectionState}
         />
       </HTMLContainer>
     );
@@ -85,19 +102,32 @@ function ScriptSectionContent({
   summary,
   characters,
   shots,
+  placeholder,
+  placeholderText,
+  statusLabel,
+  sectionState,
 }: {
   summary: string;
   characters: Character[];
   shots: Shot[];
+  placeholder: boolean;
+  placeholderText: string;
+  statusLabel: string;
+  sectionState: ScriptSectionShape["props"]["sectionState"];
 }) {
   return (
     <div className="card-doodle bg-base-100 p-5 h-full">
       {/* 标题栏 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
-          <PencilSquareIcon className="w-4 h-4 text-secondary" />
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
+            <PencilSquareIcon className="w-4 h-4 text-secondary" />
+          </div>
+          <h2 className="text-lg font-heading font-bold text-base-content">编剧</h2>
         </div>
-        <h2 className="text-lg font-heading font-bold text-base-content">编剧</h2>
+        <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+          {statusLabel}
+        </span>
       </div>
 
       {/* 剧本摘要 */}
@@ -157,9 +187,9 @@ function ScriptSectionContent({
       )}
 
       {/* 空状态 */}
-      {!summary && characters.length === 0 && shots.length === 0 && (
+      {placeholder && !summary && characters.length === 0 && shots.length === 0 && (
         <div className="text-center py-8 text-base-content/50">
-          <p className="text-sm">等待剧本生成...</p>
+          <p className="text-sm">{placeholderText}</p>
         </div>
       )}
     </div>

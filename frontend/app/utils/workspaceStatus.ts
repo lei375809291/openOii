@@ -37,13 +37,31 @@ export interface WorkspaceStatus {
   sections: WorkspaceSectionStatus[];
 }
 
-const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
+export const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
   { key: "script", title: "剧本" },
   { key: "characters", title: "角色" },
   { key: "storyboards", title: "分镜" },
   { key: "clips", title: "片段" },
   { key: "final-output", title: "最终输出" },
 ];
+
+const SECTION_STATUS_LABELS: Record<WorkspaceSectionState, string> = {
+  draft: "待生成",
+  generating: "生成中",
+  blocked: "待生成",
+  failed: "生成失败",
+  complete: "已完成",
+  superseded: "已失效",
+  "waiting-for-review": "待审核",
+};
+
+const SECTION_PLACEHOLDERS: Record<WorkspaceSectionKey, string> = {
+  script: "等待剧本生成...",
+  characters: "等待角色图生成...",
+  storyboards: "等待分镜图生成...",
+  clips: "等待片段生成...",
+  "final-output": "等待最终输出...",
+};
 
 const STAGE_ORDER: Record<string, number> = {
   ideate: 0,
@@ -206,4 +224,32 @@ export function buildWorkspaceStatus(input: WorkspaceProjectionInput): Workspace
     }),
     sections,
   };
+}
+
+export function getWorkspaceSectionStatusLabel(state: WorkspaceSectionState | string) {
+  return SECTION_STATUS_LABELS[state as WorkspaceSectionState] ?? "待生成";
+}
+
+export function getWorkspaceSectionStatusBadgeClass(state: WorkspaceSectionState | string) {
+  if (state === "complete") {
+    return "badge-success";
+  }
+
+  if (state === "generating") {
+    return "badge-warning";
+  }
+
+  if (state === "failed" || state === "superseded") {
+    return "badge-error";
+  }
+
+  if (state === "waiting-for-review") {
+    return "badge-info";
+  }
+
+  return "badge-ghost";
+}
+
+export function getWorkspaceSectionPlaceholderText(key: WorkspaceSectionKey) {
+  return SECTION_PLACEHOLDERS[key];
 }

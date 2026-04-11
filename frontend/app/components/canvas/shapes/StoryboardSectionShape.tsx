@@ -18,6 +18,11 @@ import {
 import { getStaticUrl } from "~/services/api";
 import type { Shot } from "~/types";
 import { canvasEvents } from "../canvasEvents";
+import {
+  getWorkspaceSectionPlaceholderText,
+  getWorkspaceSectionStatusBadgeClass,
+  getWorkspaceSectionStatusLabel,
+} from "~/utils/workspaceStatus";
 
 function getReviewStateMeta(state: Shot["approval_state"]) {
   if (state === "approved") {
@@ -44,6 +49,11 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
     w: T.number,
     h: T.number,
     shots: T.any,
+    sectionTitle: T.string,
+    sectionState: T.string,
+    placeholder: T.boolean,
+    statusLabel: T.string,
+    placeholderText: T.string,
   };
 
   getDefaultProps(): StoryboardSectionShape["props"] {
@@ -51,6 +61,11 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
       w: 800,
       h: 500,
       shots: [],
+      sectionTitle: "分镜图",
+      sectionState: "blocked",
+      placeholder: true,
+      statusLabel: getWorkspaceSectionStatusLabel("blocked"),
+      placeholderText: getWorkspaceSectionPlaceholderText("storyboards"),
     };
   }
 
@@ -79,7 +94,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
   }
 
   component(shape: StoryboardSectionShape) {
-    const { shots } = shape.props;
+    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, sectionState } = shape.props;
 
     return (
       <HTMLContainer
@@ -90,7 +105,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
         }}
         className="h-full"
       >
-        <StoryboardSectionContent shots={shots} />
+        <StoryboardSectionContent shots={shots} sectionTitle={sectionTitle} placeholder={placeholder} placeholderText={placeholderText} statusLabel={statusLabel} sectionState={sectionState} />
       </HTMLContainer>
     );
   }
@@ -288,17 +303,36 @@ function ShotCard({ shot }: { shot: Shot }) {
   );
 }
 
-function StoryboardSectionContent({ shots }: { shots: Shot[] }) {
+function StoryboardSectionContent({
+  shots,
+  sectionTitle,
+  placeholder,
+  placeholderText,
+  statusLabel,
+  sectionState,
+}: {
+  shots: Shot[];
+  sectionTitle: string;
+  placeholder: boolean;
+  placeholderText: string;
+  statusLabel: string;
+  sectionState: StoryboardSectionShape["props"]["sectionState"];
+}) {
   const sortedShots = [...shots].sort((a, b) => a.order - b.order);
 
   return (
     <div className="card-doodle bg-base-100 p-5 h-full">
       {/* 标题栏 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-          <FilmIcon className="w-4 h-4 text-accent" />
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+            <FilmIcon className="w-4 h-4 text-accent" />
+          </div>
+          <h2 className="text-lg font-heading font-bold text-base-content">{sectionTitle}</h2>
         </div>
-        <h2 className="text-lg font-heading font-bold text-base-content">分镜图</h2>
+        <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+          {statusLabel}
+        </span>
         {shots.length > 0 && (
           <span className="badge badge-ghost text-base-content/60">
             {shots.length} 个镜头
@@ -316,7 +350,7 @@ function StoryboardSectionContent({ shots }: { shots: Shot[] }) {
       ) : (
         <div className="text-center py-8 text-base-content/50">
           <RectangleStackIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">等待分镜图生成...</p>
+          <p className="text-sm">{placeholder ? placeholderText : "等待分镜图生成..."}</p>
         </div>
       )}
     </div>
