@@ -44,6 +44,70 @@ export interface AgentRun {
   updated_at: string;
 }
 
+export interface RecoveryStageRead {
+  name: string;
+  status: "completed" | "current" | "pending" | "blocked";
+  artifact_count: number;
+}
+
+export interface RecoverySummaryRead {
+  project_id: number;
+  run_id: number;
+  thread_id: string;
+  current_stage: string;
+  next_stage: string | null;
+  preserved_stages: string[];
+  stage_history: RecoveryStageRead[];
+  resumable: boolean;
+}
+
+export interface RecoveryControlRead {
+  state: "active" | "recoverable";
+  detail: string;
+  available_actions: Array<"resume" | "cancel">;
+  thread_id: string;
+  active_run: AgentRun;
+  recovery_summary: RecoverySummaryRead;
+}
+
+export interface RunProgressEventData {
+  run_id: number;
+  project_id?: number;
+  current_agent?: string | null;
+  current_stage?: string | null;
+  stage?: string | null;
+  next_stage?: string | null;
+  progress: number;
+  recovery_summary?: RecoverySummaryRead | null;
+}
+
+export interface RunAwaitingConfirmEventData {
+  run_id: number;
+  project_id?: number;
+  agent: string;
+  gate?: string | null;
+  current_stage?: string | null;
+  stage?: string | null;
+  next_stage?: string | null;
+  recovery_summary: RecoverySummaryRead;
+  preserved_stages: string[];
+  message?: string | null;
+  completed?: string | null;
+  next_step?: string | null;
+  question?: string | null;
+}
+
+export interface RunConfirmedEventData {
+  run_id: number;
+  project_id?: number;
+  agent: string;
+  gate?: string | null;
+  current_stage?: string | null;
+  stage?: string | null;
+  next_stage?: string | null;
+  recovery_summary?: RecoverySummaryRead | null;
+}
+
 // WebSocket event types
 export type WsEventType =
   | "connected"

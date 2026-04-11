@@ -1,6 +1,13 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore } from "~/stores/editorStore";
-import type { WsEvent, WorkflowStage } from "~/types";
+import type {
+  RecoverySummaryRead,
+  RunAwaitingConfirmEventData,
+  RunConfirmedEventData,
+  RunProgressEventData,
+  WsEvent,
+  WorkflowStage,
+} from "~/types";
 import { toast } from "~/utils/toast";
 
 const WS_BASE = import.meta.env.VITE_WS_URL || "ws://localhost:18765";
@@ -157,7 +164,7 @@ export function useProjectWebSocket(projectId: number | null) {
       // 注意：不在这里调用 disconnect()，因为可能是 StrictMode 的双重挂载
       // 只清理定时器，让连接在下次 connect() 时复用或在 onclose 时自动清理
     };
-  }, [projectId, connect, clearReconnectTimer]);
+  }, [connect, clearReconnectTimer]);
 
   return { send, disconnect, reconnect: connect };
 }
@@ -202,13 +209,23 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
       });
       store.setCurrentRunId(event.data.run_id as number);
       store.setAwaitingConfirm(false);
+      store.setRecoveryGate(null);
       if (event.data.stage) {
         store.setCurrentStage(event.data.stage as WorkflowStage);
       }
+      if (event.data.recovery_summary) {
+        store.setRecoverySummary(event.data.recovery_summary as RecoverySummaryRead);
+      }
       break;
     case "run_progress":
-      store.setCurrentAgent(event.data.current_agent as string);
-      store.setProgress(event.data.progress as number);
+      {
+        const progressEvent = event.data as unknown as RunProgressEventData;
+        store.setCurrentAgent(progressEvent.current_agent ?? null);
+        store.setProgress(progressEvent.progress);
+        if (progressEvent.recovery_summary) {
+          store.setRecoverySummary(progressEvent.recovery_summary);
+        }
+      }
       if (event.data.stage) {
         store.setCurrentStage(event.data.stage as WorkflowStage);
       }
@@ -253,7 +270,15 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
     case "run_awaiting_confirm":
       // 清除所有 isLoading 状态
       clearLoadingStates(store);
-      store.setAwaitingConfirm(true, event.data.agent as string, event.data.run_id as number);
+      {
+        const gateEvent = event.data as unknown as RunAwaitingConfirmEventData;
+        store.setAwaitingConfirm(true, gateEvent.agent, gateEvent.run_id);
+        store.setRecoveryGate(gateEvent);
+        store.setRecoverySummary(gateEvent.recovery_summary);
+        if (gateEvent.stage) {
+          store.setCurrentStage(gateEvent.stage as WorkflowStage);
+        }
+      }
       store.addMessage({
         id: generateMessageId(),
         agent: "system",
@@ -264,7 +289,14 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
       break;
     case "run_confirmed":
       // 只清除 awaitingConfirm 状态，保留 currentRunId（run 仍在进行中）
-      store.setAwaitingConfirm(false);
+      {
+        const confirmedEvent = event.data as unknown as RunConfirmedEventData;
+        store.setAwaitingConfirm(false);
+        store.setRecoveryGate(null);
+        if (confirmedEvent.recovery_summary) {
+          store.setRecoverySummary(confirmedEvent.recovery_summary);
+        }
+      }
       store.addMessage({
         id: generateMessageId(),
         agent: "system",
@@ -281,6 +313,9 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
       store.setCurrentAgent(null);
       store.setAwaitingConfirm(false);
       store.setCurrentRunId(null);
+      store.setRecoveryControl(null);
+      store.setRecoverySummary(null);
+      store.setRecoveryGate(null);
       store.setCurrentStage("deploy");
       break;
     case "run_failed":
@@ -289,6 +324,9 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
       store.setGenerating(false);
       store.setAwaitingConfirm(false);
       store.setCurrentRunId(null);
+      store.setRecoveryControl(null);
+      store.setRecoverySummary(null);
+      store.setRecoveryGate(null);
       store.addMessage({
         id: generateMessageId(),
         agent: "system",

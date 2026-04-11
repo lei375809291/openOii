@@ -2,6 +2,9 @@ import { create } from "zustand";
 import type {
   AgentMessage,
   Character,
+  RecoveryControlRead,
+  RecoverySummaryRead,
+  RunAwaitingConfirmEventData,
   Shot,
   WorkflowStage,
 } from "~/types";
@@ -18,6 +21,11 @@ interface EditorState {
   currentAgent: string | null;
   progress: number;
   messages: AgentMessage[];
+
+  // Recovery state
+  recoveryControl: RecoveryControlRead | null;
+  recoverySummary: RecoverySummaryRead | null;
+  recoveryGate: RunAwaitingConfirmEventData | null;
 
   // 确认状态
   awaitingConfirm: boolean;
@@ -41,6 +49,9 @@ interface EditorState {
   addMessage: (message: AgentMessage) => void;
   setMessages: (messages: AgentMessage[]) => void;
   clearMessages: () => void;
+  setRecoveryControl: (control: RecoveryControlRead | null) => void;
+  setRecoverySummary: (summary: RecoverySummaryRead | null) => void;
+  setRecoveryGate: (gate: RunAwaitingConfirmEventData | null) => void;
   setCharacters: (characters: Character[]) => void;
   setShots: (shots: Shot[]) => void;
   setProjectVideoUrl: (url: string | null) => void;
@@ -64,6 +75,9 @@ const initialState = {
   currentAgent: null,
   progress: 0,
   messages: [],
+  recoveryControl: null,
+  recoverySummary: null,
+  recoveryGate: null,
   awaitingConfirm: false,
   awaitingAgent: null,
   currentRunId: null,
@@ -87,6 +101,9 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({ messages: [...state.messages, message] })),
   setMessages: (messages) => set({ messages }),
   clearMessages: () => set({ messages: [], highlightedMessageIndex: null }),
+  setRecoveryControl: (control) => set({ recoveryControl: control }),
+  setRecoverySummary: (summary) => set({ recoverySummary: summary }),
+  setRecoveryGate: (gate) => set({ recoveryGate: gate }),
   setCharacters: (characters) => set({ characters }),
   setShots: (shots) => set({ shots }),
   setProjectVideoUrl: (url) => set({ projectVideoUrl: url }),
