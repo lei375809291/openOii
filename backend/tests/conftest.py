@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import pytest
@@ -14,7 +16,7 @@ from sqlmodel import SQLModel
 from app.api.deps import get_app_settings, get_db_session, get_ws_manager, require_admin
 from app.config import Settings
 from app.main import create_app
-from app.models import agent_run, message, project  # noqa: F401
+from app.models import agent_run, artifact, message, project, run, stage  # noqa: F401
 
 
 @pytest.fixture(scope="session")
@@ -53,6 +55,25 @@ async def test_session(test_settings: Settings) -> AsyncGenerator[AsyncSession, 
         yield session
 
     await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def checkpoint_sessionmaker(
+    tmp_path: Path,
+) -> AsyncGenerator[async_sessionmaker[AsyncSession], None]:
+    database_url = os.environ.get("TEST_CHECKPOINT_DATABASE_URL")
+    if not database_url:
+        database_url = f"sqlite+aiosqlite:///{tmp_path / 'checkpoint.db'}"
+
+    engine = create_async_engine(database_url, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+    session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        yield session_maker
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture()
