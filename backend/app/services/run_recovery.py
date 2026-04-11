@@ -6,6 +6,7 @@ from typing import Any, Literal, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.models.agent_run import AgentRun
 from app.models.artifact import Artifact
@@ -102,13 +103,19 @@ async def _checkpoint_history(database_url: str, run: AgentRun) -> list[Any]:
 async def _stage_artifact_counts(session: AsyncSession, run_id: int | None) -> dict[str, int]:
     if run_id is None:
         return {}
+    stage_name_col = cast(InstrumentedAttribute[str], cast(object, Stage.name))
+    stage_id_col = cast(InstrumentedAttribute[int], cast(object, Stage.id))
+    stage_run_id_col = cast(InstrumentedAttribute[int], cast(object, Stage.run_id))
+    artifact_stage_id_col = cast(InstrumentedAttribute[int], cast(object, Artifact.stage_id))
+    artifact_count = func.count(artifact_stage_id_col)
     result = await session.execute(
-        select(Stage.name, func.count(Artifact.id))
-        .join(Artifact, Artifact.stage_id == Stage.id, isouter=True)
-        .where(Stage.run_id == run_id)
-        .group_by(Stage.name)
+        select(stage_name_col, artifact_count)
+        .select_from(Stage)
+        .join(Artifact, artifact_stage_id_col == stage_id_col, isouter=True)
+        .where(stage_run_id_col == run_id)
+        .group_by(stage_name_col)
     )
-    return {name: int(count or 0) for name, count in result.all()}
+    return {name: int(count or 0) for name, count in result.tuples().all()}
 
 
 def _infer_current_stage(run: AgentRun, snapshots: Sequence[Any]) -> str:
@@ -134,7 +141,8 @@ async def build_recovery_summary(
     database_url: str,
     run: AgentRun,
 ) -> RecoverySummaryRead:
-    run_pk = run.id or 0
+    run_id = run.id
+    run_pk = run_id if run_id is not None else 0
     snapshots = await _checkpoint_history(database_url, run)
     current_stage = _infer_current_stage(run, snapshots)
     next_stage = _next_stage(current_stage)

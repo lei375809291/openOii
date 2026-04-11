@@ -85,6 +85,7 @@ The plan started as frontend-only, but the main resume action required a minimal
 
 - Biome flagged ProjectPage import ordering / hook dependencies during implementation; fixed by organizing imports and tightening effect dependencies.
 - The backend resume path needed an active-run guard so an already-live run can be adopted without spawning a duplicate task.
+- Post-execution verification surfaced basedpyright errors in the new recovery query / run-id plumbing; fixed with explicit persisted `run_id` binding and SQLAlchemy attribute casting without changing runtime behavior.
 
 ## Next Phase Readiness
 

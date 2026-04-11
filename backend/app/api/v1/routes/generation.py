@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.orchestrator import GenerationOrchestrator
 from app.api.deps import AdminDep, SessionDep, SettingsDep, WsManagerDep
@@ -26,25 +29,24 @@ def _agent_run_thread_id(run: AgentRun) -> str:
     return f"agent-run-{run.id}" if run.id is not None else "agent-run-pending"
 
 
-def _serialize_active_run(run: AgentRun) -> dict[str, object]:
-    return {
-        "id": run.id,
-        "project_id": run.project_id,
-        "status": run.status,
-        "current_agent": run.current_agent,
-        "progress": run.progress,
-        "thread_id": _agent_run_thread_id(run),
-    }
+def _require_run_id(run: AgentRun) -> int:
+    run_id = run.id
+    if run_id is None:
+        raise RuntimeError("Persisted AgentRun is missing an id")
+    return run_id
 
 
 async def _latest_run_for_project(
     session: AsyncSession, project_id: int, statuses: tuple[str, ...]
 ) -> AgentRun | None:
+    project_id_col = cast(InstrumentedAttribute[int], cast(object, AgentRun.project_id))
+    status_col = cast(InstrumentedAttribute[str], cast(object, AgentRun.status))
+    created_at_col = cast(InstrumentedAttribute[datetime], cast(object, AgentRun.created_at))
     res = await session.execute(
         select(AgentRun)
-        .where(AgentRun.project_id == project_id)
-        .where(AgentRun.status.in_(list(statuses)))
-        .order_by(AgentRun.created_at.desc())
+        .where(project_id_col == project_id)
+        .where(status_col.in_(statuses))
+        .order_by(created_at_col.desc())
         .limit(1)
     )
     return res.scalars().first()
@@ -97,6 +99,7 @@ async def generate_project(
     session.add(run)
     await session.commit()
     await session.refresh(run)
+    run_id = _require_run_id(run)
 
     async def _task() -> None:
         try:
@@ -104,11 +107,11 @@ async def generate_project(
                 orchestrator = GenerationOrchestrator(
                     settings=settings, ws=ws, session=task_session
                 )
-                await orchestrator.run(project_id=project_id, run_id=run.id, request=payload)
+                await orchestrator.run(project_id=project_id, run_id=run_id, request=payload)
         except asyncio.CancelledError:
             # 任务被取消，更新数据库状态
             async with async_session_maker() as cancel_session:
-                run_obj = await cancel_session.get(AgentRun, run.id)
+                run_obj = await cancel_session.get(AgentRun, run_id)
                 if run_obj and run_obj.status not in ("cancelled", "failed", "succeeded"):
                     run_obj.status = "cancelled"
                     await cancel_session.commit()
@@ -141,16 +144,18 @@ async def resume_project_run(
     if run.status in ("queued", "running") and task_manager.is_running(project_id):
         return AgentRunRead.model_validate(run)
 
+    run_id = payload.run_id
+
     async def _task() -> None:
         try:
             async with async_session_maker() as task_session:
                 orchestrator = GenerationOrchestrator(
                     settings=settings, ws=ws, session=task_session
                 )
-                await orchestrator.resume_from_recovery(project_id=project_id, run_id=run.id)
+                await orchestrator.resume_from_recovery(project_id=project_id, run_id=run_id)
         except asyncio.CancelledError:
             async with async_session_maker() as cancel_session:
-                run_obj = await cancel_session.get(AgentRun, run.id)
+                run_obj = await cancel_session.get(AgentRun, run_id)
                 if run_obj and run_obj.status not in ("cancelled", "failed", "succeeded"):
                     run_obj.status = "cancelled"
                     await cancel_session.commit()
@@ -178,10 +183,12 @@ async def cancel_project_run(
     task_cancelled = task_manager.cancel(project_id)
 
     # 更新数据库状态
+    project_id_col = cast(InstrumentedAttribute[int], cast(object, AgentRun.project_id))
+    status_col = cast(InstrumentedAttribute[str], cast(object, AgentRun.status))
     res = await session.execute(
         select(AgentRun)
-        .where(AgentRun.project_id == project_id)
-        .where(AgentRun.status.in_(["queued", "running"]))
+        .where(project_id_col == project_id)
+        .where(status_col.in_(("queued", "running")))
     )
     runs = res.scalars().all()
 
@@ -225,8 +232,9 @@ async def feedback_project(
     session.add(run)
     await session.commit()
     await session.refresh(run)
+    run_id = _require_run_id(run)
 
-    msg = AgentMessage(run_id=run.id, agent="user", role="user", content=payload.content)
+    msg = AgentMessage(run_id=run_id, agent="user", role="user", content=payload.content)
     session.add(msg)
     await session.commit()
 
@@ -234,7 +242,7 @@ async def feedback_project(
     session.add(
         Message(
             project_id=project_id,
-            run_id=run.id,
+            run_id=run_id,
             agent="user",
             role="user",
             content=payload.content,
@@ -250,7 +258,7 @@ async def feedback_project(
                 )
                 await orchestrator.run_from_agent(
                     project_id=project_id,
-                    run_id=run.id,
+                    run_id=run_id,
                     request=GenerateRequest(notes=payload.content),
                     agent_name="review",
                     auto_mode=False,
@@ -258,7 +266,7 @@ async def feedback_project(
         except asyncio.CancelledError:
             # 任务被取消，更新数据库状态
             async with async_session_maker() as cancel_session:
-                run_obj = await cancel_session.get(AgentRun, run.id)
+                run_obj = await cancel_session.get(AgentRun, run_id)
                 if run_obj and run_obj.status not in ("cancelled", "failed", "succeeded"):
                     run_obj.status = "cancelled"
                     await cancel_session.commit()
@@ -268,4 +276,4 @@ async def feedback_project(
 
     task = asyncio.create_task(_task())
     task_manager.register(project_id, task)
-    return {"status": "accepted", "run_id": run.id}
+    return {"status": "accepted", "run_id": run_id}

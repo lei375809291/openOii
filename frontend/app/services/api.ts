@@ -23,7 +23,7 @@ export function getStaticUrl(path: string | null | undefined): string | null {
         return null;
       }
       return trimmedPath;
-    } catch (e) {
+    } catch {
       console.warn(`[Security] Invalid URL format: ${trimmedPath}`);
       return null;
     }
