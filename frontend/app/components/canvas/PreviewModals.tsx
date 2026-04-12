@@ -26,6 +26,8 @@ export function ImagePreviewModal({ src, alt, onClose }: ImagePreviewModalProps)
           src={src}
           alt={alt}
           className="max-w-full max-h-[90vh] object-contain rounded-lg"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         />
         <button
           type="button"
@@ -45,6 +47,7 @@ interface VideoPreviewModalProps {
   title: string;
   onClose: () => void;
   showDownload?: boolean;
+  onDownload?: () => void;
 }
 
 export function VideoPreviewModal({
@@ -52,6 +55,7 @@ export function VideoPreviewModal({
   title,
   onClose,
   showDownload = true,
+  onDownload,
 }: VideoPreviewModalProps) {
   return (
     <div
@@ -73,6 +77,7 @@ export function VideoPreviewModal({
           className="max-w-full max-h-[90vh] object-contain rounded-lg"
           controls
           autoPlay
+          onClick={(e) => e.stopPropagation()}
         >
           <track kind="captions" label="中文字幕" src="" />
         </video>
@@ -89,13 +94,17 @@ export function VideoPreviewModal({
             <span className="text-primary-content text-sm font-medium truncate">
               {title}
             </span>
-            <a
-              href={src}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
               className="btn btn-sm btn-accent gap-2 border-2 border-black shadow-brutal-sm hover:shadow-brutal hover:-translate-y-0.5 transition-all"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onDownload) {
+                  onDownload();
+                  return;
+                }
+                window.open(src, "_blank", "noopener,noreferrer");
+              }}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -108,7 +117,7 @@ export function VideoPreviewModal({
                 <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
               </svg>
               下载
-            </a>
+            </button>
           </div>
         )}
       </div>

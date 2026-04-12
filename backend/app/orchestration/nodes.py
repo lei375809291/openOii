@@ -7,8 +7,6 @@ from langgraph.types import interrupt
 
 from app.agents.review import ALLOWED_START_AGENTS
 from app.services.approval_gate import can_enter_clip_generation
-from app.services.creative_control import collect_project_blocking_clips
-
 from .state import Phase2RuntimeContext, Phase2State
 
 
@@ -248,16 +246,6 @@ async def clip_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) 
 
 
 async def merge_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
-    agent_ctx = runtime.context.agent_context
-    blocking_clips = await collect_project_blocking_clips(agent_ctx.session, agent_ctx.project)
-    if blocking_clips:
-        return {
-            "current_stage": "merge",
-            "merge_blocked": True,
-            "blocking_clips": blocking_clips,
-            "project_status": "superseded",
-        }
-
     return await _run_agent_sequence(state, runtime, stage="merge")
 
 

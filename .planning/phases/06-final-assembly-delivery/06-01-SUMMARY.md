@@ -112,6 +112,7 @@ None - plan executed as written.
 - Aggregate static verification surfaced basedpyright errors in `backend/app/agents/video_merger.py` and `backend/app/api/v1/routes/projects.py` around SQLModel query expressions, `UTC`, and optional project IDs.
 - Fixed them with type-safe SQLAlchemy attribute bindings, `timezone.utc`, and explicit persisted project-id narrowing only; runtime behavior and delivery semantics stayed unchanged.
 - Post-completion code review also surfaced delivery-semantics issues in `backend/app/agents/review.py` and `backend/app/agents/video_merger.py`; fixed by aligning retry-merge keywords with the user-facing CTA and preventing blocked first-time merges from being mislabeled as stale finals.
+- A second review pass surfaced a merge-node short-circuit mismatch with the stale-final contract; fixed by routing merge blocking through `VideoMergerAgent` so blocked/current/stale semantics persist through the canonical backend path.
 
 ## Issues Encountered
 

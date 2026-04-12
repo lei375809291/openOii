@@ -6,9 +6,10 @@ import {
   type Geometry2d,
   type RecordProps,
 } from "tldraw";
-import { type VideoSectionShape } from "./types";
+import type { VideoSectionShape } from "./types";
 import { FireIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { canvasEvents } from "../canvasEvents";
+import { getStaticUrl } from "~/services/api";
 import {
   getWorkspaceSectionPlaceholderText,
   getWorkspaceSectionStatusBadgeClass,
@@ -117,20 +118,24 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
     const handleDownload = async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      try {
-        const response = await fetch(downloadUrl || videoUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
+		const resolvedDownloadUrl = getStaticUrl(downloadUrl) || downloadUrl || videoUrl;
+		try {
+			const response = await fetch(resolvedDownloadUrl);
+			if (!response.ok) {
+				throw new Error(`download failed: ${response.status}`);
+			}
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement("a");
         a.href = url;
         a.download = `${title || "video"}.mp4`;
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
+			setTimeout(() => window.URL.revokeObjectURL(url), 0);
         document.body.removeChild(a);
       } catch (err) {
         console.error("下载失败:", err);
-        window.open(downloadUrl || videoUrl, "_blank");
+			window.open(resolvedDownloadUrl, "_blank");
       }
     };
 

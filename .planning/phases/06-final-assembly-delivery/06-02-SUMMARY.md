@@ -70,6 +70,12 @@ metrics:
 - **处理：** 改为根据 `finalOutputMeta.sectionState` 复用 `getWorkspaceSectionStatusBadgeClass(...)` 生成 badge 样式。
 - **结果：** stale final 的视觉语义与 canvas/workspace 其它 final-output 展示保持一致。
 
+**3. [Post-execution review] 预览弹窗辅助下载链路与交互阻断不稳定**
+- **发现时机：** 最终 Phase 06 advisory review
+- **问题：** `PreviewModals.tsx` 的 capture-phase 阻断会让内部控件交互不稳定，且 final output 的 modal 下载入口绕过受控下载路径。
+- **处理：** 将媒体点击拦截下沉到 `img/video` 本身，并让 `VideoPreviewModal` 支持 `onDownload`，由 final-output 场景复用现有受控下载逻辑。
+- **结果：** 预览、下载、重试三条交付路径在 overview / canvas / modal 间保持一致。
+
 ## 待处理
 
 - 仓库里还有与本计划无关的既有脏改动，未纳入本次提交。

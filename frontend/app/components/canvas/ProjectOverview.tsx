@@ -48,6 +48,12 @@ interface ProjectOverviewProps {
 	projectId: number;
 }
 
+interface PreviewVideoState {
+	src: string;
+	title: string;
+	isFinalOutput?: boolean;
+}
+
 function parseNumberField(value: string) {
 	const trimmed = value.trim();
 	if (!trimmed) return null;
@@ -156,10 +162,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		src: string;
 		alt: string;
 	} | null>(null);
-	const [previewVideo, setPreviewVideo] = useState<{
-		src: string;
-		title: string;
-	} | null>(null);
+	const [previewVideo, setPreviewVideo] = useState<PreviewVideoState | null>(null);
 
 	// 编辑状态
 	const [editingCharacter, setEditingCharacter] = useState<Character | null>(
@@ -307,8 +310,8 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		setPreviewImage({ src, alt });
 	};
 
-	const handleVideoPreview = (src: string, title: string) => {
-		setPreviewVideo({ src, title });
+	const handleVideoPreview = (src: string, title: string, options?: { isFinalOutput?: boolean }) => {
+		setPreviewVideo({ src, title, isFinalOutput: options?.isFinalOutput });
 	};
 
 	const closeImagePreview = () => {
@@ -321,9 +324,10 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
 	const handleFinalVideoDownload = async () => {
 		if (!finalOutputMeta?.downloadUrl) return;
+		const downloadUrl = getStaticUrl(finalOutputMeta.downloadUrl) || finalOutputMeta.downloadUrl;
 
 		try {
-			const response = await fetch(finalOutputMeta.downloadUrl);
+			const response = await fetch(downloadUrl);
 			if (!response.ok) {
 				throw new Error(`download failed: ${response.status}`);
 			}
@@ -334,7 +338,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 			link.download = `${project?.title || "video"}.mp4`;
 			document.body.appendChild(link);
 			link.click();
-			window.URL.revokeObjectURL(url);
+			setTimeout(() => window.URL.revokeObjectURL(url), 0);
 			document.body.removeChild(link);
 		} catch (error) {
 			console.error("下载失败:", error);
@@ -342,7 +346,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 				title: "下载失败",
 				message: "无法下载最终视频，请稍后再试",
 			});
-			window.open(finalOutputMeta.downloadUrl, "_blank");
+			window.open(downloadUrl, "_blank");
 		}
 	};
 
@@ -607,7 +611,11 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 									<button
 										type="button"
 										className="btn btn-secondary btn-sm"
-										onClick={() => handleVideoPreview(finalVideoUrl, project?.title || "最终视频")}
+									onClick={() =>
+										handleVideoPreview(finalVideoUrl, project?.title || "最终视频", {
+											isFinalOutput: true,
+										})
+									}
 									>
 										{finalOutputMeta.previewLabel}
 									</button>
@@ -647,6 +655,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 					src={previewVideo.src}
 					title={previewVideo.title}
 					onClose={closeVideoPreview}
+					onDownload={previewVideo.isFinalOutput ? handleFinalVideoDownload : undefined}
 				/>
 			)}
 
