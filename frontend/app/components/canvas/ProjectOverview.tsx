@@ -38,8 +38,10 @@ import {
 	PreviewableImage,
 	VideoPreviewModal,
 } from "./PreviewModals";
+import { toast } from "~/utils/toast";
 import {
 	getWorkspaceFinalOutputMeta,
+	getWorkspaceSectionStatusBadgeClass,
 } from "~/utils/workspaceStatus";
 
 interface ProjectOverviewProps {
@@ -322,6 +324,9 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
 		try {
 			const response = await fetch(finalOutputMeta.downloadUrl);
+			if (!response.ok) {
+				throw new Error(`download failed: ${response.status}`);
+			}
 			const blob = await response.blob();
 			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement("a");
@@ -333,6 +338,10 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 			document.body.removeChild(link);
 		} catch (error) {
 			console.error("下载失败:", error);
+			toast.error({
+				title: "下载失败",
+				message: "无法下载最终视频，请稍后再试",
+			});
 			window.open(finalOutputMeta.downloadUrl, "_blank");
 		}
 	};
@@ -346,7 +355,15 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 			finalOutputMeta.retryThreadId ? `（thread: ${finalOutputMeta.retryThreadId}）` : ""
 		}`;
 
-		await projectsApi.feedback(projectId, feedback, runId);
+		try {
+			await projectsApi.feedback(projectId, feedback, runId);
+		} catch (error) {
+			console.error("最终视频重试失败:", error);
+			toast.error({
+				title: "重试失败",
+				message: "无法提交最终合成重试，请稍后再试",
+			});
+		}
 	};
 
 	// 角色操作
@@ -573,7 +590,11 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 							</div>
 							<div className="p-4 space-y-3">
 								<div className="flex flex-wrap items-center gap-2">
-									<span className="badge badge-success">{finalOutputMeta.statusLabel}</span>
+									<span
+										className={`badge ${getWorkspaceSectionStatusBadgeClass(finalOutputMeta.sectionState)}`}
+									>
+										{finalOutputMeta.statusLabel}
+									</span>
 									<p className="text-sm font-medium text-base-content/80 truncate">
 										{project?.title || "我的视频"}
 									</p>

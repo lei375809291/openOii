@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.review import SYSTEM_PROMPT
@@ -21,7 +22,14 @@ ALLOWED_START_AGENTS = {
 }
 
 
-_RETRY_MERGE_KEYWORDS = ("retry merge", "重新拼接最终视频", "重新合并最终视频", "final-output")
+_RETRY_MERGE_KEYWORDS = (
+    "retry merge",
+    "重试合成",
+    "重新合成",
+    "重新拼接最终视频",
+    "重新合并最终视频",
+    "final-output",
+)
 
 
 def _fallback_start_agent(feedback_type: str | None) -> str:
@@ -44,11 +52,22 @@ class ReviewAgent(BaseAgent):
     name = "review"
 
     async def _get_latest_feedback(self, ctx: AgentContext) -> str:
+        run_id = ctx.run.id
+        if run_id is None:
+            return ""
+
+        agent_message_run_id_col = cast(
+            InstrumentedAttribute[int], cast(object, AgentMessage.run_id)
+        )
+        agent_message_role_col = cast(InstrumentedAttribute[str], cast(object, AgentMessage.role))
+        agent_message_created_at_col = cast(
+            InstrumentedAttribute[Any], cast(object, AgentMessage.created_at)
+        )
         res = await ctx.session.execute(
             select(AgentMessage)
-            .where(AgentMessage.run_id == ctx.run.id)
-            .where(AgentMessage.role == "user")
-            .order_by(AgentMessage.created_at.desc())
+            .where(agent_message_run_id_col == run_id)
+            .where(agent_message_role_col == "user")
+            .order_by(agent_message_created_at_col.desc())
             .limit(1)
         )
         msg = res.scalars().first()
@@ -57,7 +76,7 @@ class ReviewAgent(BaseAgent):
     async def _get_project_state(self, ctx: AgentContext) -> dict[str, Any]:
         return await build_review_state(ctx.session, ctx.project)
 
-    async def run(self, ctx: AgentContext) -> dict[str, Any]:
+    async def run(self, ctx: AgentContext) -> Any:
         # 优先使用 ctx.user_feedback（orchestrator 已设置），DB 查询作为兜底
         feedback = ""
         if hasattr(ctx, "user_feedback") and ctx.user_feedback:

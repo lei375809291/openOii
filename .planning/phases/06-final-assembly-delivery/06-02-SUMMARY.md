@@ -64,6 +64,12 @@ metrics:
 - **处理：** 结束残留 dev server 后重新运行 smoke test。
 - **结果：** E2E 成功通过。
 
+**2. [Post-execution review] stale final badge 与状态语义不一致**
+- **发现时机：** Phase 06 code review
+- **问题：** `ProjectOverview.tsx` 的最终视频 badge 固定为 success 样式，即使 `finalOutputMeta.statusLabel` 已是 stale/superseded。
+- **处理：** 改为根据 `finalOutputMeta.sectionState` 复用 `getWorkspaceSectionStatusBadgeClass(...)` 生成 badge 样式。
+- **结果：** stale final 的视觉语义与 canvas/workspace 其它 final-output 展示保持一致。
+
 ## 待处理
 
 - 仓库里还有与本计划无关的既有脏改动，未纳入本次提交。

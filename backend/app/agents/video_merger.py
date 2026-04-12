@@ -20,14 +20,19 @@ class VideoMergerAgent(BaseAgent):
         if project_id is None:
             raise RuntimeError("Project must be persisted before final assembly")
 
-        # 检查项目是否已有最终视频
-        if ctx.project.video_url and ctx.project.status != "superseded":
+        # 只有全量重跑才允许沿用已有成片直接短路；显式增量 retry merge 需要继续执行
+        if (
+            ctx.project.video_url
+            and ctx.project.status != "superseded"
+            and ctx.rerun_mode == "full"
+        ):
             await self.send_message(ctx, "项目已有最终视频。")
             return
 
         blocking_clips = await collect_project_blocking_clips(ctx.session, ctx.project)
         if blocking_clips:
-            ctx.project.status = "superseded"
+            if ctx.project.video_url:
+                ctx.project.status = "superseded"
             ctx.session.add(ctx.project)
             await ctx.session.commit()
             await ctx.session.refresh(ctx.project)
