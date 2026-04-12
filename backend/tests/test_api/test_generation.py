@@ -111,7 +111,7 @@ async def test_review_agent_routes_retry_merge_back_to_video_merger(test_session
         run=run,
         llm=FakeLLM(json.dumps(llm_payload, ensure_ascii=False)),
     )
-    ctx.user_feedback = "retry merge"
+    ctx.user_feedback = "请基于当前最终视频重新合成"
 
     agent = ReviewAgent()
     routing = await agent.run(ctx)

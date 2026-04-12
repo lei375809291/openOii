@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
 
 from app.models.config_item import ConfigItem
 from tests.factories import create_config_item
+
+
+def _write_env_file(tmp_path, values: dict[str, str]) -> str:
+    env_file = tmp_path / "provider.env"
+    env_file.write_text(
+        "\n".join(f"{key}={value}" for key, value in values.items()), encoding="utf-8"
+    )
+    return str(env_file)
 
 
 @pytest.mark.asyncio
@@ -52,10 +59,7 @@ async def test_update_configs_new_item(async_client, test_session):
     assert data["skipped"] == 0
 
     # 验证数据库中存在
-    result = await test_session.execute(
-        select(ConfigItem).where(ConfigItem.key == "NEW_CONFIG_KEY")
-    )
-    item = result.scalar_one_or_none()
+    item = await test_session.get(ConfigItem, "NEW_CONFIG_KEY")
     assert item is not None
     assert item.value == "new_value"
 
@@ -74,10 +78,8 @@ async def test_update_configs_existing_item(async_client, test_session):
     assert data["updated"] == 1
 
     # 验证值已更新
-    result = await test_session.execute(
-        select(ConfigItem).where(ConfigItem.key == "EXISTING_KEY")
-    )
-    item = result.scalar_one()
+    item = await test_session.get(ConfigItem, "EXISTING_KEY")
+    assert item is not None
     assert item.value == "new_value"
 
 
@@ -85,10 +87,7 @@ async def test_update_configs_existing_item(async_client, test_session):
 async def test_update_configs_skip_masked_value(async_client, test_session):
     """测试跳过脱敏值（不更新）"""
     await create_config_item(
-        test_session,
-        key="SENSITIVE_KEY",
-        value="secret123456",
-        is_sensitive=True
+        test_session, key="SENSITIVE_KEY", value="secret123456", is_sensitive=True
     )
 
     # 尝试用脱敏值更新（应该被跳过）
@@ -102,10 +101,8 @@ async def test_update_configs_skip_masked_value(async_client, test_session):
     assert data["updated"] == 0
 
     # 验证值未改变
-    result = await test_session.execute(
-        select(ConfigItem).where(ConfigItem.key == "SENSITIVE_KEY")
-    )
-    item = result.scalar_one()
+    item = await test_session.get(ConfigItem, "SENSITIVE_KEY")
+    assert item is not None
     assert item.value == "secret123456"
 
 
@@ -140,10 +137,7 @@ async def test_update_configs_no_restart_required(async_client, test_session):
 async def test_reveal_value_existing(async_client, test_session):
     """测试获取已存在配置的原始值"""
     await create_config_item(
-        test_session,
-        key="SECRET_KEY",
-        value="my_secret_value",
-        is_sensitive=True
+        test_session, key="SECRET_KEY", value="my_secret_value", is_sensitive=True
     )
 
     res = await async_client.post(
@@ -214,10 +208,7 @@ async def test_update_configs_multiple_items(async_client, test_session):
 
     # 验证所有项都已创建
     for i in range(1, 4):
-        result = await test_session.execute(
-            select(ConfigItem).where(ConfigItem.key == f"KEY_{i}")
-        )
-        item = result.scalar_one_or_none()
+        item = await test_session.get(ConfigItem, f"KEY_{i}")
         assert item is not None
         assert item.value == f"value{i}"
 
@@ -248,3 +239,72 @@ async def test_sensitive_key_detection(async_client, test_session):
         assert item is not None
         assert item["is_sensitive"] is True
         assert item["is_masked"] is True
+
+
+@pytest.mark.asyncio
+async def test_provider_surface_prefers_database_values_over_env(
+    monkeypatch, tmp_path, async_client, test_session
+):
+    monkeypatch.setenv(
+        "ENV_FILE",
+        _write_env_file(
+            tmp_path,
+            {
+                "TEXT_API_KEY": "env-text-key",
+                "TEXT_MODEL": "env-text-model",
+                "IMAGE_API_KEY": "env-image-key",
+                "IMAGE_MODEL": "env-image-model",
+                "VIDEO_API_KEY": "env-video-key",
+                "VIDEO_MODEL": "env-video-model",
+            },
+        ),
+    )
+
+    await create_config_item(
+        test_session, key="TEXT_API_KEY", value="db-text-key", is_sensitive=True
+    )
+    await create_config_item(test_session, key="TEXT_MODEL", value="db-text-model")
+    await create_config_item(
+        test_session, key="IMAGE_API_KEY", value="db-image-key", is_sensitive=True
+    )
+    await create_config_item(test_session, key="IMAGE_MODEL", value="db-image-model")
+    await create_config_item(
+        test_session, key="VIDEO_API_KEY", value="db-video-key", is_sensitive=True
+    )
+    await create_config_item(test_session, key="VIDEO_MODEL", value="db-video-model")
+
+    res = await async_client.get("/api/v1/config")
+    assert res.status_code == 200
+    data = {item["key"]: item for item in res.json()}
+
+    for key, raw_value in {
+        "TEXT_API_KEY": "db-text-key",
+        "TEXT_MODEL": "db-text-model",
+        "IMAGE_API_KEY": "db-image-key",
+        "IMAGE_MODEL": "db-image-model",
+        "VIDEO_API_KEY": "db-video-key",
+        "VIDEO_MODEL": "db-video-model",
+    }.items():
+        assert data[key]["source"] == "db"
+        if key.endswith("_API_KEY"):
+            assert data[key]["is_sensitive"] is True
+            assert data[key]["is_masked"] is True
+            assert raw_value not in data[key]["value"]
+        else:
+            assert data[key]["is_sensitive"] is False
+            assert data[key]["is_masked"] is False
+            assert data[key]["value"] == raw_value
+
+
+@pytest.mark.asyncio
+async def test_reveal_value_falls_back_to_env_for_provider_key(monkeypatch, tmp_path, async_client):
+    monkeypatch.setenv(
+        "ENV_FILE",
+        _write_env_file(tmp_path, {"IMAGE_API_KEY": "env-image-key"}),
+    )
+
+    res = await async_client.post("/api/v1/config/reveal", json={"key": "IMAGE_API_KEY"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["key"] == "IMAGE_API_KEY"
+    assert data["value"] == "env-image-key"

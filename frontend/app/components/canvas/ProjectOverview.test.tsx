@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { charactersApi, projectsApi, shotsApi } from "~/services/api";
 import { useEditorStore } from "~/stores/editorStore";
+import { toast } from "~/utils/toast";
 import { ProjectOverview } from "./ProjectOverview";
 
 vi.mock("~/services/api", () => ({
@@ -279,6 +280,61 @@ describe("ProjectOverview edit-before-rerun flow", () => {
       );
     });
 
-    fetchMock.mockRestore();
-  });
+		fetchMock.mockRestore();
+	});
+
+	it("falls back with an error toast when final video download returns a non-OK response", async () => {
+		const user = userEvent.setup();
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+			ok: false,
+			status: 500,
+			blob: async () => new Blob(["error-page"]),
+		} as never);
+		const openMock = vi.spyOn(window, "open").mockImplementation(() => null);
+		const toastErrorSpy = vi.spyOn(toast, "error").mockImplementation(() => undefined);
+
+		useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
+
+		renderOverview();
+
+		await screen.findByText("来源：当前成片");
+		await user.click(screen.getByRole("button", { name: "下载最终视频" }));
+
+		await waitFor(() => {
+			expect(toastErrorSpy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					title: "下载失败",
+				}),
+			);
+		});
+		expect(openMock).toHaveBeenCalledWith("/api/v1/projects/7/final-video", "_blank");
+
+		fetchMock.mockRestore();
+		openMock.mockRestore();
+		toastErrorSpy.mockRestore();
+	});
+
+	it("shows a retry error toast when final video rerun submission fails", async () => {
+		const user = userEvent.setup();
+		const toastErrorSpy = vi.spyOn(toast, "error").mockImplementation(() => undefined);
+		vi.mocked(projectsApi.feedback).mockRejectedValue(new Error("network down") as never);
+
+		useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
+		useEditorStore.getState().setCurrentRunId(42);
+
+		renderOverview();
+
+		await screen.findByText("来源：当前成片");
+		await user.click(screen.getByRole("button", { name: "重试合成" }));
+
+		await waitFor(() => {
+			expect(toastErrorSpy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					title: "重试失败",
+				}),
+			);
+		});
+
+		toastErrorSpy.mockRestore();
+	});
 });

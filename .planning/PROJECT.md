@@ -18,10 +18,11 @@ An independent creator can go from a raw story idea to a coherent final video in
 - [x] The workspace can present script, character, storyboard, and video artifacts with clear status, previewability, and lineage across the generation flow. — Validated in Phase 03 for character/storyboard approval state, shot-bound cast, current approved/superseded visibility, and canvas review controls.
 - [x] A creator can start a project from a story idea and style direction, then see the full generation pipeline progress in one place. — Validated by the combined Phase 01 + Phase 04 flow: project bootstrap exists, workspace projection is backend-authored, and realtime progress is visible in one shell.
 - [x] The creator can review outputs at each stage and selectively re-run targeted assets without restarting the entire pipeline. — Validated in Phase 05 for character / shot / clip selective rerun, candidate acceptance, current/superseded lineage, and prompt-edit-before-rerun flow.
+- [x] An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow. — Validated in Phase 06 with automatic final merge gating, in-product preview/download, stale-final handling, and delivery from the existing workspace.
 
 ### Active
 
-- [ ] The platform can swap among configured text, image, and video providers without breaking the creator workflow.
+- [ ] The platform can prove project-scoped provider portability end-to-end as a follow-up milestone item.
 
 ### Out of Scope
 
@@ -39,6 +40,7 @@ An independent creator can go from a raw story idea to a coherent final video in
 - Phase 03 established shot-bound character references, per-character and per-shot approval contracts, storyboard-to-video gating, and canvas-level review controls for the current approved/superseded state.
 - Phase 04 established a backend-authored workspace projection with canonical placeholder slots, creator-friendly realtime progress labels, and a stable canvas shell that reconstructs from backend metadata on refresh.
 - Phase 05 established selective rerun as a creator-controlled correction path with explicit candidate/current promotion, direct-downstream invalidation, and minimal one-hop lineage visibility in the existing workspace.
+- Phase 06 established final assembly and delivery as part of the same guided workspace flow: merge starts automatically when current clips are ready, stale finals remain visible but clearly outdated, and preview/download/retry all live in the final-output card.
 
 ## Constraints
 
@@ -60,6 +62,7 @@ An independent creator can go from a raw story idea to a coherent final video in
 | Preserve identity through explicit shot-bound cast and structured shot intent | Prevents character/storyboard/video drift and keeps creator approvals meaningful | Locked in Phase 03 and implemented through approval-aware character/shot contracts |
 | Keep the workspace backend-authored and section-first in v1 | Avoids layout drift and keeps refresh/realtime projection deterministic | Locked in Phase 04 and implemented through canonical section projection + progress shell |
 | Make selective rerun candidate-first instead of auto-overwriting current outputs | Preserves a safe creative-control loop without needing a full version browser | Locked in Phase 05 and implemented with current/superseded promotion + minimal lineage labels |
+| Keep delivery inside the existing final-output card instead of adding a separate publish surface | Preserves a single creator-facing workflow and avoids a second delivery mode | Locked in Phase 06 and implemented through final-output preview/download/retry semantics |
 | Keep planning interactive and research-driven | User prefers visible checkpoints and higher planning confidence | — Pending |
 | Track `.planning` documents in git | Planning history should remain durable and reviewable | — Pending |
 
@@ -80,5 +83,17 @@ This document evolves at phase transitions and milestone boundaries.
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
+## Current State
+
+- **Shipped milestone:** v1.0
+- **Outcome:** The guided, resumable core loop from idea → final video is shipped and validated.
+- **Deferred warning:** Project-scoped provider portability (`PROJ-02`) is still unproven and should be handled in the next milestone rather than retroactively blocking v1.0.
+
+## Next Milestone Goals
+
+- Prove or implement project-scoped provider portability / provider swap behavior end-to-end.
+- Resolve carried-forward documentation drift and archive gaps (for example, Phase 1 standalone verification provenance).
+- Decide which v1.x items become the first post-v1 milestone scope.
+
 ---
-*Last updated: 2026-04-11 after Phase 05 completion*
+*Last updated: 2026-04-12 after v1.0 milestone closure decision*

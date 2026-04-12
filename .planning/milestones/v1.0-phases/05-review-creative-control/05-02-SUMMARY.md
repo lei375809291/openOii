@@ -8,7 +8,7 @@ tags: [react, tldraw, zustand, vitest, testing-library, workspace-status, rerun-
 requires:
   - phase: 04-workspace-realtime-progress
     provides: backend-authored workspace shell and stable status projection
-  - phase: 03-review-creative-control
+  - phase: 03-character-storyboard-workflow
     provides: approval-aware character/shot lineage contract
 provides:
   - editable rerun flow for shots and characters inside the canvas workspace

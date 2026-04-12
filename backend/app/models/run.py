@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from sqlmodel import Field, SQLModel
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+class Run(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    thread_id: str = Field(index=True, unique=True)
+    status: str = Field(default="queued", index=True)
+    version: int = Field(default=1, ge=1)
+    source: str = Field(default="manual")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

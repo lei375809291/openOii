@@ -4,11 +4,16 @@ from collections.abc import AsyncGenerator
 
 import asyncio
 from sqlalchemy import func, update
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlmodel import SQLModel
 
 from app.config import get_settings
-from app.models import agent_run, config_item, message, project  # noqa: F401
+from app.models import agent_run, artifact, config_item, message, project, run, stage  # noqa: F401
 
 
 def _patch_aiosqlite_event_loop() -> None:
@@ -42,6 +47,9 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 async def init_db() -> None:
     """Initialize database tables and cleanup stale runs."""
+    agent_run_table = SQLModel.metadata.tables["agentrun"]
+    project_table = SQLModel.metadata.tables["project"]
+
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
@@ -57,14 +65,14 @@ async def init_db() -> None:
         # 清理服务重启前遗留的 running/queued 状态的 run（它们已经不会继续执行了）
         await session.execute(
             update(AgentRun)
-            .where(AgentRun.status.in_(["queued", "running"]))
+            .where(agent_run_table.c.status.in_(["queued", "running"]))
             .values(status="cancelled", error="Service restarted")
         )
 
         # 兼容旧数据：style 可能为 NULL/空字符串，统一回填为默认风格
         await session.execute(
             update(Project)
-            .where((Project.style.is_(None)) | (func.trim(Project.style) == ""))
+            .where((project_table.c.style.is_(None)) | (func.trim(project_table.c.style) == ""))
             .values(style="anime")
         )
         await session.commit()

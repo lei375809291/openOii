@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any, cast
 from types import SimpleNamespace
 
 import pytest
@@ -15,8 +16,11 @@ from tests.factories import create_character, create_project, create_run, create
 @pytest.mark.asyncio
 async def test_shot_binding_uses_the_frozen_approved_shot_cast(test_session):
     project = await create_project(test_session)
+    assert project.id is not None
     approved = await create_character(test_session, project_id=project.id, name="Approved")
     removed = await create_character(test_session, project_id=project.id, name="Removed")
+    assert approved.id is not None
+    assert removed.id is not None
     approved.freeze_approval()
     removed.freeze_approval()
     test_session.add(approved)
@@ -50,10 +54,13 @@ async def test_shot_binding_uses_the_frozen_approved_shot_cast(test_session):
 @pytest.mark.asyncio
 async def test_clip_generation_stays_blocked_until_every_storyboard_shot_is_approved(test_session):
     project = await create_project(test_session)
+    assert project.id is not None
     run = await create_run(test_session, project_id=project.id)
 
     first_shot = await create_shot(test_session, project_id=project.id, order=1)
     second_shot = await create_shot(test_session, project_id=project.id, order=2)
+    assert first_shot.id is not None
+    assert second_shot.id is not None
 
     first_shot.freeze_approval()
     test_session.add(first_shot)
@@ -70,17 +77,49 @@ async def test_clip_generation_stays_blocked_until_every_storyboard_shot_is_appr
 
 
 @pytest.mark.asyncio
+async def test_clip_generation_is_scoped_to_the_current_shot_run(test_session):
+    project = await create_project(test_session)
+    assert project.id is not None
+    run = await create_run(test_session, project_id=project.id)
+
+    approved_shot = await create_shot(test_session, project_id=project.id, order=1)
+    pending_shot = await create_shot(test_session, project_id=project.id, order=2)
+
+    assert run.id is not None
+    assert approved_shot.id is not None
+    assert pending_shot.id is not None
+
+    run.resource_type = "shot"
+    run.resource_id = approved_shot.id
+    test_session.add(run)
+    await test_session.commit()
+
+    approved_shot.freeze_approval()
+    test_session.add(approved_shot)
+    test_session.add(pending_shot)
+    await test_session.commit()
+
+    assert await can_enter_clip_generation(test_session, run) is True
+
+
+@pytest.mark.asyncio
 async def test_storyboard_approval_routes_back_to_review_when_clip_gate_blocks(
     test_session, monkeypatch
 ):
     project = await create_project(test_session)
+    assert project.id is not None
     run = await create_run(test_session, project_id=project.id)
 
-    runtime = SimpleNamespace(
-        context=SimpleNamespace(
-            auto_mode=False,
-            agent_context=SimpleNamespace(session=test_session, project=project, run=run),
-        )
+    runtime = cast(
+        Any,
+        SimpleNamespace(
+            context=SimpleNamespace(
+                auto_mode=False,
+                agent_context=SimpleNamespace(
+                    session=test_session, project=project, run=run, target_ids=None
+                ),
+            )
+        ),
     )
 
     async def _blocked(*_args, **_kwargs):

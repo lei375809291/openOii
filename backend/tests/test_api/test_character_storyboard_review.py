@@ -10,6 +10,7 @@ async def test_character_update_and_approve_freezes_primary_reference(
     async_client, test_session, ws_manager
 ):
     project = await create_project(test_session)
+    assert project.id is not None
     character = await create_character(
         test_session,
         project_id=project.id,
@@ -58,9 +59,13 @@ async def test_shot_update_and_approve_freezes_bound_cast_and_intent(
     async_client, test_session, ws_manager
 ):
     project = await create_project(test_session)
+    assert project.id is not None
     hero = await create_character(test_session, project_id=project.id, name="Hero")
     villain = await create_character(test_session, project_id=project.id, name="Villain")
     shot = await create_shot(test_session, project_id=project.id, description="Draft shot")
+    assert hero.id is not None
+    assert villain.id is not None
+    assert shot.id is not None
 
     update_res = await async_client.patch(
         f"/api/v1/shots/{shot.id}",
@@ -106,7 +111,9 @@ async def test_shot_update_and_approve_freezes_bound_cast_and_intent(
 @pytest.mark.asyncio
 async def test_shot_approval_rejects_incomplete_intent(async_client, test_session):
     project = await create_project(test_session)
+    assert project.id is not None
     shot = await create_shot(test_session, project_id=project.id, description="Draft shot")
+    assert shot.id is not None
 
     res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
     assert res.status_code == 400
@@ -117,12 +124,42 @@ async def test_shot_approval_rejects_incomplete_intent(async_client, test_sessio
 
 
 @pytest.mark.asyncio
+async def test_shot_approval_rejects_stale_character_snapshot(async_client, test_session):
+    project = await create_project(test_session)
+    assert project.id is not None
+    character = await create_character(test_session, project_id=project.id, name="Hero")
+    shot = await create_shot(test_session, project_id=project.id)
+    assert character.id is not None
+    assert shot.id is not None
+
+    shot.description = "Final showdown"
+    shot.prompt = "A dramatic rooftop duel"
+    shot.image_prompt = "Hero confronts the villain on a rooftop"
+    shot.duration = 4.0
+    shot.camera = "wide"
+    shot.motion_note = "slow push-in"
+    shot.character_ids = [character.id]
+    test_session.add(shot)
+    await test_session.commit()
+
+    await test_session.delete(character)
+    await test_session.commit()
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+    assert res.status_code == 400
+    assert res.json()["detail"] == f"Unknown character_ids for project: [{character.id}]"
+
+
+@pytest.mark.asyncio
 async def test_websocket_payloads_report_current_review_state(
     async_client, test_session, ws_manager
 ):
     project = await create_project(test_session)
+    assert project.id is not None
     character = await create_character(test_session, project_id=project.id, name="Lead")
     shot = await create_shot(test_session, project_id=project.id, description="Opening shot")
+    assert character.id is not None
+    assert shot.id is not None
 
     await async_client.patch(
         f"/api/v1/shots/{shot.id}",

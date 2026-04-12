@@ -8,6 +8,7 @@ describe("useCanvasLayout", () => {
   it("keeps the final output section visible for an empty workspace", () => {
     const { result } = renderHook(() =>
       useCanvasLayout({
+        projectId: 7,
         summary: null,
         characters: [],
         shots: [],

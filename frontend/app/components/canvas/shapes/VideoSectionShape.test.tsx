@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { canvasEvents } from "../canvasEvents";
-import { VideoSectionShapeUtil } from "./VideoSectionShape";
 import type { VideoSectionShape } from "./types";
+import { VideoSectionShapeUtil } from "./VideoSectionShape";
 
 vi.mock("~/services/api", () => ({
   getStaticUrl: (path: string | null | undefined) => path,
@@ -71,6 +72,25 @@ describe("VideoSectionShape", () => {
       feedback: "请基于现有镜头重新合成最终视频。",
     });
     expect(container).toBeTruthy();
+  });
+
+  it("falls back to direct download when the controlled final-video route fails", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 404,
+      blob: async () => new Blob(["not-found"]),
+    } as never);
+    const openMock = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    render(shapeUtil.component(createShape()));
+
+    await user.click(screen.getByRole("button", { name: "下载最终视频" }));
+
+    expect(openMock).toHaveBeenCalledWith("/api/v1/projects/7/final-video", "_blank");
+
+    fetchMock.mockRestore();
+    openMock.mockRestore();
   });
 
   it("marks stale final output with explicit provenance copy", () => {
