@@ -22,3 +22,9 @@ CLAUDE.md
 .openspec
 openspec
 *.sh
+.bg-shell/
+.gsd/
+findings.md
+progress.md
+task_plan.md
+backend/.coverage
