@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -186,7 +186,7 @@ describe('ProjectPage live hydration', () => {
     expect(screen.getByText('文本')).toBeInTheDocument();
     expect(screen.getByText('图像')).toBeInTheDocument();
     expect(screen.getByText('视频')).toBeInTheDocument();
-    expect(screen.getByText('openai')).toBeInTheDocument();
+    expect(screen.getAllByText('openai').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('doubao')).toBeInTheDocument();
     expect(screen.getAllByText('项目覆盖')).toHaveLength(2);
     expect(screen.getByText('默认继承')).toBeInTheDocument();
@@ -212,9 +212,16 @@ describe('ProjectPage live hydration', () => {
     const user = userEvent.setup();
 
     render(<ProjectPage />);
+    vi.clearAllMocks();
 
     await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
-    await user.click(screen.getByRole('radio', { name: '继承默认（当前：OpenAI）' }));
+    const videoFieldset = screen.getByText('视频').closest('fieldset');
+    expect(videoFieldset).not.toBeNull();
+    await user.click(
+      within(videoFieldset as HTMLElement).getByRole('radio', {
+        name: '继承默认（当前：OpenAI）',
+      })
+    );
     await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
 
     expect(mutateSpy).toHaveBeenCalledWith({

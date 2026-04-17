@@ -6,11 +6,12 @@ import {
 	StopIcon,
 } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ChatPanel } from "~/components/chat/ChatPanel";
 import { Sidebar } from "~/components/layout/Sidebar";
 import { StageView } from "~/components/layout/StageView";
+import { ProviderSelectionFields } from "~/components/project/ProviderSelectionFields";
 import { SettingsModal } from "~/components/settings/SettingsModal";
 import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
@@ -18,9 +19,19 @@ import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
 import { useEditorStore } from "~/stores/editorStore";
 import { useSidebarStore } from "~/stores/sidebarStore";
-import type { RecoveryControlRead, WorkflowStage } from "~/types";
+import type {
+	ProjectProviderOverridesPayload,
+	RecoveryControlRead,
+	WorkflowStage,
+} from "~/types";
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
+
+const PROVIDER_LABELS = {
+	text: "文本",
+	image: "图像",
+	video: "视频",
+} as const;
 
 export function ProjectPage() {
 	const { id } = useParams<{ id: string }>();
@@ -31,6 +42,13 @@ export function ProjectPage() {
 	const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarStore();
 	const autoStartTriggered = useRef(false);
 	const retryCount = useRef(0);
+	const [isEditingProviders, setIsEditingProviders] = useState(false);
+	const [providerDraft, setProviderDraft] =
+		useState<ProjectProviderOverridesPayload>({
+			text_provider_override: null,
+			image_provider_override: null,
+			video_provider_override: null,
+		});
 
 	const { send } = useProjectWebSocket(projectId);
 
@@ -102,6 +120,24 @@ export function ProjectPage() {
 			useEditorStore.getState().setProjectVideoUrl(project.video_url);
 		}
 	}, [project?.video_url]);
+
+	useEffect(() => {
+		if (!project || isEditingProviders) {
+			return;
+		}
+
+		setProviderDraft({
+			text_provider_override: project.text_provider_override,
+			image_provider_override: project.image_provider_override,
+			video_provider_override: project.video_provider_override,
+		});
+	}, [
+		isEditingProviders,
+		project,
+		project?.image_provider_override,
+		project?.text_provider_override,
+		project?.video_provider_override,
+	]);
 
 	// 加载历史消息（只在数据加载完成后执行一次）
 	const messagesLoadedRef = useRef(false);
@@ -288,6 +324,28 @@ export function ProjectPage() {
 		},
 	});
 
+	const updateProvidersMutation = useMutation({
+		mutationFn: (payload: ProjectProviderOverridesPayload) =>
+			projectsApi.update(projectId, payload),
+		onSuccess: () => {
+			setIsEditingProviders(false);
+			queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+			queryClient.invalidateQueries({ queryKey: ["projects"] });
+			toast.success({
+				title: "Provider 已保存",
+				message: "项目级 provider 选择已更新。",
+			});
+		},
+		onError: (error: Error | ApiError) => {
+			const apiError = error instanceof ApiError ? error : null;
+			toast.error({
+				title: "保存失败",
+				message:
+					apiError?.message || error.message || "无法更新项目 provider 设置",
+			});
+		},
+	});
+
 	const handleGenerate = async () => {
 		store.clearMessages();
 		store.setCurrentStage("ideate");
@@ -332,6 +390,23 @@ export function ProjectPage() {
 			return;
 		}
 		resumeMutation.mutate();
+	};
+
+	const handleProviderEditCancel = () => {
+		if (!project) {
+			return;
+		}
+
+		setProviderDraft({
+			text_provider_override: project.text_provider_override,
+			image_provider_override: project.image_provider_override,
+			video_provider_override: project.video_provider_override,
+		});
+		setIsEditingProviders(false);
+	};
+
+	const handleProviderSave = () => {
+		updateProvidersMutation.mutate(providerDraft);
 	};
 
 	useEffect(() => {
@@ -396,6 +471,24 @@ export function ProjectPage() {
 		);
 	}
 
+	const providerRows = [
+		{
+			key: "text" as const,
+			label: PROVIDER_LABELS.text,
+			entry: project.provider_settings.text,
+		},
+		{
+			key: "image" as const,
+			label: PROVIDER_LABELS.image,
+			entry: project.provider_settings.image,
+		},
+		{
+			key: "video" as const,
+			label: PROVIDER_LABELS.video,
+			entry: project.provider_settings.video,
+		},
+	];
+
 	return (
 		<>
 			<Sidebar />
@@ -429,6 +522,89 @@ export function ProjectPage() {
 						<div className="w-10" />
 					</div>
 				</header>
+
+				<div className="px-2 sm:px-4 pt-2 sm:pt-4">
+					<Card className="border border-base-300 bg-base-100 shadow-none">
+						<div className="flex flex-col gap-4">
+							<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+								<div>
+									<h2 className="text-lg font-heading font-bold">Provider 选择</h2>
+									<p className="mt-1 text-sm text-base-content/70">
+										这里展示项目级 provider proof：当前生效值，以及它来自项目覆盖还是默认继承。
+									</p>
+								</div>
+
+								{!isEditingProviders ? (
+									<Button
+										variant="secondary"
+										onClick={() => setIsEditingProviders(true)}
+									>
+										编辑 Provider
+									</Button>
+								) : (
+									<div className="flex flex-wrap gap-2">
+										<Button
+											variant="ghost"
+											onClick={handleProviderEditCancel}
+											disabled={updateProvidersMutation.isPending}
+										>
+											取消
+										</Button>
+										<Button
+											variant="primary"
+											onClick={handleProviderSave}
+											loading={updateProvidersMutation.isPending}
+										>
+											保存 Provider 设置
+										</Button>
+									</div>
+								)}
+							</div>
+
+							{!isEditingProviders ? (
+								<div className="grid gap-3 md:grid-cols-3">
+									{providerRows.map((row) => (
+										<div
+											key={row.key}
+											className="rounded-2xl border border-base-300 bg-base-200/50 p-4"
+										>
+											<div className="flex items-center justify-between gap-3">
+												<span className="text-sm font-semibold text-base-content">
+													{row.label}
+												</span>
+												<span
+													className={`badge ${
+														row.entry.source === "project"
+															? "badge-primary"
+															: "badge-ghost"
+													}`}
+												>
+													{row.entry.source === "project"
+														? "项目覆盖"
+														: "默认继承"}
+												</span>
+											</div>
+											<p className="mt-3 font-mono text-sm text-base-content">
+												{row.entry.effective_key}
+											</p>
+											<p className="mt-1 text-xs text-base-content/60">
+												{row.entry.override_key
+													? `override: ${row.entry.override_key}`
+													: "未设置项目级 override"}
+											</p>
+										</div>
+									))}
+								</div>
+							) : (
+								<ProviderSelectionFields
+									value={providerDraft}
+									onChange={setProviderDraft}
+									disabled={updateProvidersMutation.isPending}
+								/>
+							)}
+						</div>
+					</Card>
+				</div>
 
 				{store.recoveryControl && (
 					<div className="px-2 sm:px-4 pt-2 sm:pt-4">

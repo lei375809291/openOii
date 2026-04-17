@@ -43,6 +43,9 @@ export function HomePage() {
       title: title || "未命名项目",
       story: trimmed,
       style: "anime",
+      text_provider_override: null,
+      image_provider_override: null,
+      video_provider_override: null,
     });
   };
 

@@ -20,6 +20,26 @@ const baseInput: WorkspaceProjectionInput = {
     status: "draft",
     created_at: "2026-04-11T00:00:00Z",
     updated_at: "2026-04-11T00:00:00Z",
+    provider_settings: {
+      text: {
+        override_key: null,
+        effective_key: "anthropic",
+        source: "default",
+      },
+      image: {
+        override_key: null,
+        effective_key: "openai",
+        source: "default",
+      },
+      video: {
+        override_key: null,
+        effective_key: "openai",
+        source: "default",
+      },
+    },
+    text_provider_override: null,
+    image_provider_override: null,
+    video_provider_override: null,
   },
   currentStage: "ideate",
   runState: "idle",
