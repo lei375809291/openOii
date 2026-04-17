@@ -34,9 +34,6 @@ const projectData = {
       source: 'project',
     },
   },
-  text_provider_override: 'openai',
-  image_provider_override: null,
-  video_provider_override: 'doubao',
 };
 const emptyCharacters: never[] = [];
 const emptyShots: never[] = [];
@@ -190,6 +187,34 @@ describe('ProjectPage live hydration', () => {
     expect(screen.getByText('doubao')).toBeInTheDocument();
     expect(screen.getAllByText('项目覆盖')).toHaveLength(2);
     expect(screen.getByText('默认继承')).toBeInTheDocument();
+  });
+
+  it('hydrates provider edit defaults from provider_settings overrides after refresh', async () => {
+    const user = userEvent.setup();
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
+
+    const textFieldset = screen.getByText('文本').closest('fieldset');
+    const imageFieldset = screen.getByText('图像').closest('fieldset');
+    const videoFieldset = screen.getByText('视频').closest('fieldset');
+
+    expect(textFieldset).not.toBeNull();
+    expect(imageFieldset).not.toBeNull();
+    expect(videoFieldset).not.toBeNull();
+
+    expect(
+      within(textFieldset as HTMLElement).getByRole('radio', { name: 'OpenAI' })
+    ).toBeChecked();
+    expect(
+      within(imageFieldset as HTMLElement).getByRole('radio', {
+        name: '继承默认（当前：OpenAI）',
+      })
+    ).toBeChecked();
+    expect(
+      within(videoFieldset as HTMLElement).getByRole('radio', { name: 'Doubao' })
+    ).toBeChecked();
   });
 
   it('invalidates project caches when projectUpdatedAt changes without clobbering live progress state', async () => {
