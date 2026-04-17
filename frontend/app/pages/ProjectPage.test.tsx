@@ -1,7 +1,9 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectPage } from './ProjectPage';
+import { projectsApi } from '~/services/api';
 
 const invalidateQueries = vi.fn();
 const setSearchParams = vi.fn();
@@ -15,6 +17,26 @@ const projectData = {
   status: 'active',
   created_at: '2026-04-11T00:00:00Z',
   updated_at: '2026-04-11T00:00:00Z',
+  provider_settings: {
+    text: {
+      override_key: 'openai',
+      effective_key: 'openai',
+      source: 'project',
+    },
+    image: {
+      override_key: null,
+      effective_key: 'openai',
+      source: 'default',
+    },
+    video: {
+      override_key: 'doubao',
+      effective_key: 'doubao',
+      source: 'project',
+    },
+  },
+  text_provider_override: 'openai',
+  image_provider_override: null,
+  video_provider_override: 'doubao',
 };
 const emptyCharacters: never[] = [];
 const emptyShots: never[] = [];
@@ -56,6 +78,7 @@ const storeState = {
   }),
   addMessage: vi.fn(),
 };
+const mutateSpy = vi.fn();
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -93,7 +116,7 @@ vi.mock('@tanstack/react-query', () => ({
     return { data: undefined, isLoading: false, error: null };
   },
   useMutation: () => ({
-    mutate: vi.fn(),
+    mutate: mutateSpy,
     isPending: false,
   }),
 }));
@@ -107,13 +130,19 @@ vi.mock('~/hooks/useWebSocket', () => ({
 }));
 
 vi.mock('~/stores/editorStore', () => ({
-  useEditorStore: (selector?: (state: typeof storeState) => unknown) =>
-    selector ? selector(storeState) : storeState,
+  useEditorStore: Object.assign(
+    (selector?: (state: typeof storeState) => unknown) =>
+      selector ? selector(storeState) : storeState,
+    {
+      getState: () => storeState,
+    }
+  ),
 }));
 
 vi.mock('~/services/api', () => ({
   projectsApi: {
     get: vi.fn(),
+    update: vi.fn(),
     getCharacters: vi.fn(),
     getShots: vi.fn(),
     getMessages: vi.fn(),
@@ -147,6 +176,20 @@ describe('ProjectPage live hydration', () => {
     storeState.progress = 0.35;
     storeState.currentStage = 'visualize';
     storeState.projectUpdatedAt = null;
+    vi.mocked(projectsApi.update).mockResolvedValue(projectData as never);
+  });
+
+  it('renders creator-visible provider proof with effective keys and source badges', () => {
+    render(<ProjectPage />);
+
+    expect(screen.getByText('Provider 选择')).toBeInTheDocument();
+    expect(screen.getByText('文本')).toBeInTheDocument();
+    expect(screen.getByText('图像')).toBeInTheDocument();
+    expect(screen.getByText('视频')).toBeInTheDocument();
+    expect(screen.getByText('openai')).toBeInTheDocument();
+    expect(screen.getByText('doubao')).toBeInTheDocument();
+    expect(screen.getAllByText('项目覆盖')).toHaveLength(2);
+    expect(screen.getByText('默认继承')).toBeInTheDocument();
   });
 
   it('invalidates project caches when projectUpdatedAt changes without clobbering live progress state', async () => {
@@ -163,5 +206,28 @@ describe('ProjectPage live hydration', () => {
     expect(storeState.isGenerating).toBe(true);
     expect(storeState.progress).toBe(0.35);
     expect(storeState.currentStage).toBe('visualize');
+  });
+
+  it('saves provider overrides without resetting recovery and live progress state', async () => {
+    const user = userEvent.setup();
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
+    await user.click(screen.getByRole('radio', { name: '继承默认（当前：OpenAI）' }));
+    await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
+
+    expect(mutateSpy).toHaveBeenCalledWith({
+      text_provider_override: 'openai',
+      image_provider_override: null,
+      video_provider_override: null,
+    });
+
+    expect(storeState.setGenerating).not.toHaveBeenCalled();
+    expect(storeState.setProgress).not.toHaveBeenCalled();
+    expect(storeState.setRecoveryControl).not.toHaveBeenCalled();
+    expect(storeState.setRecoverySummary).not.toHaveBeenCalled();
+    expect(storeState.isGenerating).toBe(true);
+    expect(storeState.progress).toBe(0.35);
   });
 });

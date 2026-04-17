@@ -53,6 +53,7 @@ describe('NewProjectPage', () => {
     await user.type(screen.getByLabelText('项目标题'), 'Bootstrap Story');
     await user.type(screen.getByPlaceholderText('很久很久以前...'), 'A creator starts a new comic-drama.');
     await user.click(screen.getByRole('button', { name: '下一步 →' }));
+    await user.click(screen.getByRole('radio', { name: 'OpenAI' }));
     await user.click(screen.getByRole('button', { name: '下一步 →' }));
     await user.click(screen.getByRole('button', { name: '创建项目' }));
 
@@ -61,6 +62,9 @@ describe('NewProjectPage', () => {
       title: 'Bootstrap Story',
       story: 'A creator starts a new comic-drama.',
       style: 'cinematic',
+      text_provider_override: null,
+      image_provider_override: 'openai',
+      video_provider_override: null,
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects'] });
     expect(mockNavigate).toHaveBeenCalledWith('/project/7?autoStart=true');
