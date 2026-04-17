@@ -17,6 +17,7 @@ def _backend_root() -> Path:
 def _alembic_config(db_url: str) -> Config:
     config = Config(str(_backend_root() / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", db_url)
+    config.set_main_option("script_location", str(_backend_root() / "alembic"))
     return config
 
 
@@ -44,6 +45,7 @@ def test_alembic_upgrade_head_rebuilds_blank_database(tmp_path: Path) -> None:
         "project",
         "run",
         "shot",
+        "shot_character_binding",
         "stage",
         "alembic_version",
     }
@@ -52,10 +54,17 @@ def test_alembic_upgrade_head_rebuilds_blank_database(tmp_path: Path) -> None:
 
     column_engine = create_engine(db_url)
     try:
-        run_columns = {column["name"] for column in inspect(column_engine).get_columns("run")}
+        inspector = inspect(column_engine)
+        run_columns = {column["name"] for column in inspector.get_columns("run")}
+        project_columns = {column["name"] for column in inspector.get_columns("project")}
     finally:
         column_engine.dispose()
     assert {"project_id", "thread_id", "status", "version", "source"}.issubset(run_columns)
+    assert {
+        "text_provider_override",
+        "image_provider_override",
+        "video_provider_override",
+    }.issubset(project_columns)
 
 
 def test_alembic_stamp_adopts_existing_create_all_database(tmp_path: Path) -> None:
