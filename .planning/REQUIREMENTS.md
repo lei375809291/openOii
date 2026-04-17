@@ -51,19 +51,19 @@ Close `PROJ-02` by proving that project-scoped provider selection survives persi
 
 | Requirement | Phase |
 |-------------|-------|
-| PROV-01 | — |
-| PROV-02 | — |
-| PROV-03 | — |
-| VAL-01 | — |
-| VAL-02 | — |
-| RUN-01 | — |
-| RUN-02 | — |
-| RUN-03 | — |
-| RUN-04 | — |
-| PROOF-01 | — |
-| PROOF-02 | — |
-| PROOF-03 | — |
-| PROOF-04 | — |
+| PROV-01 | Phase 07 |
+| PROV-02 | Phase 07 |
+| PROV-03 | Phase 07 |
+| VAL-01 | Phase 08 |
+| VAL-02 | Phase 08 |
+| RUN-01 | Phase 09 |
+| RUN-02 | Phase 09 |
+| RUN-03 | Phase 09 |
+| RUN-04 | Phase 09 |
+| PROOF-01 | Phase 10 |
+| PROOF-02 | Phase 10 |
+| PROOF-03 | Phase 10 |
+| PROOF-04 | Phase 10 |
 
 ---
 *Created: 2026-04-17 for milestone v1.1*

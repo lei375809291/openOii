@@ -6,7 +6,7 @@ status: active
 last_updated: "2026-04-17T00:00:00.000Z"
 last_activity: 2026-04-17
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-04-11)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 07 — Project Provider Contracts
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-17 — Milestone v1.1 started
+Status: Roadmap defined; ready for phase planning
+Last activity: 2026-04-17 — v1.1 roadmap created
 
 Progress: [----------] 0%
 
@@ -52,7 +52,7 @@ Progress: [----------] 0%
 
 **Recent Trend:**
 
-- v1.1 started to prove project-scoped provider portability and close directly related planning drift.
+- v1.1 roadmap defined as a tight 4-phase portability proof: contracts → validation → runtime snapshot semantics → proof/evidence.
 
 *Updated after each plan completion*
 | Phase 03 P04 | ~1 session | 3 tasks | 6 files |
@@ -77,17 +77,18 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Define v1.1 requirements for project-scoped provider portability.
-- Create the v1.1 roadmap and phase sequence.
+- Plan Phase 07: project-level provider persistence and source visibility.
+- Keep Phase 09 semantics explicit: fresh run freezes current selection, resume reuses old snapshot, rerun/new run adopts updated selection.
+- Keep proof scope tight to creator-visible evidence plus deterministic automated acceptance.
 
 ### Blockers/Concerns
 
-- **FastAPI version upgrade**: Current repo uses ≥0.115, target is ≥0.128. Must verify Pydantic v2 compatibility before Phase 1 implementation.
-- **tldraw version**: Repo references ^4.3 but latest confirmed is v4.2.0 — version resolution needs verification.
-- **LangGraph migration**: Existing repo uses Claude Agent SDK for orchestration. Phase 2 requires migrating all agent workflows to LangGraph StateGraph with persistence and interrupts.
+- **Snapshot drift risk**: Resume must stay pinned to the original run snapshot even after project provider edits.
+- **Silent fallback risk**: Resolution must fail explicitly instead of quietly switching to another provider.
+- **Scope creep risk**: Proof must stay at project-level portability; no automatic fallback, per-asset switching, or generalized routing engine work.
 
 ## Session Continuity
 
 Last session: 2026-04-12T01:50:00.000Z
-Stopped at: Milestone v1.1 requirement definition
+Stopped at: v1.1 roadmap creation complete; ready to plan Phase 07
 Resume file: None
