@@ -97,8 +97,8 @@ This document evolves at phase transitions and milestone boundaries.
 
 - **Shipped milestone:** v1.0
 - **Current milestone:** v1.1 Provider Portability Proof
-- **Current focus:** prove project-scoped provider portability (`PROJ-02`) end-to-end and close the directly related planning drift.
-- **Carry-forward context:** v1.0 shipped the guided, resumable core loop; provider portability remains the primary deferred warning.
+- **Current focus:** Phase 07 complete — project-level provider contracts and creator-facing provider proof/edit flow are now stable across save + refresh; next focus is pre-run validation and deterministic resolution.
+- **Carry-forward context:** v1.0 shipped the guided, resumable core loop; provider portability remains the primary deferred warning, but the project-scoped contract + refresh/edit consistency baseline is now in place from Phase 07.
 
 ---
-*Last updated: 2026-04-17 at v1.1 milestone start*
+*Last updated: 2026-04-18 after Phase 07 completion*
