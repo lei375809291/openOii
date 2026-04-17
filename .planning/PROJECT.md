@@ -10,6 +10,15 @@ This initialization does **not** treat the current repository as the final produ
 
 An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow.
 
+## Current Milestone: v1.1 Provider Portability Proof
+
+**Goal:** 补齐 `PROJ-02`，让项目级 provider 配置/切换在真实 creator 工作流里端到端成立，并把与该闭环直接相关的规划文档漂移一起收口。
+
+**Target features:**
+- 项目级 text / image / video provider 配置或切换路径可用
+- 从项目配置到实际生成执行的 provider 选择链路可验证
+- 修复与 provider portability 闭环直接相关的文档 / 审计漂移
+
 ## Requirements
 
 ### Validated
@@ -22,7 +31,8 @@ An independent creator can go from a raw story idea to a coherent final video in
 
 ### Active
 
-- [ ] The platform can prove project-scoped provider portability end-to-end as a follow-up milestone item.
+- [ ] The platform can prove project-scoped provider portability end-to-end in a real project workflow.
+- [ ] Planning and audit artifacts directly tied to provider portability reflect the shipped v1.0 state accurately.
 
 ### Out of Scope
 
@@ -86,14 +96,9 @@ This document evolves at phase transitions and milestone boundaries.
 ## Current State
 
 - **Shipped milestone:** v1.0
-- **Outcome:** The guided, resumable core loop from idea → final video is shipped and validated.
-- **Deferred warning:** Project-scoped provider portability (`PROJ-02`) is still unproven and should be handled in the next milestone rather than retroactively blocking v1.0.
-
-## Next Milestone Goals
-
-- Prove or implement project-scoped provider portability / provider swap behavior end-to-end.
-- Resolve carried-forward documentation drift and archive gaps (for example, Phase 1 standalone verification provenance).
-- Decide which v1.x items become the first post-v1 milestone scope.
+- **Current milestone:** v1.1 Provider Portability Proof
+- **Current focus:** prove project-scoped provider portability (`PROJ-02`) end-to-end and close the directly related planning drift.
+- **Carry-forward context:** v1.0 shipped the guided, resumable core loop; provider portability remains the primary deferred warning.
 
 ---
-*Last updated: 2026-04-12 after v1.0 milestone closure decision*
+*Last updated: 2026-04-17 at v1.1 milestone start*

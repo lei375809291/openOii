@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: v1.0
-status: complete
-stopped_at: Milestone v1.0 archived and closed
-last_updated: "2026-04-12T01:50:00.000Z"
-last_activity: 2026-04-12
+milestone: v1.1
+milestone_name: Provider Portability Proof
+status: active
+last_updated: "2026-04-17T00:00:00.000Z"
+last_activity: 2026-04-17
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow.
-**Current focus:** Phase 06 — final-assembly-delivery
+**Current focus:** Milestone v1.1 — Provider Portability Proof
 
 ## Current Position
 
-Phase: None
-Plan: None
-Status: Milestone v1.0 complete
-Last activity: 2026-04-12
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-17 — Milestone v1.1 started
 
-Progress: [██████████] 100%
+Progress: [----------] 0%
 
 ## Performance Metrics
 
@@ -53,7 +52,7 @@ Progress: [██████████] 100%
 
 **Recent Trend:**
 
-- v1.0 archived after six completed phases and nineteen completed plans.
+- v1.1 started to prove project-scoped provider portability and close directly related planning drift.
 
 *Updated after each plan completion*
 | Phase 03 P04 | ~1 session | 3 tasks | 6 files |
@@ -78,7 +77,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Define v1.1 requirements for project-scoped provider portability.
+- Create the v1.1 roadmap and phase sequence.
 
 ### Blockers/Concerns
 
@@ -89,5 +89,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-12T01:50:00.000Z
-Stopped at: Milestone v1.0 complete
+Stopped at: Milestone v1.1 requirement definition
 Resume file: None
