@@ -4,10 +4,13 @@ import json
 import asyncio
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlmodel import select
 
+from app.api.deps import get_app_settings, get_db_session, get_ws_manager
 from app.agents.review import ReviewAgent
 from app.api.v1.routes import generation as generation_routes
+from app.main import create_app
 from app.models.agent_run import AgentRun
 from tests.agent_fixtures import FakeLLM, make_context
 from tests.factories import create_project, create_run, create_shot
@@ -39,6 +42,36 @@ async def test_generate_project_success(async_client, test_session, monkeypatch)
     run = await test_session.get(AgentRun, data["id"])
     assert run is not None
     assert run.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_generate_project_does_not_require_admin_token(
+    test_session, test_settings, ws_manager, monkeypatch
+):
+    monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+
+    app = create_app()
+
+    async def override_get_session():
+        yield test_session
+
+    async def override_get_settings():
+        return test_settings
+
+    async def override_get_ws():
+        return ws_manager
+
+    app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
+
+    project = await create_project(test_session)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.post(f"/api/v1/projects/{project.id}/generate", json={})
+
+    assert res.status_code == 201
 
 
 @pytest.mark.asyncio

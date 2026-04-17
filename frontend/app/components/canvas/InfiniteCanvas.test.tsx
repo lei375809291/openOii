@@ -9,6 +9,18 @@ import { charactersApi, shotsApi } from "~/services/api";
 const updateCharacter = vi.fn();
 const updateShot = vi.fn();
 
+const useCanvasLayoutMock = vi.hoisted(() =>
+  vi.fn((args: any) =>
+    (args.workspaceStatus?.sections ?? []).map((section: any, index: number) => ({
+      id: `shape:${section.key}`,
+      type: "mock-shape",
+      x: 0,
+      y: index * 100,
+      props: { w: 100, h: 100 },
+    }))
+  )
+);
+
 const mockEditor = vi.hoisted(() => {
   let shapes: Array<{ id: string }> = [];
 
@@ -103,15 +115,7 @@ vi.mock("./shapes", () => ({
 }));
 
 vi.mock("~/hooks/useCanvasLayout", () => ({
-  useCanvasLayout: () => [
-    {
-      id: "shape:script",
-      type: "mock-shape",
-      x: 0,
-      y: 0,
-      props: { w: 100, h: 100 },
-    },
-  ],
+  useCanvasLayout: useCanvasLayoutMock,
 }));
 
 beforeEach(() => {
@@ -190,6 +194,21 @@ vi.mock("~/services/api", () => ({
 }));
 
 describe("InfiniteCanvas approve wiring", () => {
+  it("only mounts sections that are revealed for the current stage", async () => {
+    render(<InfiniteCanvas projectId={1} />);
+
+    await waitFor(() => {
+      expect(useCanvasLayoutMock).toHaveBeenCalled();
+    });
+
+    expect(useCanvasLayoutMock.mock.calls[0]?.[0].workspaceStatus?.sections.map((section: any) => section.key)).toEqual([
+      "script",
+    ]);
+    expect(mockEditor.createShapes).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "shape:script" }),
+    ]);
+  });
+
   it("routes approve-character and approve-shot events to backend mutations", async () => {
     render(<InfiniteCanvas projectId={1} />);
 

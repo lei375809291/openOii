@@ -31,11 +31,12 @@ async def test_list_shots(async_client, test_session):
 
 
 @pytest.mark.asyncio
-async def test_update_shot(async_client, test_session):
+@pytest.mark.parametrize("method", ["put", "patch"])
+async def test_update_shot(async_client, test_session, method):
     project = await create_project(test_session)
     shot = await create_shot(test_session, project_id=project.id, description="Old")
 
-    res = await async_client.patch(
+    res = await getattr(async_client, method)(
         f"/api/v1/shots/{shot.id}",
         json={"description": "New description", "prompt": "New prompt"},
     )
@@ -87,4 +88,19 @@ async def test_regenerate_shot(async_client, test_session, monkeypatch):
     await test_session.refresh(shot)
     await test_session.refresh(project)
     assert shot.video_url == "http://test.com/approved-shot.mp4"
-    assert project.video_url is None
+    assert project.video_url == "http://test.com/project-final.mp4"
+    assert project.status == "superseded"
+
+
+@pytest.mark.asyncio
+async def test_delete_shot(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, description="Delete shot")
+
+    res = await async_client.delete(f"/api/v1/shots/{shot.id}")
+
+    assert res.status_code == 204
+
+    list_res = await async_client.get(f"/api/v1/projects/{project.id}/shots")
+    assert list_res.status_code == 200
+    assert list_res.json() == []

@@ -28,16 +28,18 @@ const baseInput: WorkspaceProjectionInput = {
 };
 
 describe("buildWorkspaceStatus", () => {
-  it("always returns the five canonical sections in order", () => {
-    const result = buildWorkspaceStatus(baseInput);
+  it.each([
+    ["ideate", ["script"]],
+    ["visualize", ["script", "characters", "storyboards"]],
+    ["animate", ["script", "characters", "storyboards", "clips"]],
+    ["deploy", ["script", "characters", "storyboards", "clips", "final-output"]],
+  ] as const)("reveals only sections available at %s", (currentStage, expectedKeys) => {
+    const result = buildWorkspaceStatus({
+      ...baseInput,
+      currentStage,
+    });
 
-    expect(result.sections.map((section) => section.key)).toEqual([
-      "script",
-      "characters",
-      "storyboards",
-      "clips",
-      "final-output",
-    ]);
+    expect(result.sections.map((section) => section.key)).toEqual(expectedKeys);
   });
 
   it("keeps empty projects visible with explicit placeholder states", () => {
@@ -50,6 +52,27 @@ describe("buildWorkspaceStatus", () => {
           placeholder: true,
           state: "draft",
         }),
+      ])
+    );
+  });
+
+  it("keeps visible sections' status semantics intact after reveal", () => {
+    const result = buildWorkspaceStatus({
+      ...baseInput,
+      currentStage: "visualize",
+      project: {
+        ...baseInput.project,
+        summary: "一个侦探在雨夜寻找失踪线索",
+      },
+    });
+
+    expect(result.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "script",
+          placeholder: false,
+          state: "generating",
+        }),
         expect.objectContaining({
           key: "characters",
           placeholder: true,
@@ -60,23 +83,14 @@ describe("buildWorkspaceStatus", () => {
           placeholder: true,
           state: "blocked",
         }),
-        expect.objectContaining({
-          key: "clips",
-          placeholder: true,
-          state: "blocked",
-        }),
-        expect.objectContaining({
-          key: "final-output",
-          placeholder: true,
-          state: "blocked",
-        }),
       ])
     );
   });
 
-  it("marks partially generated sections without hiding the missing ones", () => {
+  it("marks partially generated sections without hiding the missing ones once visualize has started", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
+      currentStage: "visualize",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",

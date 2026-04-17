@@ -133,33 +133,33 @@ export function useCanvasLayout({
       "final-output": SHAPE_TYPES.VIDEO_SECTION,
     };
 
-    CANONICAL_SECTIONS.forEach((section, index) => {
-      const status = sectionStatuses[index];
-      const width = sectionWidths[section.key];
-      const height = sectionHeights[section.key];
+    sectionStatuses.forEach((status, index) => {
+      const section = status.key;
+      const width = sectionWidths[section];
+      const height = sectionHeights[section];
       const x =
-        section.key === "final-output"
+        section === "final-output"
           ? config.startX + (config.sectionWidth - width) / 2
           : config.startX;
 
       result.push({
-        id: `shape:${section.key}` as any,
-        type: sectionShapeTypes[section.key] as (typeof SHAPE_TYPES)[keyof typeof SHAPE_TYPES],
+        id: `shape:${section}` as any,
+        type: sectionShapeTypes[section] as (typeof SHAPE_TYPES)[keyof typeof SHAPE_TYPES],
         x,
         y: currentY,
         props: {
           w: width,
           h: height,
-          ...contentBySection[section.key],
+          ...contentBySection[section],
           sectionState: status.state,
           placeholder: status.placeholder,
           statusLabel: getWorkspaceSectionStatusLabel(status.state),
-          placeholderText: getWorkspaceSectionPlaceholderText(section.key),
+          placeholderText: getWorkspaceSectionPlaceholderText(section),
         },
       } as TLShapePartial);
 
       if (index > 0) {
-        const previousSection = CANONICAL_SECTIONS[index - 1];
+        const previousSection = sectionStatuses[index - 1];
         result.push({
           id: `shape:connector-${index}` as any,
           type: SHAPE_TYPES.CONNECTOR,
@@ -167,7 +167,7 @@ export function useCanvasLayout({
           y: 0,
           props: {
             fromId: `shape:${previousSection.key}`,
-            toId: `shape:${section.key}`,
+            toId: `shape:${section}`,
           },
         });
       }

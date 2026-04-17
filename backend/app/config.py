@@ -71,6 +71,10 @@ class Settings(BaseSettings):
         default="/chat/completions",
         description="文本生成 API 端点路径（OpenAI 兼容）",
     )
+    text_enable_thinking: bool | None = Field(
+        default=None,
+        description="是否显式控制推理模型的 thinking 模式（例如 Qwen3.5）",
+    )
 
     # ============================================
     # 图像生成服务 (OpenAI 兼容接口)

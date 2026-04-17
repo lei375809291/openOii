@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.models.project import Project
-from tests.factories import create_project
+from tests.factories import create_message, create_project, create_run
 
 
 @pytest.mark.asyncio
@@ -68,9 +68,10 @@ async def test_get_project_not_found(async_client):
 
 
 @pytest.mark.asyncio
-async def test_update_project(async_client, test_session):
+@pytest.mark.parametrize("method", ["put", "patch"])
+async def test_update_project(async_client, test_session, method):
     project = await create_project(test_session, title="Old Title")
-    res = await async_client.patch(
+    res = await getattr(async_client, method)(
         f"/api/v1/projects/{project.id}",
         json={"title": "New Title", "style": "noir"},
     )
@@ -78,6 +79,28 @@ async def test_update_project(async_client, test_session):
     data = res.json()
     assert data["title"] == "New Title"
     assert data["style"] == "noir"
+
+
+@pytest.mark.asyncio
+async def test_get_project_messages(async_client, test_session):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id, status="running")
+    await create_message(
+        test_session,
+        run_id=run.id,
+        project_id=project.id,
+        agent="system",
+        role="assistant",
+        content="hello world",
+    )
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}/messages")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) == 1
+    assert data[0]["project_id"] == project.id
+    assert data[0]["content"] == "hello world"
 
 
 @pytest.mark.asyncio

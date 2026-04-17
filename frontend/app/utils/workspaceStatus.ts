@@ -219,7 +219,9 @@ export function toCreatorStageLabel(input: {
 }
 
 export function buildWorkspaceStatus(input: WorkspaceProjectionInput): WorkspaceStatus {
-  const sections = CANONICAL_SECTIONS.map((section) => {
+  const sections = CANONICAL_SECTIONS.filter((section) =>
+    isSectionVisible(input.currentStage, section.key)
+  ).map((section) => {
     const state = resolveSectionState(input, section.key);
     const placeholder =
       (section.key === "script" && !input.project.summary) ||
@@ -242,6 +244,14 @@ export function buildWorkspaceStatus(input: WorkspaceProjectionInput): Workspace
     }),
     sections,
   };
+}
+
+function isSectionVisible(currentStage: string, key: WorkspaceSectionKey) {
+  if (key === "script") {
+    return true;
+  }
+
+  return isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key]);
 }
 
 export function getWorkspaceSectionStatusLabel(state: WorkspaceSectionState | string) {

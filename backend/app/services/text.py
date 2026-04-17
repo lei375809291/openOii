@@ -20,7 +20,9 @@ from app.services.llm import LLMResponse
 class TextServiceError(Exception):
     """文本服务基础异常"""
 
-    def __init__(self, message: str, status_code: int | None = None, response_body: str | None = None):
+    def __init__(
+        self, message: str, status_code: int | None = None, response_body: str | None = None
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.response_body = response_body
@@ -115,7 +117,9 @@ class TextService:
                 response_body=last_body,
             ) from last_exc
 
-    async def _post_stream_with_retry(self, url: str, payload: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+    async def _post_stream_with_retry(
+        self, url: str, payload: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
         delay_s = 0.5
         last_exc: Exception | None = None
         last_status: int | None = None
@@ -132,7 +136,10 @@ class TextService:
                     ) as res:
                         last_status = res.status_code
 
-                        if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
+                        if (
+                            self._is_retryable_status(res.status_code)
+                            and attempt < self.max_retries
+                        ):
                             # 检查 Retry-After 头
                             retry_after = res.headers.get("Retry-After")
                             if retry_after:
@@ -291,6 +298,8 @@ class TextService:
             "max_tokens": max_tokens,
             **kwargs,
         }
+        if self.settings.text_enable_thinking is not None:
+            payload["enable_thinking"] = self.settings.text_enable_thinking
         if temperature is not None:
             payload["temperature"] = temperature
 
@@ -300,11 +309,15 @@ class TextService:
                 payload["messages"] = messages
                 # 如果有 system，添加到 messages 开头
                 if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+                    payload["messages"] = [{"role": "system", "content": system}] + payload[
+                        "messages"
+                    ]
             elif prompt:
                 payload["messages"] = [{"role": "user", "content": prompt}]
                 if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+                    payload["messages"] = [{"role": "system", "content": system}] + payload[
+                        "messages"
+                    ]
             else:
                 raise ValueError("Either messages or prompt must be provided")
         else:
@@ -365,6 +378,8 @@ class TextService:
             "max_tokens": max_tokens,
             **kwargs,
         }
+        if self.settings.text_enable_thinking is not None:
+            payload["enable_thinking"] = self.settings.text_enable_thinking
         if temperature is not None:
             payload["temperature"] = temperature
 
@@ -374,11 +389,15 @@ class TextService:
                 payload["messages"] = messages
                 # 如果有 system，添加到 messages 开头
                 if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+                    payload["messages"] = [{"role": "system", "content": system}] + payload[
+                        "messages"
+                    ]
             elif prompt:
                 payload["messages"] = [{"role": "user", "content": prompt}]
                 if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+                    payload["messages"] = [{"role": "system", "content": system}] + payload[
+                        "messages"
+                    ]
             else:
                 raise ValueError("Either messages or prompt must be provided")
         else:
@@ -417,5 +436,5 @@ class TextService:
         complete_text = "".join(full_text)
         yield {
             "type": "final",
-            "response": LLMResponse(text=complete_text, tool_calls=[], raw=None)
+            "response": LLMResponse(text=complete_text, tool_calls=[], raw=None),
         }

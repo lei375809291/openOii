@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 
+from app.api import deps as api_deps
+from app.api.deps import get_app_settings, get_db_session, get_ws_manager
+from app.api.v1.routes import config as config_routes
+from app.main import create_app
 from app.models.config_item import ConfigItem
+from app.schemas.config import TestConnectionResponse as ConfigTestConnectionResponse
 from tests.factories import create_config_item
 
 
@@ -84,6 +90,22 @@ async def test_update_configs_existing_item(async_client, test_session):
 
 
 @pytest.mark.asyncio
+async def test_update_configs_post_alias(async_client, test_session):
+    res = await async_client.post(
+        "/api/v1/config",
+        json={"configs": {"POST_ALIAS_KEY": "post_value"}},
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["updated"] == 1
+
+    item = await test_session.get(ConfigItem, "POST_ALIAS_KEY")
+    assert item is not None
+    assert item.value == "post_value"
+
+
+@pytest.mark.asyncio
 async def test_update_configs_skip_masked_value(async_client, test_session):
     """测试跳过脱敏值（不更新）"""
     await create_config_item(
@@ -161,6 +183,26 @@ async def test_reveal_value_not_found(async_client, test_session):
     data = res.json()
     assert data["key"] == "NON_EXISTENT_KEY"
     assert data["value"] is None
+
+
+@pytest.mark.asyncio
+async def test_test_connection_happy_path(async_client, monkeypatch):
+    async def _fake_test_llm_connection(_settings):
+        return ConfigTestConnectionResponse(
+            success=True, message="LLM 服务连接成功", details="模型: test"
+        )
+
+    monkeypatch.setattr(config_routes, "_test_llm_connection", _fake_test_llm_connection)
+
+    res = await async_client.post(
+        "/api/v1/config/test-connection",
+        json={"service": "llm"},
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["message"] == "LLM 服务连接成功"
 
 
 @pytest.mark.asyncio
@@ -308,3 +350,35 @@ async def test_reveal_value_falls_back_to_env_for_provider_key(monkeypatch, tmp_
     data = res.json()
     assert data["key"] == "IMAGE_API_KEY"
     assert data["value"] == "env-image-key"
+
+
+@pytest.mark.asyncio
+async def test_test_connection_requires_admin_token_when_configured(
+    test_session, test_settings, ws_manager, monkeypatch
+):
+    app = create_app()
+
+    async def override_get_session():
+        yield test_session
+
+    async def override_get_settings():
+        return test_settings
+
+    async def override_get_ws():
+        return ws_manager
+
+    app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
+    test_settings.admin_token = "secret-admin-token"
+    monkeypatch.setattr(api_deps, "get_settings", lambda: test_settings)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.post(
+            "/api/v1/config/test-connection",
+            json={"service": "llm"},
+        )
+
+    assert res.status_code == 403
+    assert res.json()["detail"] == "Not authorized"
