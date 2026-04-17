@@ -2,9 +2,11 @@ import { ApiError } from "~/types/errors";
 import type {
   Character,
   CharacterUpdatePayload,
+  CreateProjectPayload,
   Project,
   Shot,
   ShotUpdatePayload,
+  UpdateProjectPayload,
 } from "~/types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:18765";
@@ -132,13 +134,13 @@ export const projectsApi = {
   
   get: (id: number) => fetchApi<Project>(`/api/v1/projects/${id}`),
   
-  create: (data: { title: string; story?: string; style?: string }) =>
+  create: (data: CreateProjectPayload) =>
     fetchApi<Project>("/api/v1/projects", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   
-  update: (id: number, data: Partial<Project>) =>
+  update: (id: number, data: UpdateProjectPayload) =>
     fetchApi<Project>(`/api/v1/projects/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),

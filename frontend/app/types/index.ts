@@ -1,5 +1,33 @@
 import type React from "react";
 
+export interface ProjectProviderEntry {
+  override_key: string | null;
+  effective_key: string;
+  source: "project" | "default";
+}
+
+export interface ProjectProviderSettings {
+  text: ProjectProviderEntry;
+  image: ProjectProviderEntry;
+  video: ProjectProviderEntry;
+}
+
+export interface ProjectProviderOverridesPayload {
+  text_provider_override: string | null;
+  image_provider_override: string | null;
+  video_provider_override: string | null;
+}
+
+export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
+  title: string;
+  story?: string;
+  style?: string;
+}
+
+export type UpdateProjectPayload = Partial<
+  Pick<Project, "title" | "story" | "style"> & ProjectProviderOverridesPayload
+>;
+
 // Project types
 export interface Project {
   id: number;
@@ -11,6 +39,10 @@ export interface Project {
   status: string;
   created_at: string;
   updated_at: string;
+  provider_settings: ProjectProviderSettings;
+  text_provider_override: string | null;
+  image_provider_override: string | null;
+  video_provider_override: string | null;
 }
 
 export interface Character {

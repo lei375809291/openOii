@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,7 +53,9 @@ describe('NewProjectPage', () => {
     await user.type(screen.getByLabelText('项目标题'), 'Bootstrap Story');
     await user.type(screen.getByPlaceholderText('很久很久以前...'), 'A creator starts a new comic-drama.');
     await user.click(screen.getByRole('button', { name: '下一步 →' }));
-    await user.click(screen.getByRole('radio', { name: 'OpenAI' }));
+    const imageFieldset = screen.getByText('图像').closest('fieldset');
+    expect(imageFieldset).not.toBeNull();
+    await user.click(within(imageFieldset as HTMLElement).getByRole('radio', { name: 'OpenAI' }));
     await user.click(screen.getByRole('button', { name: '下一步 →' }));
     await user.click(screen.getByRole('button', { name: '创建项目' }));
 
