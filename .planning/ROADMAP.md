@@ -29,10 +29,11 @@
   1. 创作者可以在同一个项目里分别查看和设置 text、image、video 的 provider 选择。
   2. 创作者保存项目设置后，刷新页面或重新进入项目时，看到的 provider 选择与保存时一致。
   3. 创作者可以明确看出某个 modality 当前是项目级 override，还是仍在继承默认 provider。
-**Plans**: 2 plans
+**Plans**: 3 plans
 Plans:
 - [x] 07-01-PLAN.md — 锁定项目 provider 持久化合同、来源字段与数据库迁移。
 - [x] 07-02-PLAN.md — 把项目级 provider 选择与来源展示接入新建项目和项目页。
+- [x] 07-03-PLAN.md — 修复刷新后项目页 Provider 编辑态回显与真实读合同对齐。
 **UI hint**: yes
 
 ### Phase 08: Validation & Deterministic Resolution

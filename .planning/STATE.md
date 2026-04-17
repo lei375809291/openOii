@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: v1.1 roadmap creation complete; ready to plan Phase 07
-last_updated: "2026-04-17T17:14:35.057Z"
-last_activity: 2026-04-17
+last_updated: "2026-04-18T01:25:00.000Z"
+last_activity: 2026-04-18 -- Phase 07 verified and marked complete
 progress:
   total_phases: 4
   completed_phases: 1
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-11)
+See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow.
-**Current focus:** Phase 07 — project-provider-contracts
+**Current focus:** Phase 08 — validation-&-deterministic-resolution
 
 ## Current Position
 
-Phase: 08
+Phase: 08 (validation-&-deterministic-resolution) — READY
 Plan: Not started
-Status: Executing Phase 07
-Last activity: 2026-04-17
+Status: Ready to plan Phase 08
+Last activity: 2026-04-18 -- Phase 07 verified and marked complete
 
 Progress: [----------] 0%
 
@@ -79,7 +79,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Plan Phase 07: project-level provider persistence and source visibility.
+- Plan Phase 08: validation and deterministic resolution before execution starts.
 - Keep Phase 09 semantics explicit: fresh run freezes current selection, resume reuses old snapshot, rerun/new run adopts updated selection.
 - Keep proof scope tight to creator-visible evidence plus deterministic automated acceptance.
 
@@ -92,5 +92,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-12T01:50:00.000Z
-Stopped at: v1.1 roadmap creation complete; ready to plan Phase 07
+Stopped at: Phase 07 complete; ready to plan Phase 08
 Resume file: None
