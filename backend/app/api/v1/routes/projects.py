@@ -15,8 +15,13 @@ from app.models.message import Message
 from app.models.project import Character, Project, Shot
 from app.schemas.project import (
     CharacterRead,
+    DEFAULT_IMAGE_PROVIDER,
+    DEFAULT_TEXT_PROVIDER,
+    DEFAULT_VIDEO_PROVIDER,
     MessageRead,
     ProjectCreate,
+    ProjectProviderEntry,
+    ProjectProviderSettingsRead,
     ProjectListRead,
     ProjectRead,
     ProjectUpdate,
@@ -29,6 +34,43 @@ router = APIRouter()
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _provider_entry(override_key: str | None, default_key: str) -> ProjectProviderEntry:
+    if override_key:
+        return ProjectProviderEntry(
+            override_key=override_key,
+            effective_key=override_key,
+            source="project",
+        )
+    return ProjectProviderEntry(
+        override_key=None,
+        effective_key=default_key,
+        source="default",
+    )
+
+
+def _project_provider_settings(project: Project) -> ProjectProviderSettingsRead:
+    return ProjectProviderSettingsRead(
+        text=_provider_entry(project.text_provider_override, DEFAULT_TEXT_PROVIDER),
+        image=_provider_entry(project.image_provider_override, DEFAULT_IMAGE_PROVIDER),
+        video=_provider_entry(project.video_provider_override, DEFAULT_VIDEO_PROVIDER),
+    )
+
+
+def _project_read_model(project: Project) -> ProjectRead:
+    return ProjectRead(
+        id=project.id if project.id is not None else 0,
+        title=project.title,
+        story=project.story,
+        style=project.style,
+        summary=project.summary,
+        video_url=project.video_url,
+        status=project.status,
+        provider_settings=_project_provider_settings(project),
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+    )
 
 
 async def _delete_project_files(session: AsyncSession, project: Project, project_id: int) -> None:
@@ -87,11 +129,14 @@ async def create_project(payload: ProjectCreate, session: AsyncSession = Session
         story=payload.story,
         style=style,
         status=payload.status or "draft",
+        text_provider_override=payload.text_provider_override,
+        image_provider_override=payload.image_provider_override,
+        video_provider_override=payload.video_provider_override,
     )
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    return ProjectRead.model_validate(project)
+    return _project_read_model(project)
 
 
 @router.get("", response_model=ProjectListRead)
@@ -99,7 +144,7 @@ async def list_projects(session: AsyncSession = SessionDep):
     project_created_at_col = cast(InstrumentedAttribute[datetime], cast(object, Project.created_at))
     res = await session.execute(select(Project).order_by(project_created_at_col.desc()))
     items = res.scalars().all()
-    return {"items": [ProjectRead.model_validate(p) for p in items], "total": len(items)}
+    return {"items": [_project_read_model(p) for p in items], "total": len(items)}
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -107,7 +152,7 @@ async def get_project(project_id: int, session: AsyncSession = SessionDep):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return ProjectRead.model_validate(project)
+    return _project_read_model(project)
 
 
 @router.get("/{project_id}/final-video")
@@ -140,7 +185,7 @@ async def update_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    return ProjectRead.model_validate(project)
+    return _project_read_model(project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

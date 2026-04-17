@@ -6,11 +6,35 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+TextProviderKey = Literal["anthropic", "openai"]
+ImageProviderKey = Literal["openai"]
+VideoProviderKey = Literal["openai", "doubao"]
+
+DEFAULT_TEXT_PROVIDER: TextProviderKey = "anthropic"
+DEFAULT_IMAGE_PROVIDER: ImageProviderKey = "openai"
+DEFAULT_VIDEO_PROVIDER: VideoProviderKey = "openai"
+
+
+class ProjectProviderEntry(BaseModel):
+    override_key: str | None
+    effective_key: str
+    source: Literal["project", "default"]
+
+
+class ProjectProviderSettingsRead(BaseModel):
+    text: ProjectProviderEntry
+    image: ProjectProviderEntry
+    video: ProjectProviderEntry
+
+
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1)
     story: str | None = None
     style: str | None = None
     status: str | None = None
+    text_provider_override: TextProviderKey | None = None
+    image_provider_override: ImageProviderKey | None = None
+    video_provider_override: VideoProviderKey | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -18,6 +42,9 @@ class ProjectUpdate(BaseModel):
     story: str | None = None
     style: str | None = None
     status: str | None = None
+    text_provider_override: TextProviderKey | None = None
+    image_provider_override: ImageProviderKey | None = None
+    video_provider_override: VideoProviderKey | None = None
 
 
 class ProjectRead(BaseModel):
@@ -30,6 +57,7 @@ class ProjectRead(BaseModel):
     summary: str | None
     video_url: str | None
     status: str
+    provider_settings: ProjectProviderSettingsRead
     created_at: datetime
     updated_at: datetime
 

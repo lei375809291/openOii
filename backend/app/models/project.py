@@ -20,6 +20,9 @@ class Project(SQLModel, table=True):
     summary: Optional[str] = None  # 剧情摘要
     video_url: Optional[str] = None  # 最终拼接视频
     status: str = Field(default="draft")
+    text_provider_override: Optional[str] = None
+    image_provider_override: Optional[str] = None
+    video_provider_override: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
