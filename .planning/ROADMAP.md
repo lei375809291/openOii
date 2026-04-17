@@ -14,7 +14,7 @@
 
 ## Phases
 
-- [ ] **Phase 07: Project Provider Contracts** - 让项目级 provider 选择成为可保存、可刷新、可区分来源的一等数据。
+- [x] **Phase 07: Project Provider Contracts** - 让项目级 provider 选择成为可保存、可刷新、可区分来源的一等数据。 (completed 2026-04-17)
 - [ ] **Phase 08: Validation & Deterministic Resolution** - 在运行前明确校验 provider 可用性，并锁定无 silent fallback 的解析规则。
 - [ ] **Phase 09: Runtime Snapshot Semantics** - 让 fresh run、resume、rerun/new run 都按明确的 provider snapshot 语义执行。
 - [ ] **Phase 10: Proof Surface & Acceptance Evidence** - 提供 creator/operator 可见证据与自动化闭环，证明项目级 provider 路由真实生效。
@@ -31,8 +31,8 @@
   3. 创作者可以明确看出某个 modality 当前是项目级 override，还是仍在继承默认 provider。
 **Plans**: 2 plans
 Plans:
-- [ ] 07-01-PLAN.md — 锁定项目 provider 持久化合同、来源字段与数据库迁移。
-- [ ] 07-02-PLAN.md — 把项目级 provider 选择与来源展示接入新建项目和项目页。
+- [x] 07-01-PLAN.md — 锁定项目 provider 持久化合同、来源字段与数据库迁移。
+- [x] 07-02-PLAN.md — 把项目级 provider 选择与来源展示接入新建项目和项目页。
 **UI hint**: yes
 
 ### Phase 08: Validation & Deterministic Resolution
@@ -73,7 +73,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 07. Project Provider Contracts | 0/2 | Not started | - |
+| 07. Project Provider Contracts | 3/3 | Complete    | 2026-04-17 |
 | 08. Validation & Deterministic Resolution | 0/TBD | Not started | - |
 | 09. Runtime Snapshot Semantics | 0/TBD | Not started | - |
 | 10. Proof Surface & Acceptance Evidence | 0/TBD | Not started | - |
