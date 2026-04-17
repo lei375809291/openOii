@@ -20,6 +20,7 @@ import { projectsApi } from "~/services/api";
 import { useEditorStore } from "~/stores/editorStore";
 import { useSidebarStore } from "~/stores/sidebarStore";
 import type {
+	Project,
 	ProjectProviderOverridesPayload,
 	RecoveryControlRead,
 	WorkflowStage,
@@ -32,6 +33,16 @@ const PROVIDER_LABELS = {
 	image: "图像",
 	video: "视频",
 } as const;
+
+function deriveProviderOverridesFromProject(
+	project: Pick<Project, "provider_settings">,
+): ProjectProviderOverridesPayload {
+	return {
+		text_provider_override: project.provider_settings.text.override_key,
+		image_provider_override: project.provider_settings.image.override_key,
+		video_provider_override: project.provider_settings.video.override_key,
+	};
+}
 
 export function ProjectPage() {
 	const { id } = useParams<{ id: string }>();
@@ -127,17 +138,9 @@ export function ProjectPage() {
 		}
 
 		setProviderDraft({
-			text_provider_override: project.text_provider_override,
-			image_provider_override: project.image_provider_override,
-			video_provider_override: project.video_provider_override,
+			...deriveProviderOverridesFromProject(project),
 		});
-	}, [
-		isEditingProviders,
-		project,
-		project?.image_provider_override,
-		project?.text_provider_override,
-		project?.video_provider_override,
-	]);
+	}, [isEditingProviders, project]);
 
 	// 加载历史消息（只在数据加载完成后执行一次）
 	const messagesLoadedRef = useRef(false);
@@ -398,9 +401,7 @@ export function ProjectPage() {
 		}
 
 		setProviderDraft({
-			text_provider_override: project.text_provider_override,
-			image_provider_override: project.image_provider_override,
-			video_provider_override: project.video_provider_override,
+			...deriveProviderOverridesFromProject(project),
 		});
 		setIsEditingProviders(false);
 	};

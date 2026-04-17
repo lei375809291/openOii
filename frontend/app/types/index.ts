@@ -40,9 +40,6 @@ export interface Project {
   created_at: string;
   updated_at: string;
   provider_settings: ProjectProviderSettings;
-  text_provider_override: string | null;
-  image_provider_override: string | null;
-  video_provider_override: string | null;
 }
 
 export interface Character {
