@@ -1,9 +1,12 @@
 import type React from "react";
 
 export interface ProjectProviderEntry {
-  override_key: string | null;
-  effective_key: string;
+  selected_key: string;
   source: "project" | "default";
+  resolved_key: string | null;
+  valid: boolean;
+  reason_code: string | null;
+  reason_message: string | null;
 }
 
 export interface ProjectProviderSettings {

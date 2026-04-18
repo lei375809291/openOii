@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectPage } from './ProjectPage';
 import { projectsApi } from '~/services/api';
+import type { Project } from '~/types';
 
 const invalidateQueries = vi.fn();
 const setSearchParams = vi.fn();
-const projectData = {
+const projectData: Project = {
   id: 9,
   title: 'Realtime Story',
   story: 'A story about live progress syncing.',
@@ -202,7 +203,7 @@ describe('ProjectPage live hydration', () => {
     expect(screen.getByText('图像')).toBeInTheDocument();
     expect(screen.getByText('视频')).toBeInTheDocument();
     expect(screen.getAllByText('openai').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('doubao')).toBeInTheDocument();
+    expect(screen.getAllByText('doubao').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('项目覆盖')).toHaveLength(2);
     expect(screen.getByText('默认继承')).toBeInTheDocument();
     expect(screen.getAllByText('解析有效')).toHaveLength(3);
@@ -227,7 +228,7 @@ describe('ProjectPage live hydration', () => {
     render(<ProjectPage />);
 
     expect(screen.getByText('未解析')).toBeInTheDocument();
-    expect(screen.getByText('缺少 Doubao API Key')).toBeInTheDocument();
+    expect(screen.getAllByText('缺少 Doubao API Key').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('button', { name: '开始生成' })).toBeDisabled();
   });
 

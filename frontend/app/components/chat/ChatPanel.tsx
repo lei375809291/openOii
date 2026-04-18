@@ -21,6 +21,8 @@ interface ChatPanelProps {
   onGenerate: () => void;
   onCancel: () => void;
   isGenerating: boolean;
+  generateDisabled?: boolean;
+  generateDisabledReason?: string;
 }
 // ... (imports and interface definition remain the same) ...
 
@@ -82,6 +84,8 @@ export function ChatPanel({
   onGenerate,
   onCancel,
   isGenerating,
+  generateDisabled = false,
+  generateDisabledReason,
 }: ChatPanelProps) {
   const {
     messages,
@@ -196,12 +200,18 @@ export function ChatPanel({
                 variant="primary"
                 size="lg"
                 onClick={onGenerate}
+                disabled={generateDisabled}
                 className="gap-2 touch-target"
                 aria-label="开始生成漫剧"
               >
                 <RocketLaunchIcon className="w-5 h-5" aria-hidden="true" />
                 <span>开始生成</span>
               </Button>
+              {generateDisabledReason ? (
+                <p className="mt-3 max-w-xs text-xs text-warning">
+                  当前无法开始生成：{generateDisabledReason}
+                </p>
+              ) : null}
             </div>
           </div>
         ) : (

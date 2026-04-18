@@ -38,9 +38,18 @@ function deriveProviderOverridesFromProject(
 	project: Pick<Project, "provider_settings">,
 ): ProjectProviderOverridesPayload {
 	return {
-		text_provider_override: project.provider_settings.text.override_key,
-		image_provider_override: project.provider_settings.image.override_key,
-		video_provider_override: project.provider_settings.video.override_key,
+		text_provider_override:
+			project.provider_settings.text.source === "project"
+				? project.provider_settings.text.selected_key
+				: null,
+		image_provider_override:
+			project.provider_settings.image.source === "project"
+				? project.provider_settings.image.selected_key
+				: null,
+		video_provider_override:
+			project.provider_settings.video.source === "project"
+				? project.provider_settings.video.selected_key
+				: null,
 	};
 }
 
@@ -489,6 +498,9 @@ export function ProjectPage() {
 			entry: project.provider_settings.video,
 		},
 	];
+	const invalidProviderEntry = providerRows.find((row) => !row.entry.valid);
+	const generateDisabledReason = invalidProviderEntry?.entry.reason_message ?? undefined;
+	const generateDisabled = Boolean(generateDisabledReason);
 
 	return (
 		<>
@@ -531,7 +543,7 @@ export function ProjectPage() {
 								<div>
 									<h2 className="text-lg font-heading font-bold">Provider 选择</h2>
 									<p className="mt-1 text-sm text-base-content/70">
-										这里展示项目级 provider proof：当前生效值，以及它来自项目覆盖还是默认继承。
+										这里展示真实解析结果：当前选择、解析结果，以及它来自项目覆盖还是默认继承。
 									</p>
 								</div>
 
@@ -585,14 +597,25 @@ export function ProjectPage() {
 														: "默认继承"}
 												</span>
 											</div>
-											<p className="mt-3 font-mono text-sm text-base-content">
-												{row.entry.effective_key}
+											<p className="mt-3 text-xs text-base-content/60">
+												selected
+											</p>
+											<p className="font-mono text-sm text-base-content">
+												{row.entry.selected_key}
 											</p>
 											<p className="mt-1 text-xs text-base-content/60">
-												{row.entry.override_key
-													? `override: ${row.entry.override_key}`
-													: "未设置项目级 override"}
+												resolved
 											</p>
+											<p className="font-mono text-sm text-base-content">
+												{row.entry.resolved_key ?? "未解析"}
+											</p>
+											{row.entry.reason_message ? (
+												<p className="mt-2 text-xs text-warning">
+													{row.entry.reason_message}
+												</p>
+											) : (
+												<p className="mt-2 text-xs text-success">解析有效</p>
+											)}
 										</div>
 									))}
 								</div>
@@ -601,6 +624,20 @@ export function ProjectPage() {
 									value={providerDraft}
 									onChange={setProviderDraft}
 									disabled={updateProvidersMutation.isPending}
+									defaultKeys={{
+										text:
+											project.provider_settings.text.source === "default"
+												? project.provider_settings.text.selected_key
+												: "anthropic",
+										image:
+											project.provider_settings.image.source === "default"
+												? project.provider_settings.image.selected_key
+												: "openai",
+										video:
+											project.provider_settings.video.source === "default"
+												? project.provider_settings.video.selected_key
+												: "openai",
+									}}
 								/>
 							)}
 						</div>
@@ -695,6 +732,8 @@ export function ProjectPage() {
 							onGenerate={handleGenerate}
 							onCancel={handleCancel}
 							isGenerating={store.isGenerating || generateMutation.isPending}
+							generateDisabled={generateDisabled}
+							generateDisabledReason={generateDisabledReason}
 						/>
 					</div>
 
