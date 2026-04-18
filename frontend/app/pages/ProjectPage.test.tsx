@@ -19,22 +19,32 @@ const projectData = {
   updated_at: '2026-04-11T00:00:00Z',
   provider_settings: {
     text: {
-      override_key: 'openai',
-      effective_key: 'openai',
+      selected_key: 'openai',
       source: 'project',
+      resolved_key: 'openai',
+      valid: true,
+      reason_code: null,
+      reason_message: null,
     },
     image: {
-      override_key: null,
-      effective_key: 'openai',
+      selected_key: 'openai',
       source: 'default',
+      resolved_key: 'openai',
+      valid: true,
+      reason_code: null,
+      reason_message: null,
     },
     video: {
-      override_key: 'doubao',
-      effective_key: 'doubao',
+      selected_key: 'doubao',
       source: 'project',
+      resolved_key: 'doubao',
+      valid: true,
+      reason_code: null,
+      reason_message: null,
     },
   },
 };
+let currentProjectData = projectData;
 const emptyCharacters: never[] = [];
 const emptyShots: never[] = [];
 const emptyMessages: never[] = [];
@@ -92,7 +102,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: [string, number] }) => {
     if (queryKey[0] === 'project') {
       return {
-        data: projectData,
+        data: currentProjectData,
         isLoading: false,
         error: null,
       };
@@ -151,7 +161,14 @@ vi.mock('~/services/api', () => ({
 }));
 
 vi.mock('~/components/chat/ChatPanel', () => ({
-  ChatPanel: () => <div data-testid="chat-panel" />,
+  ChatPanel: ({ generateDisabled, generateDisabledReason }: { generateDisabled?: boolean; generateDisabledReason?: string }) => (
+    <div data-testid="chat-panel">
+      <button type="button" disabled={generateDisabled}>
+        开始生成
+      </button>
+      {generateDisabledReason ? <span>{generateDisabledReason}</span> : null}
+    </div>
+  ),
 }));
 
 vi.mock('~/components/layout/Sidebar', () => ({
@@ -169,6 +186,7 @@ vi.mock('~/components/settings/SettingsModal', () => ({
 describe('ProjectPage live hydration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    currentProjectData = projectData;
     storeState.isGenerating = true;
     storeState.progress = 0.35;
     storeState.currentStage = 'visualize';
@@ -176,7 +194,7 @@ describe('ProjectPage live hydration', () => {
     vi.mocked(projectsApi.update).mockResolvedValue(projectData as never);
   });
 
-  it('renders creator-visible provider proof with effective keys and source badges', () => {
+  it('renders creator-visible provider proof with resolved keys and source badges', () => {
     render(<ProjectPage />);
 
     expect(screen.getByText('Provider 选择')).toBeInTheDocument();
@@ -187,6 +205,30 @@ describe('ProjectPage live hydration', () => {
     expect(screen.getByText('doubao')).toBeInTheDocument();
     expect(screen.getAllByText('项目覆盖')).toHaveLength(2);
     expect(screen.getByText('默认继承')).toBeInTheDocument();
+    expect(screen.getAllByText('解析有效')).toHaveLength(3);
+  });
+
+  it('shows invalid provider reason and disables generate before creator starts a run', () => {
+    currentProjectData = {
+      ...projectData,
+      provider_settings: {
+        ...projectData.provider_settings,
+        video: {
+          selected_key: 'doubao',
+          source: 'project',
+          resolved_key: null,
+          valid: false,
+          reason_code: 'provider_missing_credentials',
+          reason_message: '缺少 Doubao API Key',
+        },
+      },
+    };
+
+    render(<ProjectPage />);
+
+    expect(screen.getByText('未解析')).toBeInTheDocument();
+    expect(screen.getByText('缺少 Doubao API Key')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '开始生成' })).toBeDisabled();
   });
 
   it('hydrates provider edit defaults from provider_settings overrides after refresh', async () => {
