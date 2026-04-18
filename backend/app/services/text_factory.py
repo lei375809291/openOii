@@ -25,6 +25,6 @@ def create_text_service(settings: Settings) -> TextServiceProtocol:
     """
     if settings.text_provider == "openai":
         return TextService(settings)
-    else:
-        # 默认使用 Anthropic
+    if settings.text_provider == "anthropic":
         return LLMService(settings)
+    raise ValueError(f"Unsupported text provider: {settings.text_provider}")

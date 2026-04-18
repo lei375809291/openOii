@@ -7,14 +7,16 @@ interface ProviderFieldConfig {
   title: string;
   description: string;
   overrideKey: keyof ProjectProviderOverridesPayload;
-  defaultKey: string;
   options: readonly string[];
 }
+
+type ProviderDefaultKeys = Record<ProviderModality, string>;
 
 interface ProviderSelectionFieldsProps {
   value: ProjectProviderOverridesPayload;
   onChange: (next: ProjectProviderOverridesPayload) => void;
   disabled?: boolean;
+  defaultKeys?: Partial<ProviderDefaultKeys>;
 }
 
 export const TEXT_PROVIDER_OPTIONS = [
@@ -35,7 +37,6 @@ const PROVIDER_FIELDS: ProviderFieldConfig[] = [
     title: "文本",
     description: "用于故事理解、脚本与提示词推导。",
     overrideKey: "text_provider_override",
-    defaultKey: "anthropic",
     options: TEXT_PROVIDER_OPTIONS,
   },
   {
@@ -43,7 +44,6 @@ const PROVIDER_FIELDS: ProviderFieldConfig[] = [
     title: "图像",
     description: "用于角色图、分镜首帧与静态视觉资产。",
     overrideKey: "image_provider_override",
-    defaultKey: "openai",
     options: IMAGE_PROVIDER_OPTIONS,
   },
   {
@@ -51,10 +51,15 @@ const PROVIDER_FIELDS: ProviderFieldConfig[] = [
     title: "视频",
     description: "用于镜头动画与最终片段生成。",
     overrideKey: "video_provider_override",
-    defaultKey: "openai",
     options: VIDEO_PROVIDER_OPTIONS,
   },
 ];
+
+const FALLBACK_DEFAULT_KEYS: ProviderDefaultKeys = {
+  text: "anthropic",
+  image: "openai",
+  video: "openai",
+};
 
 function getProviderLabel(key: string): string {
   switch (key) {
@@ -73,7 +78,13 @@ export function ProviderSelectionFields({
   value,
   onChange,
   disabled = false,
+  defaultKeys,
 }: ProviderSelectionFieldsProps) {
+  const resolvedDefaultKeys: ProviderDefaultKeys = {
+    ...FALLBACK_DEFAULT_KEYS,
+    ...defaultKeys,
+  };
+
   return (
     <div className="space-y-4">
       {PROVIDER_FIELDS.map((field) => {
@@ -93,8 +104,9 @@ export function ProviderSelectionFields({
               {field.options.map((option) => {
                 const optionId = `${field.modality}-${option}`;
                 const isInherit = option === "inherit-default";
+                const currentDefaultKey = resolvedDefaultKeys[field.modality];
                 const optionLabel = isInherit
-                  ? `继承默认（当前：${getProviderLabel(field.defaultKey)}）`
+                  ? `继承默认（当前：${getProviderLabel(currentDefaultKey)}）`
                   : getProviderLabel(option);
 
                 return (

@@ -156,7 +156,7 @@ export function SettingsModal() {
 
   // 获取当前视频服务提供商
   const getVideoProvider = () => {
-    return (formState['VIDEO_PROVIDER'] || formState['video_provider'] || 'doubao') as string;
+    return (formState['VIDEO_PROVIDER'] || formState['video_provider'] || 'openai') as string;
   };
 
   // 渲染单个配置项
