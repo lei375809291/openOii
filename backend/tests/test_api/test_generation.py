@@ -17,13 +17,57 @@ from tests.agent_fixtures import FakeLLM, make_context
 from tests.factories import create_project, create_run, create_shot
 
 
+def _provider_resolution_deterministic() -> generation_routes.ProviderResolution:
+    return generation_routes.ProviderResolution(
+        valid=True,
+        text=ProjectProviderEntry(
+            selected_key="anthropic",
+            source="default",
+            resolved_key="anthropic",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+        image=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+        video=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+    )
+
+
 def _immediate_task(coro):
     """Helper to make asyncio.create_task synchronous for testing"""
     loop = asyncio.get_running_loop()
+    inner = None
+    frame = getattr(coro, "cr_frame", None)
+    if frame is not None:
+        inner = frame.f_locals.get("coro")
     coro.close()
+    if inner is not None:
+        inner.close()
     future = loop.create_future()
     future.set_result(None)
     return future
+
+
+async def _noop_task() -> None:
+    return None
+
+
+async def _return_resolution(_project, _settings, resolution):
+    return resolution
 
 
 def _invalid_provider_resolution() -> generation_routes.ProviderResolution:
@@ -56,6 +100,36 @@ def _invalid_provider_resolution() -> generation_routes.ProviderResolution:
     )
 
 
+def _video_only_invalid_provider_resolution() -> generation_routes.ProviderResolution:
+    return generation_routes.ProviderResolution(
+        valid=False,
+        text=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+        image=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+        video=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key=None,
+            valid=False,
+            reason_code="provider_missing_credentials",
+            reason_message="缺少 OpenAI 视频凭据",
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_generate_project_not_found(async_client):
     res = await async_client.post("/api/v1/projects/99999/generate", json={})
@@ -63,37 +137,50 @@ async def test_generate_project_not_found(async_client):
 
 
 @pytest.mark.asyncio
+async def test_start_project_task_registers_created_task(monkeypatch):
+    created_coroutines: list[object] = []
+    registered_tasks: list[tuple[int, object]] = []
+
+    class DummyTask:
+        def add_done_callback(self, callback):
+            self.callback = callback
+
+    dummy_task = DummyTask()
+
+    monkeypatch.setattr(
+        generation_routes.asyncio,
+        "create_task",
+        lambda coro: created_coroutines.append(coro) or dummy_task,
+    )
+    monkeypatch.setattr(
+        generation_routes.task_manager,
+        "register",
+        lambda project_id, task: registered_tasks.append((project_id, task)),
+    )
+
+    async def worker() -> None:
+        return None
+
+    await generation_routes._start_project_task(42, worker())
+
+    assert len(created_coroutines) == 1
+    assert registered_tasks == [(42, dummy_task)]
+    created_coroutines[0].close()
+
+
+@pytest.mark.asyncio
 async def test_generate_project_success(async_client, test_session, monkeypatch):
+    expected_snapshot = _provider_resolution_deterministic().as_project_provider_settings().model_dump(
+        mode="json"
+    )
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
     monkeypatch.setattr(
         generation_routes,
-        "resolve_project_provider_settings",
-        lambda project, settings: generation_routes.ProviderResolution(
-            valid=True,
-            text=ProjectProviderEntry(
-                selected_key="anthropic",
-                source="default",
-                resolved_key="anthropic",
-                valid=True,
-                reason_code=None,
-                reason_message=None,
-            ),
-            image=ProjectProviderEntry(
-                selected_key="openai",
-                source="default",
-                resolved_key="openai",
-                valid=True,
-                reason_code=None,
-                reason_message=None,
-            ),
-            video=ProjectProviderEntry(
-                selected_key="openai",
-                source="default",
-                resolved_key="openai",
-                valid=True,
-                reason_code=None,
-                reason_message=None,
-            ),
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(
+            project,
+            settings,
+            _provider_resolution_deterministic(),
         ),
     )
 
@@ -104,6 +191,8 @@ async def test_generate_project_success(async_client, test_session, monkeypatch)
     run = await test_session.get(AgentRun, data["id"])
     assert run is not None
     assert run.status == "running"
+    assert data["provider_snapshot"] == expected_snapshot
+    assert run.provider_snapshot == expected_snapshot
 
 
 @pytest.mark.asyncio
@@ -113,8 +202,8 @@ async def test_generate_project_returns_provider_precheck_failed_without_creatin
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
     monkeypatch.setattr(
         generation_routes,
-        "resolve_project_provider_settings",
-        lambda project, settings: _invalid_provider_resolution(),
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(project, settings, _invalid_provider_resolution()),
     )
 
     project = await create_project(test_session)
@@ -133,10 +222,69 @@ async def test_generate_project_returns_provider_precheck_failed_without_creatin
 
 
 @pytest.mark.asyncio
+async def test_generate_project_allows_start_when_only_video_provider_is_invalid(
+    async_client, test_session, monkeypatch
+):
+    monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(
+            project, settings, _video_only_invalid_provider_resolution()
+        ),
+    )
+
+    project = await create_project(test_session)
+
+    res = await async_client.post(f"/api/v1/projects/{project.id}/generate", json={})
+
+    assert res.status_code == 201
+    data = res.json()
+    run = await test_session.get(AgentRun, data["id"])
+    assert run is not None
+    assert run.status == "running"
+
+
+@pytest.mark.asyncio
 async def test_generate_project_does_not_require_admin_token(
     test_session, test_settings, ws_manager, monkeypatch
 ):
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(
+            project,
+            settings,
+            generation_routes.ProviderResolution(
+                valid=True,
+                text=ProjectProviderEntry(
+                    selected_key="anthropic",
+                    source="default",
+                    resolved_key="anthropic",
+                    valid=True,
+                    reason_code=None,
+                    reason_message=None,
+                ),
+                image=ProjectProviderEntry(
+                    selected_key="openai",
+                    source="default",
+                    resolved_key="openai",
+                    valid=True,
+                    reason_code=None,
+                    reason_message=None,
+                ),
+                video=ProjectProviderEntry(
+                    selected_key="openai",
+                    source="default",
+                    resolved_key="openai",
+                    valid=True,
+                    reason_code=None,
+                    reason_message=None,
+                ),
+            ),
+        ),
+    )
 
     app = create_app()
 
@@ -185,6 +333,15 @@ async def test_cancel_project_run_updates(async_client, test_session):
 @pytest.mark.asyncio
 async def test_feedback_project_success(async_client, test_session, monkeypatch):
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(
+            project,
+            settings,
+            _provider_resolution_deterministic(),
+        ),
+    )
 
     project = await create_project(test_session)
     res = await async_client.post(
@@ -196,6 +353,9 @@ async def test_feedback_project_success(async_client, test_session, monkeypatch)
     run = await test_session.get(AgentRun, data["run_id"])
     assert run is not None
     assert run.status == "queued"
+    assert run.provider_snapshot == _provider_resolution_deterministic().as_project_provider_settings().model_dump(
+        mode="json"
+    )
 
     from app.models.message import Message
 

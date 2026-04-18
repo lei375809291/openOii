@@ -1,9 +1,23 @@
 from __future__ import annotations
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import get_app_settings, get_db_session, get_ws_manager
+from app.api.v1.routes import projects as project_routes
+from app.main import create_app
 from app.models.project import Project
+from app.schemas.project import ProjectProviderEntry, ProviderResolution
+from app.services.provider_resolution import resolve_project_provider_settings
 from tests.factories import create_message, create_project, create_run
+
+
+@pytest.fixture(autouse=True)
+def _stub_async_provider_resolution(monkeypatch):
+    async def _fake(project, settings, **kwargs):
+        return resolve_project_provider_settings(project, settings)
+
+    monkeypatch.setattr(project_routes, "resolve_project_provider_settings_async", _fake)
 
 
 @pytest.mark.asyncio
@@ -86,8 +100,10 @@ async def test_get_project(async_client, test_session, test_settings):
         "source": "project",
         "resolved_key": "openai",
         "valid": True,
+        "status": "valid",
         "reason_code": None,
         "reason_message": None,
+        "capabilities": {"generate": True, "stream": True},
     }
     assert data["provider_settings"]["image"]["selected_key"] == "openai"
     assert data["provider_settings"]["image"]["resolved_key"] == "openai"
@@ -117,6 +133,120 @@ async def test_get_project_provider_settings_follow_runtime_defaults(
     assert data["provider_settings"]["text"]["resolved_key"] == "openai"
     assert data["provider_settings"]["video"]["selected_key"] == "doubao"
     assert data["provider_settings"]["video"]["valid"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_project_exposes_degraded_text_provider(async_client, test_session, monkeypatch):
+    async def _fake(_project, _settings, **kwargs):
+        return ProviderResolution(
+            valid=True,
+            text=ProjectProviderEntry(
+                selected_key="openai",
+                source="default",
+                resolved_key="openai",
+                valid=True,
+                status="degraded",
+                reason_code="provider_stream_unavailable",
+                reason_message="文本 Provider 流式不可用，已自动回退非流式生成。",
+                capabilities=ProjectProviderEntry.Capabilities(generate=True, stream=False),
+            ),
+            image=ProjectProviderEntry(
+                selected_key="openai",
+                source="default",
+                resolved_key="openai",
+                valid=True,
+                status="valid",
+                reason_code=None,
+                reason_message=None,
+                capabilities=ProjectProviderEntry.Capabilities(generate=True, stream=None),
+            ),
+            video=ProjectProviderEntry(
+                selected_key="openai",
+                source="default",
+                resolved_key="openai",
+                valid=True,
+                status="valid",
+                reason_code=None,
+                reason_message=None,
+                capabilities=ProjectProviderEntry.Capabilities(generate=True, stream=None),
+            ),
+        )
+
+    monkeypatch.setattr(project_routes, "resolve_project_provider_settings_async", _fake)
+    project = await create_project(test_session, title="Degraded Provider")
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["provider_settings"]["text"]["valid"] is True
+    assert data["provider_settings"]["text"]["status"] == "degraded"
+    assert data["provider_settings"]["text"]["capabilities"] == {
+        "generate": True,
+        "stream": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_project_provider_settings_follow_runtime_resolution_payload(
+    async_client, test_session, monkeypatch
+):
+    async def _fake(_project, _settings, **kwargs):
+        return ProviderResolution(
+            valid=False,
+            text=ProjectProviderEntry(
+                selected_key="anthropic",
+                source="default",
+                resolved_key=None,
+                valid=False,
+                status="invalid",
+                reason_code="provider_missing_credentials",
+                reason_message="缺少 Anthropic 文本凭据",
+            ),
+            image=ProjectProviderEntry(
+                selected_key="openai",
+                source="project",
+                resolved_key="openai",
+                valid=True,
+                status="valid",
+                reason_code=None,
+                reason_message=None,
+            ),
+            video=ProjectProviderEntry(
+                selected_key="doubao",
+                source="default",
+                resolved_key="doubao",
+                valid=True,
+                status="valid",
+                reason_code=None,
+                reason_message=None,
+            ),
+        )
+
+    monkeypatch.setattr(project_routes, "resolve_project_provider_settings_async", _fake)
+    project = await create_project(
+        test_session,
+        title="Runtime Resolution",
+        text_provider_override="openai",
+        video_provider_override="openai",
+    )
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["provider_settings"]["text"] == {
+        "selected_key": "anthropic",
+        "source": "default",
+        "resolved_key": None,
+        "valid": False,
+        "status": "invalid",
+        "reason_code": "provider_missing_credentials",
+        "reason_message": "缺少 Anthropic 文本凭据",
+        "capabilities": None,
+    }
+    assert data["provider_settings"]["image"]["source"] == "project"
+    assert data["provider_settings"]["video"]["selected_key"] == "doubao"
 
 
 @pytest.mark.asyncio
@@ -197,6 +327,35 @@ async def test_delete_project(async_client, test_session):
 
     res = await async_client.get(f"/api/v1/projects/{project.id}")
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_project_does_not_require_admin_token_when_configured(
+    test_session, test_settings, ws_manager
+):
+    test_settings.admin_token = "secret-admin-token"
+    app = create_app()
+
+    async def override_get_session():
+        yield test_session
+
+    async def override_get_settings():
+        return test_settings
+
+    async def override_get_ws():
+        return ws_manager
+
+    app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
+
+    project = await create_project(test_session)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.delete(f"/api/v1/projects/{project.id}")
+
+    assert res.status_code == 204
 
 
 @pytest.mark.asyncio
