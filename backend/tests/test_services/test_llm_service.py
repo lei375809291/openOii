@@ -93,3 +93,38 @@ async def test_stream_emits_text_and_final(monkeypatch):
 
     assert events[0]["type"] == "text"
     assert events[-1]["type"] == "final"
+
+
+@pytest.mark.asyncio
+async def test_probe_retries_transient_generate_failure(monkeypatch):
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="key")
+    service = LLMService(settings, max_retries=0)
+    calls = {"generate": 0}
+
+    class RetryableError(Exception):
+        status_code = 503
+
+    async def fake_generate(**kwargs):
+        calls["generate"] += 1
+        if calls["generate"] == 1:
+            raise RetryableError("temporary")
+        return DummyMessage()  # pragma: no cover
+
+    async def fake_stream(**kwargs):
+        raise RuntimeError("stream down")
+        yield kwargs  # pragma: no cover
+
+    monkeypatch.setattr(service, "generate", fake_generate)
+    monkeypatch.setattr(service, "stream", fake_stream)
+    monkeypatch.setattr(
+        service,
+        "_is_retryable_error",
+        lambda exc: isinstance(exc, RetryableError),
+    )
+
+    result = await service.probe()
+
+    assert calls["generate"] == 2
+    assert result.status == "degraded"
+    assert result.generate is True
+    assert result.stream is False

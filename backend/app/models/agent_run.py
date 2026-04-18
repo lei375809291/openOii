@@ -1,7 +1,7 @@
 from datetime import datetime, UTC
 from typing import Optional, List
 
-from sqlalchemy import Column, Text
+from sqlalchemy import Column, JSON, Text
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -23,6 +23,9 @@ class AgentRun(SQLModel, table=True):
     # 资源级别锁：用于细粒度并发控制
     resource_type: Optional[str] = Field(default=None, index=True)  # character|shot|project
     resource_id: Optional[int] = Field(default=None, index=True)    # 对应资源的 ID
+    provider_snapshot: dict[str, object] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

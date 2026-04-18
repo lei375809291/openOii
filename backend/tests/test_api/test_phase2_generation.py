@@ -79,6 +79,10 @@ def _invalid_provider_resolution() -> ProviderResolution:
     )
 
 
+async def _return_resolution(_project, _settings, resolution: ProviderResolution) -> ProviderResolution:
+    return resolution
+
+
 @pytest.mark.asyncio
 async def test_generate_project_rejects_second_active_full_run(
     async_client, test_session, monkeypatch
@@ -86,8 +90,8 @@ async def test_generate_project_rejects_second_active_full_run(
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
     monkeypatch.setattr(
         generation_routes,
-        "resolve_project_provider_settings",
-        lambda project, settings: _invalid_provider_resolution(),
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(project, settings, _invalid_provider_resolution()),
     )
 
     project = await create_project(test_session)
@@ -122,8 +126,8 @@ async def test_generate_project_conflict_is_explicit_about_resume_or_cancel(
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
     monkeypatch.setattr(
         generation_routes,
-        "resolve_project_provider_settings",
-        lambda project, settings: _invalid_provider_resolution(),
+        "resolve_project_provider_settings_async",
+        lambda project, settings: _return_resolution(project, settings, _invalid_provider_resolution()),
     )
 
     project = await create_project(test_session)

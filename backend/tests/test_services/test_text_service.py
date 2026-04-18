@@ -5,6 +5,7 @@ import pytest
 
 import app.services.text as text_module
 from app.config import Settings
+from app.services.llm import LLMResponse
 from app.services.text import (
     TextService,
     TextServiceAuthError,
@@ -181,6 +182,137 @@ async def test_stream_completions_sse(monkeypatch):
     assert client.last_json is not None
     assert client.last_json["prompt"] == "hi"
     assert client.last_json["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_stream_falls_back_to_generate_when_native_stream_fails(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings)
+
+    async def fake_stream_native_events(payload):
+        raise TextServiceError("Text generation stream failed after 3 retries")
+        yield payload  # pragma: no cover
+
+    async def fake_generate_from_payload(payload):
+        assert payload["stream"] is False
+        return LLMResponse(text="fallback text", tool_calls=[], raw={"mode": "generate"})
+
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+    monkeypatch.setattr(service, "_generate_from_payload", fake_generate_from_payload)
+
+    events = []
+    async for event in service.stream(prompt="hi"):
+        events.append(event)
+
+    assert events == [
+        {"type": "text", "text": "fallback text"},
+        {"type": "final", "response": LLMResponse(text="fallback text", tool_calls=[], raw={"mode": "generate"})},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_probe_marks_provider_degraded_when_stream_is_unavailable(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings)
+
+    async def fake_post(_url, _payload):
+        return {"choices": [{"message": {"content": ""}}]}
+
+    async def fake_stream_native_events(payload):
+        raise TextServiceError("stream unavailable")
+        yield payload  # pragma: no cover
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+
+    result = await service.probe()
+
+    assert result.status == "degraded"
+    assert result.generate is True
+    assert result.stream is False
+    assert result.reason_code == "provider_stream_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_probe_retries_transient_generate_failure_before_marking_invalid(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings, max_retries=0)
+    calls = {"post": 0}
+
+    async def fake_post(_url, _payload):
+        calls["post"] += 1
+        if calls["post"] == 1:
+            raise TextServiceError("Text generation request failed after 0 retries")
+        return {"choices": [{"message": {"content": ""}}]}
+
+    async def fake_stream_native_events(payload):
+        raise TextServiceError("Text generation stream failed after 0 retries")
+        yield payload  # pragma: no cover
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+
+    result = await service.probe()
+
+    assert calls["post"] == 2
+    assert result.status == "degraded"
+    assert result.generate is True
+    assert result.stream is False
+
+
+@pytest.mark.asyncio
+async def test_probe_accepts_openai_compatible_reasoning_response_without_content(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings)
+
+    async def fake_post(_url, _payload):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "reasoning_content": "thinking...",
+                    }
+                }
+            ]
+        }
+
+    async def fake_stream_native_events(_payload):
+        yield {"type": "text", "text": "OK"}
+        yield {"type": "final", "response": LLMResponse(text="OK", tool_calls=[], raw=None)}
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+
+    result = await service.probe()
+
+    assert result.status == "valid"
+    assert result.generate is True
+    assert result.stream is True
 
 
 # ============================================
@@ -1606,4 +1738,3 @@ async def test_stream_network_error_exhausted(monkeypatch):
             pass
 
     assert call_count == 3  # max_retries=2 means 3 attempts total
-

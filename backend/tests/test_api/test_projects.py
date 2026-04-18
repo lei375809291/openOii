@@ -331,6 +331,22 @@ async def test_delete_project(async_client, test_session):
 
 
 @pytest.mark.asyncio
+async def test_batch_delete_projects(async_client, test_session):
+    project1 = await create_project(test_session, title="Project 1")
+    project2 = await create_project(test_session, title="Project 2")
+    project3 = await create_project(test_session, title="Project 3")
+
+    res = await async_client.post("/api/v1/projects/batch-delete", json={"ids": [project1.id, project2.id]})
+
+    assert res.status_code == 204
+
+    list_res = await async_client.get("/api/v1/projects")
+    data = list_res.json()
+    remain_ids = {item["id"] for item in data["items"]}
+    assert remain_ids == {project3.id}
+
+
+@pytest.mark.asyncio
 async def test_delete_project_does_not_require_admin_token_when_configured(
     test_session, test_settings, ws_manager
 ):

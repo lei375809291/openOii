@@ -228,7 +228,7 @@ def apply_settings_overrides(overrides: dict[str, Any]) -> None:
     data = settings.model_dump()
     data.update(overrides)
     updated = Settings.model_validate(data)
-    for field_name in settings.model_fields:
+    for field_name in Settings.model_fields:
         setattr(settings, field_name, getattr(updated, field_name))
 
 

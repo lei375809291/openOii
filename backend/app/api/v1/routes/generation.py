@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Coroutine
 from datetime import datetime
 from typing import cast
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,13 +21,29 @@ from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Project
 from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest, ProviderResolution, ResumeRequest
-from app.services.provider_resolution import resolve_project_provider_settings
+from app.services.generation_entry import decide_generation_entry
+from app.services.provider_resolution import resolve_project_provider_settings_async
 from app.services.run_recovery import build_recovery_control_surface
 from app.services.task_manager import task_manager
 from app.ws.manager import ConnectionManager
 
 router = APIRouter(prefix="/projects")
+logger = logging.getLogger(__name__)
 
+
+async def _start_project_task(project_id: int, coro: Coroutine[object, object, None]) -> None:
+    task = asyncio.create_task(coro)
+
+    def _log_task_result(done_task: asyncio.Task[None]) -> None:
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("Background project task failed", extra={"project_id": project_id})
+
+    task.add_done_callback(_log_task_result)
+    task_manager.register(project_id, task)
 
 def _agent_run_thread_id(run: AgentRun) -> str:
     return f"agent-run-{run.id}" if run.id is not None else "agent-run-pending"
@@ -60,6 +78,7 @@ async def _latest_run_for_project(
 async def generate_project(
     project_id: int,
     payload: GenerateRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
@@ -69,11 +88,21 @@ async def generate_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
-    if active_run is not None:
+    resumable_run = await _latest_run_for_project(session, project_id, ("failed", "cancelled"))
+    provider_resolution: ProviderResolution = await resolve_project_provider_settings_async(
+        project, settings
+    )
+    decision = decide_generation_entry(
+        active_run=active_run,
+        resumable_run=resumable_run,
+        provider_resolution=provider_resolution,
+    )
+
+    if decision.kind == "active_conflict":
         control = await build_recovery_control_surface(
             session=session,
             database_url=settings.database_url,
-            run=active_run,
+            run=decision.run,
             state="active",
         )
         return JSONResponse(
@@ -81,29 +110,31 @@ async def generate_project(
             content=control.model_dump(mode="json"),
         )
 
-    resumable_run = await _latest_run_for_project(session, project_id, ("failed", "cancelled"))
-    if resumable_run is not None:
+    if decision.kind == "recoverable_conflict":
         control = await build_recovery_control_surface(
             session=session,
             database_url=settings.database_url,
-            run=resumable_run,
+            run=decision.run,
             state="recoverable",
         )
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content=control.model_dump(mode="json"),
         )
-
-    provider_resolution: ProviderResolution = resolve_project_provider_settings(project, settings)
-    if not provider_resolution.valid:
+    if decision.kind == "provider_blocked":
         raise BusinessError(
             message="项目 Provider 配置无效，无法启动生成",
             code="PROVIDER_PRECHECK_FAILED",
             details={"provider_resolution": provider_resolution.as_error_details()},
         )
 
+    provider_snapshot = provider_resolution.as_project_provider_settings().model_dump(mode="json")
     run = AgentRun(
-        project_id=project_id, status="running", current_agent="orchestrator", progress=0.0
+        project_id=project_id,
+        status="running",
+        current_agent="orchestrator",
+        progress=0.0,
+        provider_snapshot=provider_snapshot,
     )
     session.add(run)
     await session.commit()
@@ -128,8 +159,7 @@ async def generate_project(
         finally:
             task_manager.remove(project_id)
 
-    task = asyncio.create_task(_task())
-    task_manager.register(project_id, task)
+    background_tasks.add_task(_start_project_task, project_id, _task())
     return AgentRunRead.model_validate(run)
 
 
@@ -137,6 +167,7 @@ async def generate_project(
 async def resume_project_run(
     project_id: int,
     payload: ResumeRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
@@ -171,8 +202,7 @@ async def resume_project_run(
         finally:
             task_manager.remove(project_id)
 
-    task = asyncio.create_task(_task())
-    task_manager.register(project_id, task)
+    background_tasks.add_task(_start_project_task, project_id, _task())
     return AgentRunRead.model_validate(run)
 
 
@@ -226,6 +256,7 @@ async def cancel_project_run(
 async def feedback_project(
     project_id: int,
     payload: FeedbackRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
@@ -234,8 +265,19 @@ async def feedback_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    provider_resolution: ProviderResolution = await resolve_project_provider_settings_async(
+        project, settings
+    )
+    provider_snapshot = provider_resolution.as_project_provider_settings().model_dump(mode="json")
+
     # 并发限制已移除，允许多个任务同时运行
-    run = AgentRun(project_id=project_id, status="queued", current_agent="review", progress=0.0)
+    run = AgentRun(
+        project_id=project_id,
+        status="queued",
+        current_agent="review",
+        progress=0.0,
+        provider_snapshot=provider_snapshot,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -281,6 +323,5 @@ async def feedback_project(
         finally:
             task_manager.remove(project_id)
 
-    task = asyncio.create_task(_task())
-    task_manager.register(project_id, task)
+    background_tasks.add_task(_start_project_task, project_id, _task())
     return {"status": "accepted", "run_id": run_id}

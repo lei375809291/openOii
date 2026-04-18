@@ -23,12 +23,15 @@ from app.schemas.project import (
 
 PHASE2_STAGE_ORDER: tuple[str, ...] = (
     "ideate",
+    "ideate_approval",
     "script",
+    "script_approval",
     "character",
     "character_approval",
     "storyboard",
     "storyboard_approval",
     "clip",
+    "clip_approval",
     "merge",
     "review",
 )
@@ -95,7 +98,7 @@ async def _checkpoint_history(database_url: str, run: AgentRun) -> list[Any]:
         async with build_postgres_checkpointer(database_url) as checkpointer:
             compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
             graph_run = cast(Any, SimpleNamespace(id=run.id, thread_id=_thread_id_for_run(run)))
-            return get_checkpoint_history(compiled_graph, graph_run, limit=8)
+            return await get_checkpoint_history(compiled_graph, graph_run, limit=8)
     except Exception:
         return []
 

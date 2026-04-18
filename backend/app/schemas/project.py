@@ -12,12 +12,18 @@ VideoProviderKey = Literal["openai", "doubao"]
 
 
 class ProjectProviderEntry(BaseModel):
+    class Capabilities(BaseModel):
+        generate: bool | None = None
+        stream: bool | None = None
+
     selected_key: str
     source: Literal["project", "default"]
     resolved_key: str | None
     valid: bool
+    status: Literal["valid", "degraded", "invalid"] | None = None
     reason_code: str | None
     reason_message: str | None
+    capabilities: Capabilities | None = None
 
 
 class ProjectProviderSettingsRead(BaseModel):
@@ -64,6 +70,10 @@ class ProjectUpdate(BaseModel):
     text_provider_override: TextProviderKey | None = None
     image_provider_override: ImageProviderKey | None = None
     video_provider_override: VideoProviderKey | None = None
+
+
+class ProjectBatchDeleteRequest(BaseModel):
+    ids: list[int] = Field(min_length=1)
 
 
 class ProjectRead(BaseModel):
@@ -172,6 +182,7 @@ class AgentRunRead(BaseModel):
     error: str | None
     resource_type: str | None  # 资源类型：character|shot|project
     resource_id: int | None  # 资源 ID
+    provider_snapshot: ProjectProviderSettingsRead | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -32,7 +32,7 @@ def build_phase2_runtime_context(
     )
 
 
-def build_stage_recovery_config(
+async def build_stage_recovery_config(
     graph: Any,
     run: Run,
     *,
@@ -40,12 +40,25 @@ def build_stage_recovery_config(
     limit: int | None = None,
 ) -> dict[str, dict[str, str]]:
     config = build_graph_config(run)
-    for snapshot in graph.get_state_history(config, limit=limit):
-        next_nodes = getattr(snapshot, "next", ())
-        if next_nodes and next_nodes[0] == before_stage:
-            return snapshot.config
+    if hasattr(graph, "aget_state_history"):
+        async for snapshot in graph.aget_state_history(config, limit=limit):
+            next_nodes = getattr(snapshot, "next", ())
+            if next_nodes and next_nodes[0] == before_stage:
+                return snapshot.config
+    else:
+        for snapshot in graph.get_state_history(config, limit=limit):
+            next_nodes = getattr(snapshot, "next", ())
+            if next_nodes and next_nodes[0] == before_stage:
+                return snapshot.config
     return config
 
 
-def get_checkpoint_history(graph: Any, run: Run, *, limit: int | None = None) -> list[Any]:
-    return list(graph.get_state_history(build_graph_config(run), limit=limit))
+async def get_checkpoint_history(graph: Any, run: Run, *, limit: int | None = None) -> list[Any]:
+    history: list[Any] = []
+    config = build_graph_config(run)
+    if hasattr(graph, "aget_state_history"):
+        async for snapshot in graph.aget_state_history(config, limit=limit):
+            history.append(snapshot)
+    else:
+        history.extend(list(graph.get_state_history(config, limit=limit)))
+    return history

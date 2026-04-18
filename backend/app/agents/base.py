@@ -10,6 +10,7 @@ from app.config import Settings
 from app.models.agent_run import AgentRun
 from app.models.message import Message
 from app.models.project import Project
+from app.schemas.project import CharacterRead, ShotRead
 from app.services.image import ImageService
 from app.services.llm import LLMResponse, LLMService
 from app.services.video_factory import VideoServiceProtocol
@@ -78,7 +79,7 @@ class BaseAgent:
             is_loading=is_loading,
         )
         ctx.session.add(message)
-        await ctx.session.flush()
+        await ctx.session.commit()
 
         # 发送 WebSocket 事件
         await ctx.ws.send_event(
@@ -88,39 +89,26 @@ class BaseAgent:
 
     async def send_character_event(self, ctx: AgentContext, character: Any, event_type: str = "character_created") -> None:
         """发送角色创建/更新事件"""
+        payload = CharacterRead.model_validate(character).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
             {
                 "type": event_type,
                 "data": {
-                    "character": {
-                        "id": character.id,
-                        "project_id": character.project_id,
-                        "name": character.name,
-                        "description": character.description,
-                        "image_url": character.image_url,
-                    }
+                    "character": payload
                 },
             },
         )
 
     async def send_shot_event(self, ctx: AgentContext, shot: Any, event_type: str = "shot_created") -> None:
         """发送分镜创建/更新事件"""
+        payload = ShotRead.model_validate(shot).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
             {
                 "type": event_type,
                 "data": {
-                    "shot": {
-                        "id": shot.id,
-                        "project_id": shot.project_id,
-                        "order": shot.order,
-                        "description": shot.description,
-                        "prompt": shot.prompt,
-                        "image_url": shot.image_url,
-                        "video_url": shot.video_url,
-                        "duration": shot.duration,
-                    }
+                    "shot": payload
                 },
             },
         )

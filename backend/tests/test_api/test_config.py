@@ -9,6 +9,7 @@ from app.api.v1.routes import config as config_routes
 from app.main import create_app
 from app.models.config_item import ConfigItem
 from app.schemas.config import TestConnectionResponse as ConfigTestConnectionResponse
+from app.services.text_capabilities import TextProviderCapability
 from tests.factories import create_config_item
 
 
@@ -203,6 +204,30 @@ async def test_test_connection_happy_path(async_client, monkeypatch):
     data = res.json()
     assert data["success"] is True
     assert data["message"] == "LLM 服务连接成功"
+
+
+@pytest.mark.asyncio
+async def test_test_llm_connection_reports_degraded_stream_capability(test_settings, monkeypatch):
+    test_settings.text_provider = "openai"
+    test_settings.text_model = "Qwen/Qwen3.5-4B"
+
+    async def fake_probe(_settings):
+        return TextProviderCapability(
+            status="degraded",
+            generate=True,
+            stream=False,
+            reason_code="provider_stream_unavailable",
+            reason_message="文本 Provider 流式不可用，已自动回退非流式生成。",
+        )
+
+    monkeypatch.setattr(config_routes, "probe_text_provider", fake_probe)
+
+    result = await config_routes._test_llm_connection(test_settings)
+
+    assert result.success is True
+    assert result.status == "degraded"
+    assert result.capabilities == {"generate": True, "stream": False}
+    assert "部分可用" in result.message
 
 
 @pytest.mark.asyncio

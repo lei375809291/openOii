@@ -18,6 +18,7 @@ static
 *.timestamp_*
 playwright-report/
 test-results/
+coverage/
 CLAUDE.md
 .openspec
 openspec
@@ -27,4 +28,5 @@ openspec
 findings.md
 progress.md
 task_plan.md
+.coverage
 backend/.coverage

@@ -32,6 +32,7 @@ from app.orchestration.runtime import (
 from app.orchestration.state import Phase2Stage
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
+from app.services.provider_resolution import settings_with_provider_snapshot
 from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary
 from app.services.text_factory import create_text_service
 from app.services.video_factory import create_video_service
@@ -86,6 +87,12 @@ def _resume_agent_for_stage(stage: str | None) -> str:
     if not isinstance(stage, str):
         return "scriptwriter"
     return RESUME_AGENT_FOR_STAGE.get(stage, "scriptwriter")
+
+
+def _video_generation_skipped_in_result(result: Any) -> bool:
+    if not isinstance(result, dict):
+        return False
+    return bool(result.get("video_generation_skipped"))
 
 
 # Agent 完成后的描述信息
@@ -460,15 +467,19 @@ class GenerationOrchestrator:
         run: AgentRun,
         request: GenerateRequest,
     ) -> AgentContext:
+        context_settings = settings_with_provider_snapshot(
+            self.settings,
+            run.provider_snapshot,
+        )
         return AgentContext(
-            settings=self.settings,
+            settings=context_settings,
             session=self.session,
             ws=self.ws,
             project=project,
             run=run,
-            llm=cast(Any, create_text_service(self.settings)),
+            llm=cast(Any, create_text_service(context_settings)),
             image=ImageService(self.settings),
-            video=cast(Any, create_video_service(self.settings)),
+            video=cast(Any, create_video_service(context_settings)),
         )
 
     def _build_phase2_state(
@@ -504,17 +515,21 @@ class GenerationOrchestrator:
         runtime_context: Any,
         initial_payload: Any,
         auto_mode: bool,
-    ) -> None:
+    ) -> bool:
         if project.id is None or run.id is None:
             raise RuntimeError("Project and run must be persisted before graph execution")
         project_pk = int(project.id)
         run_pk = int(run.id)
 
         payload: Any = initial_payload
+        video_generation_skipped = False
         while True:
             result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
             if not isinstance(result, dict):
                 break
+
+            if _video_generation_skipped_in_result(result):
+                video_generation_skipped = True
 
             interrupts = result.get("__interrupt__") or []
             if not interrupts:
@@ -539,6 +554,8 @@ class GenerationOrchestrator:
         self.session.add(ctx.project)
         await self.session.commit()
 
+        return video_generation_skipped
+
     async def _run_phase2_graph(
         self,
         *,
@@ -548,7 +565,7 @@ class GenerationOrchestrator:
         ctx: AgentContext,
         agent_name: str,
         auto_mode: bool,
-    ) -> None:
+    ) -> bool:
         if agent_name not in GRAPH_STAGE_FOR_AGENT:
             raise ValueError(f"Unsupported agent for graph execution: {agent_name}")
 
@@ -576,7 +593,7 @@ class GenerationOrchestrator:
 
         async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
             compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
-            await self._invoke_phase2_graph(
+            return await self._invoke_phase2_graph(
                 project=project,
                 run=run,
                 ctx=ctx,
@@ -627,6 +644,7 @@ class GenerationOrchestrator:
                     "data": {
                         "run_id": run_id,
                         "project_id": project_id,
+                        "provider_snapshot": run.provider_snapshot,
                         "stage": resume_stage,
                         "next_stage": recovery.next_stage,
                         "recovery_summary": recovery.model_dump(mode="json"),
@@ -644,7 +662,7 @@ class GenerationOrchestrator:
                 compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
                 resume_config = cast(
                     Any,
-                    build_stage_recovery_config(
+                    await build_stage_recovery_config(
                         compiled_graph,
                         run,
                         before_stage=recovery.next_stage or recovery.current_stage,
@@ -656,7 +674,7 @@ class GenerationOrchestrator:
                     start_stage=resume_stage,
                     auto_mode=auto_mode,
                 )
-                await self._invoke_phase2_graph(
+                video_generation_skipped = await self._invoke_phase2_graph(
                     project=project,
                     run=run,
                     ctx=ctx,
@@ -669,7 +687,18 @@ class GenerationOrchestrator:
 
             await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
             await self.ws.send_event(
-                project_id, {"type": "run_completed", "data": {"run_id": run_id}}
+                project_id,
+                {
+                    "type": "run_completed",
+                    "data": {
+                        "run_id": run_id,
+                        **(
+                            {"message": "视频未配置，已完成文本和图片生成"}
+                            if video_generation_skipped
+                            else {}
+                        ),
+                    },
+                },
             )
         except Exception as e:
             await self.session.rollback()
@@ -708,7 +737,14 @@ class GenerationOrchestrator:
             )
             await self.ws.send_event(
                 project_id,
-                {"type": "run_started", "data": {"run_id": run_id, "project_id": project_id}},
+                {
+                    "type": "run_started",
+                    "data": {
+                        "run_id": run_id,
+                        "project_id": project_id,
+                        "provider_snapshot": run.provider_snapshot,
+                    },
+                },
             )
             await self._log(
                 run_id,
@@ -791,7 +827,7 @@ class GenerationOrchestrator:
             # 刷新 project 对象，因为 cleanup 可能修改了它
             await self.session.refresh(ctx.project)
 
-            await self._run_phase2_graph(
+            video_generation_skipped = await self._run_phase2_graph(
                 project=project,
                 run=run,
                 request=request,
@@ -802,7 +838,18 @@ class GenerationOrchestrator:
 
             await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
             await self.ws.send_event(
-                project_id, {"type": "run_completed", "data": {"run_id": run_id}}
+                project_id,
+                {
+                    "type": "run_completed",
+                    "data": {
+                        "run_id": run_id,
+                        **(
+                            {"message": "视频未配置，已完成文本和图片生成"}
+                            if video_generation_skipped
+                            else {}
+                        ),
+                    },
+                },
             )
         except Exception as e:
             # 先 rollback 以清理可能的脏状态

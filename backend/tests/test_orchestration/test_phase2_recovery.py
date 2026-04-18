@@ -106,3 +106,81 @@ async def test_resume_from_recovery_uses_run_provider_snapshot(test_session, tes
 
     assert captured["text_provider"] == "openai"
     assert captured["video_provider"] == "openai"
+
+
+@pytest.mark.asyncio
+async def test_resume_from_recovery_reports_no_video_completion_message(test_session, test_settings, monkeypatch):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id, status="failed")
+    run.provider_snapshot = {
+        "text": {"selected_key": "openai", "source": "project", "valid": True, "status": "valid"},
+        "image": {"selected_key": "openai", "source": "default", "valid": True, "status": "valid"},
+        "video": {
+            "selected_key": "openai",
+            "source": "default",
+            "valid": False,
+            "status": "invalid",
+            "reason_code": "provider_missing_credentials",
+            "reason_message": "mock",
+        },
+    }
+    await test_session.commit()
+
+    captured_events: list[dict[str, object]] = []
+
+    def _fake_text_service(settings):
+        return SimpleNamespace()
+
+    def _fake_video_service(settings):
+        return SimpleNamespace()
+
+    class _DummyCompiledGraph:
+        def get_state_history(self, *_args, **_kwargs):
+            return []
+
+        def compile(self, *_args, **_kwargs):
+            return self
+
+    class _DummyCheckpointer:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            return None
+
+    async def _noop_recovery_summary(*, session, database_url, run):
+        return RecoverySummaryRead(
+            project_id=run.project_id,
+            run_id=run.id or 0,
+            thread_id=f"agent-run-{run.id}",
+            current_stage="storyboard",
+            next_stage="clip",
+            preserved_stages=[],
+            stage_history=[],
+            resumable=True,
+        )
+
+    async def _fake_invoke_phase2_graph(self, **_kwargs):
+        return True
+
+    async def _noop_clear_confirm_event(_: int) -> None:
+        return None
+
+    class _StubWs:
+        async def send_event(self, _project_id: int, event: dict) -> None:
+            captured_events.append(event)
+
+    monkeypatch.setattr("app.agents.orchestrator.create_text_service", _fake_text_service)
+    monkeypatch.setattr("app.agents.orchestrator.create_video_service", _fake_video_service)
+    monkeypatch.setattr("app.agents.orchestrator.build_phase2_graph", lambda: _DummyCompiledGraph())
+    monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda _database_url: _DummyCheckpointer())
+    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", _noop_recovery_summary)
+    monkeypatch.setattr(GenerationOrchestrator, "_invoke_phase2_graph", _fake_invoke_phase2_graph)
+    monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", _noop_clear_confirm_event)
+
+    orchestrator = GenerationOrchestrator(settings=test_settings, ws=_StubWs(), session=test_session)
+    await orchestrator.resume_from_recovery(project_id=project.id, run_id=run.id)
+
+    run_completed_events = [event for event in captured_events if event.get("type") == "run_completed"]
+    assert run_completed_events, "resume flow should publish run_completed"
+    assert run_completed_events[0].get("data", {}).get("message") == "视频未配置，已完成文本和图片生成"

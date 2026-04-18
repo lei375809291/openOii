@@ -3,7 +3,6 @@ from __future__ import annotations
 import ipaddress
 from urllib.parse import urlparse
 
-import httpx
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +18,7 @@ from app.schemas.config import (
     TestConnectionResponse,
 )
 from app.services.config_service import ConfigService
+from app.services.provider_resolution import probe_text_provider
 
 router = APIRouter()
 
@@ -165,56 +165,32 @@ async def test_connection(
 async def _test_llm_connection(settings) -> TestConnectionResponse:
     """测试 LLM 服务连接（使用实际服务类）"""
     try:
-        from app.services.llm import LLMService
+        probe = await probe_text_provider(settings)
+        model_name = settings.anthropic_model if settings.text_provider == "anthropic" else settings.text_model
+        details = f"提供商: {settings.text_provider}, 模型: {model_name}"
+        if probe.reason_message:
+            details = f"{details}\n{probe.reason_message}"
 
-        # 实例化服务
-        service = LLMService(settings, max_retries=0)
-
-        # 尝试发送最小请求
-        try:
-            await service.generate(
-                messages=[{"role": "user", "content": "test"}],
-                max_tokens=1
-            )
-            # 成功
-            return TestConnectionResponse(
-                success=True,
-                message="LLM 服务连接成功",
-                details=f"模型: {settings.anthropic_model}"
-            )
-        except Exception as e:
-            # 检查是否是认证错误
-            error_str = str(e).lower()
-            if "401" in error_str or "unauthorized" in error_str or "authentication" in error_str:
-                return TestConnectionResponse(
-                    success=False,
-                    message="认证失败",
-                    details=f"API Key 无效或已过期: {str(e)[:200]}"
-                )
-            elif "403" in error_str or "forbidden" in error_str:
-                return TestConnectionResponse(
-                    success=False,
-                    message="认证失败",
-                    details=f"权限不足: {str(e)[:200]}"
-                )
-            elif "404" in error_str or "not found" in error_str:
-                return TestConnectionResponse(
-                    success=False,
-                    message="API 端点不存在",
-                    details=f"请检查 BASE_URL 配置: {str(e)[:200]}"
-                )
-            else:
-                # 其他错误也返回失败
-                return TestConnectionResponse(
-                    success=False,
-                    message="连接失败",
-                    details=str(e)[:200]
-                )
+        return TestConnectionResponse(
+            success=probe.generate,
+            message=(
+                "LLM 服务连接成功"
+                if probe.status == "valid"
+                else "LLM 服务部分可用"
+                if probe.status == "degraded"
+                else "连接失败"
+            ),
+            details=details,
+            status=probe.status,
+            capabilities={"generate": probe.generate, "stream": probe.stream},
+        )
     except Exception as e:
         return TestConnectionResponse(
             success=False,
             message="连接失败",
-            details=str(e)[:200]
+            details=str(e)[:200],
+            status="invalid",
+            capabilities={"generate": False, "stream": False},
         )
 
 

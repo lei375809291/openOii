@@ -7,12 +7,15 @@ from typing import Annotated, Any, Literal, TypedDict
 
 Phase2Stage = Literal[
     "ideate",
+    "ideate_approval",
     "script",
+    "script_approval",
     "character",
     "character_approval",
     "storyboard",
     "storyboard_approval",
     "clip",
+    "clip_approval",
     "merge",
     "review",
 ]

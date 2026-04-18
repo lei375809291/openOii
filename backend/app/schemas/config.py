@@ -35,6 +35,8 @@ class TestConnectionResponse(BaseModel):
     success: bool
     message: str
     details: str | None = None
+    status: Literal["valid", "degraded", "invalid"] | None = None
+    capabilities: dict[str, bool | None] | None = None
 
 
 class RevealValueRequest(BaseModel):

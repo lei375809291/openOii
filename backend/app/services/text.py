@@ -9,12 +9,14 @@ from typing import Any, AsyncIterator
 import httpx
 
 from app.config import Settings
+from app.services.llm import LLMResponse
+from app.services.text_capabilities import (
+    TextProviderCapability,
+    build_provider_capability_cache_key,
+    get_cached_provider_capability,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# 导入 LLMResponse 以保持接口兼容
-from app.services.llm import LLMResponse
 
 
 class TextServiceError(Exception):
@@ -268,6 +270,170 @@ class TextService:
         text = first.get("text")
         return text if isinstance(text, str) else ""
 
+    def _build_payload(
+        self,
+        *,
+        messages: list[dict[str, Any]] | None = None,
+        prompt: str | None = None,
+        system: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        stream: bool,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.settings.text_model,
+            "max_tokens": max_tokens,
+            **kwargs,
+        }
+        if self.settings.text_enable_thinking is not None:
+            payload["enable_thinking"] = self.settings.text_enable_thinking
+        if temperature is not None:
+            payload["temperature"] = temperature
+
+        if self._is_chat_endpoint():
+            if messages:
+                payload["messages"] = messages
+                if system:
+                    payload["messages"] = [{"role": "system", "content": system}] + payload[
+                        "messages"
+                    ]
+            elif prompt:
+                payload["messages"] = [{"role": "user", "content": prompt}]
+                if system:
+                    payload["messages"] = [{"role": "system", "content": system}] + payload[
+                        "messages"
+                    ]
+            else:
+                raise ValueError("Either messages or prompt must be provided")
+        else:
+            if messages:
+                prompt_parts = []
+                if system:
+                    prompt_parts.append(f"System: {system}")
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    prompt_parts.append(f"{role.capitalize()}: {content}")
+                payload["prompt"] = "\n\n".join(prompt_parts)
+            elif prompt:
+                if system:
+                    payload["prompt"] = f"System: {system}\n\n{prompt}"
+                else:
+                    payload["prompt"] = prompt
+            else:
+                raise ValueError("Either messages or prompt must be provided")
+
+        payload["stream"] = stream
+        return payload
+
+    async def _generate_from_payload(self, payload: dict[str, Any]) -> LLMResponse:
+        data = await self._post_json_with_retry(self._build_url(), payload)
+        text = self._extract_text_from_response(data)
+        return LLMResponse(text=text, tool_calls=[], raw=data)
+
+    async def _stream_native_events(self, payload: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+        full_text: list[str] = []
+
+        async for chunk in self._post_stream_with_retry(self._build_url(), payload):
+            text = self._extract_text_from_stream_chunk(chunk)
+            if text:
+                full_text.append(text)
+                yield {"type": "text", "text": text}
+
+        yield {
+            "type": "final",
+            "response": LLMResponse(text="".join(full_text), tool_calls=[], raw=None),
+        }
+
+    def _stream_fallback_message(self, exc: Exception) -> str:
+        detail = str(exc).strip()
+        if not detail:
+            return "文本 Provider 流式不可用，已自动回退非流式生成。"
+        return f"文本 Provider 流式不可用，已自动回退非流式生成。原始错误：{detail[:200]}"
+
+    def _should_fallback_from_stream(self, exc: TextServiceError) -> bool:
+        if isinstance(exc, (TextServiceAuthError, TextServiceRateLimitError, TextServiceServerError)):
+            return False
+        return str(exc).startswith("Text generation stream failed after")
+
+    def _is_retryable_probe_generate_error(self, exc: Exception) -> bool:
+        if not isinstance(exc, TextServiceError):
+            return False
+        if exc.status_code is None:
+            return True
+        return self._is_retryable_status(exc.status_code)
+
+    async def _probe_generate_capability(self, *, messages: list[dict[str, Any]]) -> None:
+        delay_s = 0.5
+        last_exc: Exception | None = None
+
+        for attempt in range(2):
+            try:
+                payload = self._build_payload(
+                    messages=messages,
+                    max_tokens=8,
+                    temperature=0,
+                    stream=False,
+                )
+                await self._post_json_with_retry(self._build_url(), payload)
+                return
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= 1 or not self._is_retryable_probe_generate_error(exc):
+                    raise
+                await asyncio.sleep(delay_s)
+                delay_s = min(delay_s * 2, 2.0)
+
+        if last_exc is not None:
+            raise last_exc
+
+    def _capability_cache_key(self) -> str:
+        return build_provider_capability_cache_key(
+            provider=self.settings.text_provider,
+            text_base_url=self.settings.text_base_url,
+            text_model=self.settings.text_model,
+            text_endpoint=self.settings.text_endpoint,
+            anthropic_base_url=self.settings.anthropic_base_url,
+            anthropic_model=self.settings.anthropic_model,
+            secret=self.settings.text_api_key or self.settings.anthropic_api_key or self.settings.anthropic_auth_token,
+        )
+
+    async def probe(self) -> TextProviderCapability:
+        probe_messages = [{"role": "user", "content": "Reply with OK only."}]
+
+        try:
+            await self._probe_generate_capability(messages=probe_messages)
+        except Exception as exc:
+            return TextProviderCapability(
+                status="invalid",
+                generate=False,
+                stream=False,
+                reason_code="provider_generate_unavailable",
+                reason_message=f"文本 Provider 连通性预检失败：{str(exc)[:200]}",
+            )
+
+        try:
+            async for _ in self._stream_native_events(
+                self._build_payload(
+                    messages=probe_messages,
+                    max_tokens=1,
+                    temperature=0,
+                    stream=True,
+                )
+            ):
+                pass
+        except Exception as exc:
+            return TextProviderCapability(
+                status="degraded",
+                generate=True,
+                stream=False,
+                reason_code="provider_stream_unavailable",
+                reason_message=self._stream_fallback_message(exc),
+            )
+
+        return TextProviderCapability(status="valid", generate=True, stream=True)
+
     async def generate(
         self,
         *,
@@ -291,60 +457,16 @@ class TextService:
         Returns:
             LLMResponse 对象（与 LLMService 兼容）
         """
-        url = self._build_url()
-
-        payload: dict[str, Any] = {
-            "model": self.settings.text_model,
-            "max_tokens": max_tokens,
+        payload = self._build_payload(
+            messages=messages,
+            prompt=prompt,
+            system=system,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=False,
             **kwargs,
-        }
-        if self.settings.text_enable_thinking is not None:
-            payload["enable_thinking"] = self.settings.text_enable_thinking
-        if temperature is not None:
-            payload["temperature"] = temperature
-
-        if self._is_chat_endpoint():
-            # Chat 端点使用 messages
-            if messages:
-                payload["messages"] = messages
-                # 如果有 system，添加到 messages 开头
-                if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload[
-                        "messages"
-                    ]
-            elif prompt:
-                payload["messages"] = [{"role": "user", "content": prompt}]
-                if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload[
-                        "messages"
-                    ]
-            else:
-                raise ValueError("Either messages or prompt must be provided")
-        else:
-            # Completions 端点使用 prompt
-            if messages:
-                # 将 messages 转换为 prompt
-                prompt_parts = []
-                if system:
-                    prompt_parts.append(f"System: {system}")
-                for msg in messages:
-                    role = msg.get("role", "user")
-                    content = msg.get("content", "")
-                    prompt_parts.append(f"{role.capitalize()}: {content}")
-                payload["prompt"] = "\n\n".join(prompt_parts)
-            elif prompt:
-                if system:
-                    payload["prompt"] = f"System: {system}\n\n{prompt}"
-                else:
-                    payload["prompt"] = prompt
-            else:
-                raise ValueError("Either messages or prompt must be provided")
-
-        payload["stream"] = False
-
-        data = await self._post_json_with_retry(url, payload)
-        text = self._extract_text_from_response(data)
-        return LLMResponse(text=text, tool_calls=[], raw=data)
+        )
+        return await self._generate_from_payload(payload)
 
     async def stream(
         self,
@@ -371,70 +493,41 @@ class TextService:
             - {"type": "text", "text": "..."}  # 增量文本
             - {"type": "final", "response": LLMResponse(...)}  # 最终响应
         """
-        url = self._build_url()
-
-        payload: dict[str, Any] = {
-            "model": self.settings.text_model,
-            "max_tokens": max_tokens,
+        payload = self._build_payload(
+            messages=messages,
+            prompt=prompt,
+            system=system,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
             **kwargs,
-        }
-        if self.settings.text_enable_thinking is not None:
-            payload["enable_thinking"] = self.settings.text_enable_thinking
-        if temperature is not None:
-            payload["temperature"] = temperature
+        )
 
-        if self._is_chat_endpoint():
-            # Chat 端点使用 messages
-            if messages:
-                payload["messages"] = messages
-                # 如果有 system，添加到 messages 开头
-                if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload[
-                        "messages"
-                    ]
-            elif prompt:
-                payload["messages"] = [{"role": "user", "content": prompt}]
-                if system:
-                    payload["messages"] = [{"role": "system", "content": system}] + payload[
-                        "messages"
-                    ]
-            else:
-                raise ValueError("Either messages or prompt must be provided")
-        else:
-            # Completions 端点使用 prompt
-            if messages:
-                # 将 messages 转换为 prompt
-                prompt_parts = []
-                if system:
-                    prompt_parts.append(f"System: {system}")
-                for msg in messages:
-                    role = msg.get("role", "user")
-                    content = msg.get("content", "")
-                    prompt_parts.append(f"{role.capitalize()}: {content}")
-                payload["prompt"] = "\n\n".join(prompt_parts)
-            elif prompt:
-                if system:
-                    payload["prompt"] = f"System: {system}\n\n{prompt}"
-                else:
-                    payload["prompt"] = prompt
-            else:
-                raise ValueError("Either messages or prompt must be provided")
+        cached_capability = get_cached_provider_capability(self._capability_cache_key())
+        if cached_capability is not None and cached_capability.generate and not cached_capability.stream:
+            fallback_payload = dict(payload)
+            fallback_payload["stream"] = False
+            response = await self._generate_from_payload(fallback_payload)
+            if response.text:
+                yield {"type": "text", "text": response.text}
+            yield {"type": "final", "response": response}
+            return
 
-        payload["stream"] = True
+        emitted_any = False
+        try:
+            async for event in self._stream_native_events(payload):
+                if event.get("type") == "text" and event.get("text"):
+                    emitted_any = True
+                yield event
+            return
+        except TextServiceError as exc:
+            if emitted_any or not self._should_fallback_from_stream(exc):
+                raise
+            logger.warning("Text stream failed; falling back to non-stream generate: %s", exc)
 
-        # 收集完整文本用于最终响应
-        full_text = []
-
-        async for chunk in self._post_stream_with_retry(url, payload):
-            text = self._extract_text_from_stream_chunk(chunk)
-            if text:
-                full_text.append(text)
-                # 产出增量文本事件
-                yield {"type": "text", "text": text}
-
-        # 产出最终响应事件
-        complete_text = "".join(full_text)
-        yield {
-            "type": "final",
-            "response": LLMResponse(text=complete_text, tool_calls=[], raw=None),
-        }
+        fallback_payload = dict(payload)
+        fallback_payload["stream"] = False
+        response = await self._generate_from_payload(fallback_payload)
+        if response.text:
+            yield {"type": "text", "text": response.text}
+        yield {"type": "final", "response": response}

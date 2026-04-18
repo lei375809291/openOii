@@ -7,7 +7,7 @@ import pytest
 
 from app.agents.storyboard_artist import StoryboardArtistAgent
 from app.agents.video_generator import VideoGeneratorAgent
-from app.orchestration.nodes import storyboard_approval_node
+from app.orchestration.nodes import clip_approval_node, storyboard_approval_node
 from app.services.approval_gate import can_enter_clip_generation
 from app.services.shot_binding import resolve_shot_bound_approved_characters
 from tests.factories import create_character, create_project, create_run, create_shot
@@ -132,3 +132,55 @@ async def test_storyboard_approval_routes_back_to_review_when_clip_gate_blocks(
 
     assert result["route_stage"] == "review"
     assert result["review_requested"] is True
+
+
+@pytest.mark.asyncio
+async def test_storyboard_approval_skips_to_merge_when_video_provider_invalid():
+    runtime = cast(
+        Any,
+        SimpleNamespace(
+            context=SimpleNamespace(
+                auto_mode=False,
+                orchestrator=SimpleNamespace(),
+                agent_context=SimpleNamespace(
+                    run=SimpleNamespace(
+                        provider_snapshot={
+                            "video": {"valid": False, "selected_key": "openai", "source": "default"}
+                        },
+                    ),
+                    project=SimpleNamespace(id=1),
+                    session=None,
+                    target_ids=None,
+                ),
+            ),
+        ),
+    )
+
+    result = await storyboard_approval_node({}, runtime)
+
+    assert result["route_stage"] == "merge"
+    assert result["review_requested"] is False
+
+
+@pytest.mark.asyncio
+async def test_clip_approval_skips_to_merge_when_video_provider_invalid():
+    runtime = cast(
+        Any,
+        SimpleNamespace(
+            context=SimpleNamespace(
+                auto_mode=False,
+                agent_context=SimpleNamespace(
+                    run=SimpleNamespace(
+                        provider_snapshot={
+                            "video": {"valid": False, "selected_key": "openai", "source": "default"}
+                        },
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = await clip_approval_node({}, runtime)
+
+    assert result["route_stage"] == "merge"
+    assert result["review_requested"] is False

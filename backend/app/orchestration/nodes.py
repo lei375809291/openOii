@@ -46,17 +46,44 @@ def _should_skip_stage(state: Phase2State, stage: str) -> bool:
     return _stage_key(stage) in artifact_lineage
 
 
+def _is_video_provider_invalid(run_snapshot: dict[str, Any] | None) -> bool:
+    if not isinstance(run_snapshot, dict):
+        return False
+
+    video_snapshot = run_snapshot.get("video")
+    if not isinstance(video_snapshot, dict):
+        return False
+
+    return video_snapshot.get("valid") is False
+
+
+def _get_run_provider_snapshot(agent_ctx: Any) -> dict[str, Any] | None:
+    if not hasattr(agent_ctx, "run"):
+        return None
+    run = getattr(agent_ctx, "run")
+    return getattr(run, "provider_snapshot", None)
+
+
 async def _run_agent_sequence(
     state: Phase2State,
     runtime: Runtime[Phase2RuntimeContext],
     *,
     stage: str,
 ) -> dict[str, Any]:
+    agent_ctx = runtime.context.agent_context
+    if stage in {"clip", "merge"} and _is_video_provider_invalid(
+        _get_run_provider_snapshot(agent_ctx)
+    ):
+        return {
+            "current_stage": stage,
+            "stage_history": [stage],
+            "artifact_lineage": [_stage_key(stage)],
+        }
+
     if _should_skip_stage(state, stage):
         return {"current_stage": stage}
 
     orchestrator = runtime.context.orchestrator
-    agent_ctx = runtime.context.agent_context
     agent_names = _STAGE_TO_AGENTS[stage]
     total = max(len(agent_names), 1)
 
@@ -108,8 +135,87 @@ async def ideate_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
     return await _run_agent_sequence(state, runtime, stage="ideate")
 
 
+def _approval_result(
+    *,
+    approval_stage: str,
+    history_key: str,
+    next_stage: str,
+    feedback: str,
+) -> dict[str, Any]:
+    review_requested = bool(feedback)
+    return {
+        "current_stage": approval_stage,
+        "approval_history": [history_key],
+        "approval_feedback": feedback,
+        "review_requested": review_requested,
+        "route_stage": "review" if review_requested else next_stage,
+    }
+
+
+def _auto_approval_result(*, approval_stage: str, history_key: str, next_stage: str) -> dict[str, Any]:
+    return {
+        "current_stage": approval_stage,
+        "approval_history": [history_key],
+        "approval_feedback": "",
+        "review_requested": False,
+        "route_stage": next_stage,
+    }
+
+
+async def _manual_approval_node(
+    runtime: Runtime[Phase2RuntimeContext],
+    *,
+    approval_stage: str,
+    history_key: str,
+    gate: str,
+    message: str,
+    next_stage: str,
+) -> dict[str, Any]:
+    if runtime.context.auto_mode:
+        return _auto_approval_result(
+            approval_stage=approval_stage,
+            history_key=history_key,
+            next_stage=next_stage,
+        )
+
+    resume_value = interrupt({"gate": gate, "message": message})
+    feedback = _normalize_resume_value(resume_value)
+    return _approval_result(
+        approval_stage=approval_stage,
+        history_key=history_key,
+        next_stage=next_stage,
+        feedback=feedback,
+    )
+
+
+async def ideate_approval_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    return await _manual_approval_node(
+        runtime,
+        approval_stage="ideate_approval",
+        history_key="ideate",
+        gate="director",
+        message="创作方向已规划，请确认是否继续进入剧本阶段。",
+        next_stage="script",
+    )
+
+
 async def script_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
     return await _run_agent_sequence(state, runtime, stage="script")
+
+
+async def script_approval_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    return await _manual_approval_node(
+        runtime,
+        approval_stage="script_approval",
+        history_key="script",
+        gate="scriptwriter",
+        message="剧本和角色设定已生成，请确认是否继续进入角色设计阶段。",
+        next_stage="character",
+    )
 
 
 async def character_node(
@@ -121,30 +227,14 @@ async def character_node(
 async def character_approval_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:
-    if runtime.context.auto_mode:
-        return {
-            "current_stage": "character_approval",
-            "approval_history": ["character"],
-            "approval_feedback": "",
-            "review_requested": False,
-            "route_stage": "storyboard",
-        }
-
-    resume_value = interrupt(
-        {
-            "gate": "character_artist",
-            "message": "角色设计已生成，请确认是否继续进入分镜阶段。",
-        }
+    return await _manual_approval_node(
+        runtime,
+        approval_stage="character_approval",
+        history_key="character",
+        gate="character_artist",
+        message="角色设计已生成，请确认是否继续进入分镜阶段。",
+        next_stage="storyboard",
     )
-    feedback = _normalize_resume_value(resume_value)
-    review_requested = bool(feedback)
-    return {
-        "current_stage": "character_approval",
-        "approval_history": ["character"],
-        "approval_feedback": feedback,
-        "review_requested": review_requested,
-        "route_stage": "review" if review_requested else "storyboard",
-    }
 
 
 async def storyboard_node(
@@ -156,15 +246,20 @@ async def storyboard_node(
 async def storyboard_approval_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:
-    if runtime.context.auto_mode:
-        return {
-            "current_stage": "storyboard_approval",
-            "approval_history": ["storyboard"],
-            "approval_feedback": "",
-            "review_requested": False,
-            "route_stage": "clip",
-        }
+    agent_ctx = runtime.context.agent_context
+    if _is_video_provider_invalid(_get_run_provider_snapshot(agent_ctx)):
+        return _auto_approval_result(
+            approval_stage="storyboard_approval",
+            history_key="storyboard",
+            next_stage="merge",
+        )
 
+    if runtime.context.auto_mode:
+        return _auto_approval_result(
+            approval_stage="storyboard_approval",
+            history_key="storyboard",
+            next_stage="clip",
+        )
 
     agent_ctx = runtime.context.agent_context
     clip_ready = await can_enter_clip_generation(
@@ -179,30 +274,14 @@ async def storyboard_approval_node(
             "route_stage": "review",
         }
 
-    if runtime.context.auto_mode:
-        return {
-            "current_stage": "storyboard_approval",
-            "approval_history": ["storyboard"],
-            "approval_feedback": "",
-            "review_requested": False,
-            "route_stage": "clip",
-        }
-
-    resume_value = interrupt(
-        {
-            "gate": "storyboard_artist",
-            "message": "分镜图已生成，请确认是否继续进入视频生成阶段。",
-        }
+    return await _manual_approval_node(
+        runtime,
+        approval_stage="storyboard_approval",
+        history_key="storyboard",
+        gate="storyboard_artist",
+        message="分镜图已生成，请确认是否继续进入视频生成阶段。",
+        next_stage="clip",
     )
-    feedback = _normalize_resume_value(resume_value)
-    review_requested = bool(feedback)
-    return {
-        "current_stage": "storyboard_approval",
-        "approval_history": ["storyboard"],
-        "approval_feedback": feedback,
-        "review_requested": review_requested,
-        "route_stage": "review" if review_requested else "clip",
-    }
 
 
 async def review_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
@@ -255,16 +334,51 @@ async def clip_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) 
     return await _run_agent_sequence(state, runtime, stage="clip")
 
 
+async def clip_approval_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    agent_ctx = runtime.context.agent_context
+    if _is_video_provider_invalid(_get_run_provider_snapshot(agent_ctx)):
+        return _auto_approval_result(
+            approval_stage="clip_approval",
+            history_key="clip",
+            next_stage="merge",
+        )
+
+    return await _manual_approval_node(
+        runtime,
+        approval_stage="clip_approval",
+        history_key="clip",
+        gate="video_generator",
+        message="视频片段已生成，请确认是否继续进入合成阶段。",
+        next_stage="merge",
+    )
+
+
 async def merge_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
     return await _run_agent_sequence(state, runtime, stage="merge")
 
 
+def route_after_ideate_approval(state: Phase2State) -> str:
+    return state.get("route_stage") or ("review" if state.get("review_requested") else "script")
+
+
+def route_after_script_approval(state: Phase2State) -> str:
+    return state.get("route_stage") or ("review" if state.get("review_requested") else "character")
+
+
 def route_after_character_approval(state: Phase2State) -> str:
-    return "review" if state.get("review_requested") else "storyboard"
+    return state.get("route_stage") or (
+        "review" if state.get("review_requested") else "storyboard"
+    )
 
 
 def route_after_storyboard_approval(state: Phase2State) -> str:
-    return "review" if state.get("review_requested") else "clip"
+    return state.get("route_stage") or ("review" if state.get("review_requested") else "clip")
+
+
+def route_after_clip_approval(state: Phase2State) -> str:
+    return state.get("route_stage") or ("review" if state.get("review_requested") else "merge")
 
 
 def route_after_review(state: Phase2State) -> str:

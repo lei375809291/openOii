@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 from app.config import Settings
+from app.services.text_capabilities import TextProviderCapability
 
 
 @dataclass(slots=True)
@@ -111,6 +112,52 @@ class LLMService:
             return True
 
         return False
+
+    async def _probe_generate_capability(self, *, messages: list[dict[str, Any]]) -> None:
+        delay_s = 0.5
+        last_exc: Exception | None = None
+
+        for attempt in range(2):
+            try:
+                await self.generate(messages=messages, max_tokens=1, temperature=0)
+                return
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= 1 or not self._is_retryable_error(exc):
+                    raise
+                await asyncio.sleep(delay_s)
+                delay_s = min(delay_s * 2, 2.0)
+
+        if last_exc is not None:
+            raise last_exc
+
+    async def probe(self) -> TextProviderCapability:
+        probe_messages = [{"role": "user", "content": "ping"}]
+
+        try:
+            await self._probe_generate_capability(messages=probe_messages)
+        except Exception as exc:
+            return TextProviderCapability(
+                status="invalid",
+                generate=False,
+                stream=False,
+                reason_code="provider_generate_unavailable",
+                reason_message=f"文本 Provider 连通性预检失败：{str(exc)[:200]}",
+            )
+
+        try:
+            async for _ in self.stream(messages=probe_messages, max_tokens=1, temperature=0):
+                pass
+        except Exception as exc:
+            return TextProviderCapability(
+                status="degraded",
+                generate=True,
+                stream=False,
+                reason_code="provider_stream_unavailable",
+                reason_message=f"文本 Provider 流式不可用，将优先回退非流式。原始错误：{str(exc)[:200]}",
+            )
+
+        return TextProviderCapability(status="valid", generate=True, stream=True)
 
     async def generate(
         self,

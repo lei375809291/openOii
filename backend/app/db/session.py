@@ -14,6 +14,7 @@ from sqlmodel import SQLModel
 
 from app.config import get_settings
 from app.models import agent_run, artifact, config_item, message, project, run, stage  # noqa: F401
+from app.orchestration.persistence import ensure_postgres_checkpointer_setup
 
 
 def _patch_aiosqlite_event_loop() -> None:
@@ -47,6 +48,7 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 async def init_db() -> None:
     """Initialize database tables and cleanup stale runs."""
+    settings = get_settings()
     agent_run_table = SQLModel.metadata.tables["agentrun"]
     project_table = SQLModel.metadata.tables["project"]
 
@@ -76,6 +78,8 @@ async def init_db() -> None:
             .values(style="anime")
         )
         await session.commit()
+
+    await ensure_postgres_checkpointer_setup(settings.database_url)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
