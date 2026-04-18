@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Phase 07 complete; ready to plan Phase 08
-last_updated: "2026-04-18T01:25:00.000Z"
-last_activity: 2026-04-18 -- Phase 07 verified and marked complete
+stopped_at: Phase 08 complete; ready to plan Phase 09
+last_updated: "2026-04-18T01:33:20.956Z"
+last_activity: 2026-04-18 -- Phase 08 execution complete
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow.
-**Current focus:** Phase 08 — validation-&-deterministic-resolution
+**Current focus:** Phase 09 — runtime-snapshot-semantics
 
 ## Current Position
 
-Phase: 08 (validation-&-deterministic-resolution) — READY
+Phase: 09 (runtime-snapshot-semantics) — READY
 Plan: Not started
-Status: Ready to plan Phase 08
-Last activity: 2026-04-18 -- Phase 07 verified and marked complete
+Status: Ready to plan Phase 09
+Last activity: 2026-04-18 -- Phase 08 execution complete
 
-Progress: [----------] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -59,6 +59,9 @@ Progress: [----------] 0%
 *Updated after each plan completion*
 | Phase 03 P04 | ~1 session | 3 tasks | 6 files |
 | Phase 05 P01 | 29min | 3 tasks | 7 files |
+| Phase 08 P01 | 22min | 3 tasks | 9 files |
+| Phase 08 P02 | 11min | 2 tasks | 6 files |
+| Phase 08 P03 | 17min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -76,12 +79,18 @@ Recent decisions affecting current work:
 - [Phase 05]: Shot clip reruns preserve approved shot sources and only clear the final merged project output.
 - [Phase 05]: Video feedback defaults to the clip-safe merge path rather than per-shot regeneration.
 - [Milestone]: v1.0 accepted on core-loop closure, with PROJ-02 reclassified as a deferred portability warning.
+- [Phase 08]: 项目 provider proof 改为直接读取 resolver，而不是继续拼 schema 常量默认值。
+- [Phase 08]: text/video factory 对未知 provider 直接抛错，禁止 silent fallback。
+- [Phase 08]: generate preflight 复用 08-01 resolver，而不是再造一套 start-time 校验逻辑。
+- [Phase 08]: 422 payload 直接挂 details.provider_resolution，保持后端与前端阻断语义一致。
+- [Phase 08]: 前端只消费后端返回的 selected/resolved/valid/reason，不自行猜测 provider 解析结果。
+- [Phase 08]: 生成按钮阻断理由直接来自首个 invalid modality 的 reason_message。
 
 ### Pending Todos
 
-- Plan Phase 08: validation and deterministic resolution before execution starts.
 - Keep Phase 09 semantics explicit: fresh run freezes current selection, resume reuses old snapshot, rerun/new run adopts updated selection.
 - Keep proof scope tight to creator-visible evidence plus deterministic automated acceptance.
+- Use Phase 08 resolver/preflight contracts as fixed inputs; Phase 09 should add snapshot semantics, not reopen fallback rules.
 
 ### Blockers/Concerns
 
@@ -91,6 +100,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-12T01:50:00.000Z
-Stopped at: Phase 07 complete; ready to plan Phase 08
+Last session: 2026-04-18T01:33:20.954Z
+Stopped at: Phase 08 complete; ready to plan Phase 09
 Resume file: None

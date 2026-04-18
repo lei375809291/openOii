@@ -14,8 +14,8 @@ Close `PROJ-02` by proving that project-scoped provider selection survives persi
 
 ### Validation & Resolution
 
-- [ ] **VAL-01**: 创作者在启动生成前，如果所选 provider 未配置、被禁用或不支持对应 modality / stage，会收到明确阻断与原因说明。
-- [ ] **VAL-02**: 系统对项目级 provider 选择采用确定性的解析规则，不会静默退回别的 provider。
+- [x] **VAL-01**: 创作者在启动生成前，如果所选 provider 未配置、被禁用或不支持对应 modality / stage，会收到明确阻断与原因说明。
+- [x] **VAL-02**: 系统对项目级 provider 选择采用确定性的解析规则，不会静默退回别的 provider。
 
 ### Runtime Snapshot Semantics
 
