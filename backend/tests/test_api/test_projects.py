@@ -80,6 +80,7 @@ async def test_create_project_persists_bootstrap_payload(async_client, test_sess
     assert project.video_provider_override == "doubao"
 
 
+@pytest.mark.asyncio
 async def test_get_project(async_client, test_session, test_settings):
     test_settings.text_provider = "openai"
     test_settings.text_api_key = "text-key"

@@ -156,6 +156,16 @@ async def storyboard_node(
 async def storyboard_approval_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:
+    if runtime.context.auto_mode:
+        return {
+            "current_stage": "storyboard_approval",
+            "approval_history": ["storyboard"],
+            "approval_feedback": "",
+            "review_requested": False,
+            "route_stage": "clip",
+        }
+
+
     agent_ctx = runtime.context.agent_context
     clip_ready = await can_enter_clip_generation(
         agent_ctx.session, agent_ctx.run, agent_ctx.target_ids
