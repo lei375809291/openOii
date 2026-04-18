@@ -87,6 +87,7 @@ export function ChatPanel({
   generateDisabled = false,
   generateDisabledReason,
 }: ChatPanelProps) {
+  const generateDisabledReasonId = generateDisabledReason ? "generate-disabled-reason" : undefined;
   const {
     messages,
     currentAgent,
@@ -203,12 +204,17 @@ export function ChatPanel({
                 disabled={generateDisabled}
                 className="gap-2 touch-target"
                 aria-label="开始生成漫剧"
+                aria-describedby={generateDisabledReasonId}
               >
                 <RocketLaunchIcon className="w-5 h-5" aria-hidden="true" />
                 <span>开始生成</span>
               </Button>
               {generateDisabledReason ? (
-                <p className="mt-3 max-w-xs text-xs text-warning">
+                <p
+                  id={generateDisabledReasonId}
+                  className="mt-3 max-w-xs text-xs text-warning"
+                  aria-live="polite"
+                >
                   当前无法开始生成：{generateDisabledReason}
                 </p>
               ) : null}
