@@ -26,6 +26,26 @@ class ProjectProviderSettingsRead(BaseModel):
     video: ProjectProviderEntry
 
 
+class ProviderResolution(BaseModel):
+    valid: bool
+    text: ProjectProviderEntry
+    image: ProjectProviderEntry
+    video: ProjectProviderEntry
+
+    def as_project_provider_settings(self) -> ProjectProviderSettingsRead:
+        return ProjectProviderSettingsRead(
+            text=self.text,
+            image=self.image,
+            video=self.video,
+        )
+
+    def as_error_details(self) -> dict[str, object]:
+        return {
+            "valid": self.valid,
+            "modalities": self.as_project_provider_settings().model_dump(),
+        }
+
+
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1)
     story: str | None = None

@@ -14,10 +14,12 @@ from app.agents.orchestrator import GenerationOrchestrator
 from app.api.deps import SessionDep, SettingsDep, WsManagerDep
 from app.config import Settings
 from app.db.session import async_session_maker
+from app.exceptions import BusinessError
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Project
-from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest, ResumeRequest
+from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest, ProviderResolution, ResumeRequest
+from app.services.provider_resolution import resolve_project_provider_settings
 from app.services.run_recovery import build_recovery_control_surface
 from app.services.task_manager import task_manager
 from app.ws.manager import ConnectionManager
@@ -90,6 +92,14 @@ async def generate_project(
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content=control.model_dump(mode="json"),
+        )
+
+    provider_resolution: ProviderResolution = resolve_project_provider_settings(project, settings)
+    if not provider_resolution.valid:
+        raise BusinessError(
+            message="项目 Provider 配置无效，无法启动生成",
+            code="PROVIDER_PRECHECK_FAILED",
+            details={"provider_resolution": provider_resolution.as_error_details()},
         )
 
     run = AgentRun(

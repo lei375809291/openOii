@@ -70,9 +70,15 @@ class PermissionError(AppException):
 class BusinessError(AppException):
     """业务逻辑错误 (422)"""
 
-    def __init__(self, message: str, code: str = "BUSINESS_ERROR") -> None:
+    def __init__(
+        self,
+        message: str,
+        code: str = "BUSINESS_ERROR",
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(
             message=message,
             code=code,
             status_code=422,
+            details=details,
         )

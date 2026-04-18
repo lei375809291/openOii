@@ -5,7 +5,7 @@ from typing import Literal, Protocol
 from pydantic import BaseModel
 
 from app.config import Settings
-from app.schemas.project import ProjectProviderEntry, ProjectProviderSettingsRead
+from app.schemas.project import ProjectProviderEntry, ProviderResolution
 
 
 class ProjectProviderOverrides(Protocol):
@@ -17,26 +17,6 @@ class ProjectProviderOverrides(Protocol):
 TEXT_PROVIDER_KEYS = ("anthropic", "openai")
 IMAGE_PROVIDER_KEYS = ("openai",)
 VIDEO_PROVIDER_KEYS = ("openai", "doubao")
-
-
-class ProviderResolution(BaseModel):
-    valid: bool
-    text: ProjectProviderEntry
-    image: ProjectProviderEntry
-    video: ProjectProviderEntry
-
-    def as_project_provider_settings(self) -> ProjectProviderSettingsRead:
-        return ProjectProviderSettingsRead(
-            text=self.text,
-            image=self.image,
-            video=self.video,
-        )
-
-    def as_error_details(self) -> dict[str, object]:
-        return {
-            "valid": self.valid,
-            "modalities": self.as_project_provider_settings().model_dump(),
-        }
 
 
 def _normalize_provider_key(value: str | None) -> str | None:
