@@ -13,10 +13,12 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
 import { ApiError } from "~/types/errors";
+import { cleanupDeletedProjectCaches } from "~/features/projects/deleteProject";
 
 export function ProjectsPage() {
   const queryClient = useQueryClient();
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number[] | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const {
     data: projects,
@@ -46,19 +48,14 @@ export function ProjectsPage() {
   }, [error, queryClient]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => projectsApi.delete(id),
-    onSuccess: (_, deletedId) => {
-      // 清理项目列表缓存
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      // 移除该项目的所有相关缓存，防止 ID 复用时命中旧缓存
-      queryClient.removeQueries({ queryKey: ["project", deletedId] });
-      queryClient.removeQueries({ queryKey: ["characters", deletedId] });
-      queryClient.removeQueries({ queryKey: ["shots", deletedId] });
-      queryClient.removeQueries({ queryKey: ["messages", deletedId] });
+    mutationFn: (ids: number[]) => projectsApi.deleteMany(ids),
+    onSuccess: (_, deletedIds) => {
+      cleanupDeletedProjectCaches(queryClient, deletedIds);
+      setSelectedIds((prev) => prev.filter((id) => !deletedIds.includes(id)));
       setDeleteTarget(null);
       toast.success({
         title: "删除成功",
-        message: "项目已删除",
+        message: deletedIds.length > 1 ? "项目已批量删除" : "项目已删除",
       });
     },
     onError: (error: Error | ApiError) => {
@@ -74,11 +71,30 @@ export function ProjectsPage() {
     e.preventDefault();
     e.stopPropagation();
     if (deleteMutation.isPending) return;
-    setDeleteTarget(id);
+    setDeleteTarget([id]);
   };
 
+  const handleBatchDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (deleteMutation.isPending || selectedIds.length === 0) return;
+    setDeleteTarget([...selectedIds]);
+  };
+
+  const handleToggleSelect = (projectId: number, checked: boolean) => {
+    setSelectedIds((prev) =>
+      checked ? [...prev, projectId] : prev.filter((id) => id !== projectId)
+    );
+  };
+
+  const handleToggleSelectAll = (checked: boolean) => {
+    if (!projects) return;
+    setSelectedIds(checked ? projects.map((project) => project.id) : []);
+  };
+
+  const allSelected = projects && projects.length > 0 && selectedIds.length === projects.length;
+
   const handleConfirmDelete = () => {
-    if (deleteTarget !== null) {
+    if (deleteTarget !== null && deleteTarget.length > 0) {
       deleteMutation.mutate(deleteTarget);
     }
   };
@@ -90,6 +106,26 @@ export function ProjectsPage() {
           <h1 className="text-2xl font-heading font-bold">
             <span className="underline-sketch">全部项目</span>
           </h1>
+          <div className="mt-3 flex items-center gap-3">
+            <label className="cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(allSelected)}
+                onChange={(e) => handleToggleSelectAll(e.target.checked)}
+                disabled={!projects || projects.length === 0}
+                className="mr-2 align-middle"
+              />
+              全选
+            </label>
+            <button
+              type="button"
+              className="btn btn-sm btn-error"
+              onClick={handleBatchDeleteClick}
+              disabled={selectedIds.length === 0}
+            >
+              批量删除（{selectedIds.length}）
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 px-6 py-8">
@@ -120,6 +156,21 @@ export function ProjectsPage() {
                   >
                     <Card className="group transition-transform duration-200 hover:-translate-y-1 cursor-pointer">
                       <div className="flex items-center justify-between">
+                        <label
+                          className="mr-2 cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(project.id)}
+                            onChange={(e) => handleToggleSelect(project.id, e.target.checked)}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          />
+                        </label>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-heading font-bold truncate">
@@ -166,7 +217,7 @@ export function ProjectsPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
         title="删除项目"
-        message="确定要删除这个项目吗？删除后将无法恢复。"
+        message={`确定要删除选中的${deleteTarget ? deleteTarget.length : 0}个项目吗？删除后将无法恢复。`}
         confirmText="删除"
         cancelText="取消"
         variant="danger"

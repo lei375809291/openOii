@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore } from "~/stores/editorStore";
 import type {
   Character,
+  ProjectProviderSettings,
   RecoverySummaryRead,
   RunAwaitingConfirmEventData,
   RunConfirmedEventData,
@@ -11,8 +12,9 @@ import type {
   WorkflowStage,
 } from "~/types";
 import { toast } from "~/utils/toast";
+import { getWsBase } from "~/utils/runtimeBase";
 
-const WS_BASE = import.meta.env.VITE_WS_URL || "ws://localhost:18765";
+const WS_BASE = getWsBase();
 const RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
@@ -50,12 +52,13 @@ export function useProjectWebSocket(projectId: number | null) {
     }
 
     ws.onopen = () => {
+      const wasReconnecting = reconnectAttempts.current > 0;
       if (import.meta.env.DEV) {
         console.log("[WS] 已连接到项目", projectId);
       }
       reconnectAttempts.current = 0;
       // 只在重连成功时显示提示
-      if (reconnectAttempts.current > 0) {
+      if (wasReconnecting) {
         toast.success({
           title: "重新连接成功",
           message: "可以继续创作了",
@@ -179,7 +182,7 @@ function clearLoadingStates(
   store: ReturnType<typeof useEditorStore.getState>,
   agentFilter?: string
 ): void {
-  const currentMessages = store.messages;
+  const currentMessages = useEditorStore.getState().messages;
   const updatedMessages = currentMessages.map((msg) => {
     if (msg.isLoading && (!agentFilter || msg.agent === agentFilter)) {
       return { ...msg, isLoading: false };
@@ -232,6 +235,11 @@ export function applyWsEvent(
       }
       if (event.data.recovery_summary) {
         store.setRecoverySummary(event.data.recovery_summary as RecoverySummaryRead);
+      }
+      if (Object.hasOwn(event.data, "provider_snapshot")) {
+        store.setCurrentRunProviderSnapshot(
+          event.data.provider_snapshot as ProjectProviderSettings | null
+        );
       }
       break;
     case "run_progress":
@@ -345,7 +353,17 @@ export function applyWsEvent(
       store.setRecoveryControl(null);
       store.setRecoverySummary(null);
       store.setRecoveryGate(null);
+      store.setCurrentRunProviderSnapshot(null);
       store.setCurrentStage("deploy");
+      if (typeof event.data?.message === "string" && event.data.message.trim()) {
+        store.addMessage({
+          id: generateMessageId(),
+          agent: "system",
+          role: "assistant",
+          content: event.data.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
       break;
     case "run_failed":
       // 清除所有 isLoading 状态
@@ -356,6 +374,7 @@ export function applyWsEvent(
       store.setRecoveryControl(null);
       store.setRecoverySummary(null);
       store.setRecoveryGate(null);
+      store.setCurrentRunProviderSnapshot(null);
       store.addMessage({
         id: generateMessageId(),
         agent: "system",
@@ -368,6 +387,25 @@ export function applyWsEvent(
         title: "生成失败",
         message: (event.data.error as string) || "未知错误",
         duration: 5000,
+      });
+      break;
+    case "run_cancelled":
+      clearLoadingStates(store);
+      store.setGenerating(false);
+      store.setProgress(0);
+      store.setCurrentAgent(null);
+      store.setAwaitingConfirm(false, null, null);
+      store.setCurrentRunId(null);
+      store.setRecoveryControl(null);
+      store.setRecoverySummary(null);
+      store.setRecoveryGate(null);
+      store.setCurrentRunProviderSnapshot(null);
+      store.addMessage({
+        id: generateMessageId(),
+        agent: "system",
+        role: "info",
+        content: "生成已停止",
+        timestamp: new Date().toISOString(),
       });
       break;
     case "error":

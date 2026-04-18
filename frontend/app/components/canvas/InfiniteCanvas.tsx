@@ -137,6 +137,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		currentStage,
 		isGenerating,
 		recoverySummary,
+		currentRunProviderSnapshot,
 		currentRunId,
 		updateCharacter,
 		updateShot,
@@ -248,6 +249,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			video_url: rawVideoUrl || null,
 		};
 	}, [project, rawVideoUrl]);
+
+	const videoProviderValid = currentRunProviderSnapshot?.video?.valid;
 	const finalOutputMeta = useMemo(() => {
 		if (!finalOutputProject) {
 			return null;
@@ -260,8 +263,17 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			characters,
 			shots,
 			recoverySummary,
+			videoProviderValid,
 		});
-	}, [finalOutputProject, recoverySummary, currentStage, isGenerating, characters, shots]);
+	}, [
+		finalOutputProject,
+		recoverySummary,
+		currentStage,
+		isGenerating,
+		characters,
+		shots,
+		videoProviderValid,
+	]);
 
 	// 计算布局
 	const shapes = useCanvasLayout({
@@ -283,6 +295,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 				characters,
 				shots,
 				recoverySummary,
+				videoProviderValid,
 			});
 		}, [
 			project,
@@ -291,6 +304,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			isGenerating,
 			characters,
 			shots,
+			videoProviderValid,
 		]),
 		finalOutputMeta,
 	});

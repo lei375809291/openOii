@@ -10,10 +10,11 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { projectsApi } from "~/services/api";
+import { cleanupDeletedProjectCaches } from "~/features/projects/deleteProject";
 import { useSettingsStore } from "~/stores/settingsStore";
 import { useSidebarStore } from "~/stores/sidebarStore";
 import { useThemeStore } from "~/stores/themeStore";
@@ -26,7 +27,8 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number[] | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const handleSettingsClick = () => {
     openSettingsModal();
@@ -38,18 +40,17 @@ export function Sidebar() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => projectsApi.delete(id),
-    onSuccess: (_, deletedId) => {
-      // 清理项目列表缓存
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      // 移除该项目的所有相关缓存，防止 ID 复用时命中旧缓存
-      queryClient.removeQueries({ queryKey: ["project", deletedId] });
-      queryClient.removeQueries({ queryKey: ["characters", deletedId] });
-      queryClient.removeQueries({ queryKey: ["shots", deletedId] });
-      queryClient.removeQueries({ queryKey: ["messages", deletedId] });
+    mutationFn: (ids: number[]) => {
+      if (ids.length > 1) {
+        return projectsApi.deleteMany(ids);
+      }
+      return projectsApi.delete(ids[0]);
+    },
+    onSuccess: (_, deletedIds) => {
+      cleanupDeletedProjectCaches(queryClient, deletedIds);
+      setSelectedIds((prev) => prev.filter((id) => !deletedIds.includes(id)));
       setDeleteTarget(null);
-      // 如果删除的是当前项目，跳转到首页
-      if (location.pathname === `/project/${deletedId}`) {
+      if (deletedIds.some((id) => location.pathname === `/project/${id}`)) {
         navigate("/");
       }
     },
@@ -59,11 +60,40 @@ export function Sidebar() {
     e.preventDefault();
     e.stopPropagation();
     if (deleteMutation.isPending) return;
-    setDeleteTarget(id);
+    setDeleteTarget([id]);
+  };
+
+  const handleBatchDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (deleteMutation.isPending || selectedIds.length === 0) return;
+    setDeleteTarget([...selectedIds]);
+  };
+
+  const handleToggleSelect = (projectId: number, checked: boolean) => {
+    setSelectedIds((prev) =>
+      checked ? [...prev, projectId] : prev.filter((id) => id !== projectId),
+    );
+  };
+
+  const isMultiSelectMode = selectedIds.length > 0;
+
+  useEffect(() => {
+    if (!projects) {
+      return;
+    }
+
+    setSelectedIds((prev) =>
+      prev.filter((id) => projects.some((project) => project.id === id)),
+    );
+  }, [projects]);
+
+  const handleToggleSelectAll = (checked: boolean) => {
+    if (!projects) return;
+    setSelectedIds(checked ? projects.map((project) => project.id) : []);
   };
 
   const handleConfirmDelete = () => {
-    if (deleteTarget !== null) {
+    if (deleteTarget !== null && deleteTarget.length > 0) {
       deleteMutation.mutate(deleteTarget);
     }
   };
@@ -138,6 +168,36 @@ export function Sidebar() {
             历史记录
           </div>
 
+          {selectedIds.length > 0 ? (
+            <div className="mx-2 mb-2 px-2 py-2 border border-black bg-base-200 rounded-lg">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-base-content">
+                <span>已选 {selectedIds.length} 项</span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleSelectAll(true)}
+                  className="btn btn-xs"
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="btn btn-xs"
+                >
+                  清空
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleBatchDeleteClick(e)}
+                  className="btn btn-xs btn-error"
+                  disabled={selectedIds.length === 0}
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <span className="loading loading-spinner loading-sm"></span>
@@ -146,21 +206,24 @@ export function Sidebar() {
             <div className="space-y-1">
               {projects.map((project: Project) => {
                 const isActive = currentProjectId === String(project.id);
-                return (
-                  <Link
-                    key={project.id}
-                    to={`/project/${project.id}`}
-                    className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 cursor-pointer ${
-                      isActive
-                        ? "bg-primary/20 border-2 border-black"
-                        : "hover:bg-base-200 border-2 border-transparent"
-                    }`}
-                  >
+                const rowChecked = selectedIds.includes(project.id);
+                const rowClassName = `group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 cursor-pointer ${
+                  isActive
+                    ? "bg-primary/20 border-2 border-black"
+                    : "hover:bg-base-200 border-2 border-transparent"
+                }`;
+
+                const rowContent = (
+                  <>
+                    <input
+                      type="checkbox"
+                      checked={rowChecked}
+                      onChange={(e) => handleToggleSelect(project.id, e.target.checked)}
+                      className="checkbox checkbox-xs"
+                    />
                     <ChatBubbleLeftRightIcon className="w-4 h-4 flex-shrink-0 text-base-content/60" />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate text-sm">
-                        {project.title}
-                      </div>
+                      <div className="font-medium truncate text-sm">{project.title}</div>
                       {project.story && (
                         <div className="text-xs text-base-content/50 truncate">
                           {project.story.slice(0, 30)}
@@ -175,6 +238,25 @@ export function Sidebar() {
                     >
                       <TrashIcon className="w-4 h-4 text-error" />
                     </button>
+                  </>
+                );
+
+                return isMultiSelectMode ? (
+                  <div
+                    key={project.id}
+                    className={rowClassName}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("input,button,a")) {
+                        return;
+                      }
+                      handleToggleSelect(project.id, !rowChecked);
+                    }}
+                  >
+                    {rowContent}
+                  </div>
+                ) : (
+                  <Link key={project.id} to={`/project/${project.id}`} className={rowClassName}>
+                    {rowContent}
                   </Link>
                 );
               })}
@@ -234,7 +316,7 @@ export function Sidebar() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
         title="删除项目"
-        message="删除后无法恢复。确定要删除这个项目吗？"
+        message={`确定要删除选中的${deleteTarget ? deleteTarget.length : 0}个项目吗？删除后无法恢复。`}
         confirmText="删除"
         cancelText="取消"
         variant="danger"

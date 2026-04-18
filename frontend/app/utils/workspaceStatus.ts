@@ -30,6 +30,7 @@ export interface WorkspaceProjectionInput {
   characters: Character[];
   shots: Shot[];
   recoverySummary?: RecoverySummaryRead | null;
+  videoProviderValid?: boolean | null;
 }
 
 export interface WorkspaceStatus {
@@ -172,8 +173,20 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
 		return "superseded";
 	}
 
-	if (project.video_url && key === "final-output") {
-		return "complete";
+	if (key === "final-output") {
+		if (project.video_url) {
+			return "complete";
+		}
+
+		if (input.videoProviderValid === false) {
+			return "blocked";
+		}
+
+		if (isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key])) {
+			return runState === "running" ? "generating" : "draft";
+		}
+
+		return "blocked";
 	}
 
   if (project.video_url) {
@@ -292,12 +305,16 @@ export function getWorkspaceFinalOutputMeta(
   const sectionState = resolveSectionState(input, "final-output");
   const runId = input.recoverySummary?.run_id ?? null;
   const threadId = input.recoverySummary?.thread_id ?? null;
+  const videoProviderValid = input.videoProviderValid ?? null;
 
   return {
     sectionState,
     statusLabel: getWorkspaceSectionStatusLabel(sectionState),
-    provenanceText: getFinalOutputProvenanceText(sectionState),
-    blockingText: getFinalOutputBlockingText(sectionState),
+    provenanceText: getFinalOutputProvenanceText(sectionState, videoProviderValid),
+    blockingText: getFinalOutputBlockingText({
+      sectionState,
+      videoProviderValid,
+    }),
     downloadUrl: getProjectFinalVideoDownloadUrl(input.project.id),
     previewLabel: "预览最终视频",
     downloadLabel: "下载最终视频",
@@ -307,13 +324,17 @@ export function getWorkspaceFinalOutputMeta(
       runId,
       threadId,
       currentStage: input.currentStage,
+      videoProviderValid,
     }),
     retryRunId: runId,
     retryThreadId: threadId,
   };
 }
 
-function getFinalOutputProvenanceText(state: WorkspaceSectionState) {
+function getFinalOutputProvenanceText(
+  state: WorkspaceSectionState,
+  videoProviderValid?: boolean | null,
+) {
   if (state === "superseded") {
     return "来源：上一次合成结果，已被新版本替代";
   }
@@ -326,15 +347,32 @@ function getFinalOutputProvenanceText(state: WorkspaceSectionState) {
     return "来源：合成失败，需要重试";
   }
 
+  if (state === "blocked" && videoProviderValid === false) {
+    return "来源：本次运行视频 provider 无效，clip 与 merge 已自动跳过";
+  }
+
+  if (state === "blocked") {
+    return "来源：等待分镜片段完成后生成最终视频";
+  }
+
   return "来源：等待分镜片段完成后生成最终视频";
 }
 
-function getFinalOutputBlockingText(state: WorkspaceSectionState) {
-  if (state === "blocked") {
+function getFinalOutputBlockingText(input: {
+  sectionState: WorkspaceSectionState;
+  videoProviderValid?: boolean | null;
+}) {
+  const { sectionState, videoProviderValid } = input;
+
+  if (sectionState === "blocked") {
+    if (videoProviderValid === false) {
+      return "本次运行的视频 provider 无效，已跳过 clip 与 merge 阶段。请先配置可用视频 provider 后重试。";
+    }
+
     return "当前仍在等待分镜片段完成，完成后会自动生成最终视频。";
   }
 
-  if (state === "superseded") {
+  if (sectionState === "superseded") {
     return "当前成片已失效，但仍可预览和下载历史版本。";
   }
 
@@ -346,8 +384,13 @@ function buildFinalOutputRetryFeedback(input: {
   runId: number | null;
   threadId: string | null;
   currentStage: string;
+  videoProviderValid?: boolean | null;
 }) {
-  const { sectionState, runId, threadId, currentStage } = input;
+  const { sectionState, runId, threadId, currentStage, videoProviderValid } = input;
+
+  if (sectionState === "blocked" && videoProviderValid === false) {
+    return `视频 provider 无效，当前运行已自动跳过 clip/merge。请先在项目中修复视频 provider 后重试。`;
+  }
 
   if (sectionState === "blocked") {
     return `最终视频仍在等待分镜片段完成，请在 ${currentStage} 之后继续合成。`;

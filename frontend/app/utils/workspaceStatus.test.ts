@@ -315,6 +315,51 @@ describe("buildWorkspaceStatus", () => {
     expect(meta.blockingText).toContain("分镜");
     expect(meta.downloadUrl).toBe("/api/v1/projects/1/final-video");
   });
+
+  it("shows explicit skip copy when video provider is invalid at final output", () => {
+    const meta = getWorkspaceFinalOutputMeta({
+      ...baseInput,
+      currentStage: "deploy",
+      runState: "completed",
+      videoProviderValid: false,
+      project: {
+        ...baseInput.project,
+        video_url: null,
+        status: "completed",
+      },
+      shots: [
+        {
+          id: 1,
+          project_id: 1,
+          order: 1,
+          description: "镜头",
+          prompt: null,
+          image_prompt: null,
+          image_url: "/static/shots/1.png",
+          video_url: "/static/shots/1.mp4",
+          duration: 6,
+          camera: null,
+          motion_note: null,
+          character_ids: [],
+          approval_state: "approved",
+          approval_version: 1,
+          approved_at: null,
+          approved_description: null,
+          approved_prompt: null,
+          approved_image_prompt: null,
+          approved_duration: null,
+          approved_camera: null,
+          approved_motion_note: null,
+          approved_character_ids: [],
+        },
+      ],
+    });
+
+    expect(meta.sectionState).toBe("blocked");
+    expect(meta.blockingText).toContain("已跳过");
+    expect(meta.retryFeedback).toContain("视频 provider 无效");
+    expect(meta.provenanceText).toContain("已自动跳过");
+  });
 });
 
 describe("toCreatorStageLabel", () => {

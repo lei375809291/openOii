@@ -152,6 +152,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		projectVideoUrl,
 		currentStage,
 		currentRunId,
+		currentRunProviderSnapshot,
 		recoverySummary,
 		updateCharacter,
 		updateShot,
@@ -204,6 +205,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		if (!finalOutputProject) {
 			return null;
 		}
+		const videoProviderValid = currentRunProviderSnapshot?.video?.valid;
 
 		return getWorkspaceFinalOutputMeta({
 			project: finalOutputProject,
@@ -212,8 +214,16 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 			characters,
 			shots,
 			recoverySummary,
+			videoProviderValid,
 		});
-	}, [finalOutputProject, currentStage, characters, shots, recoverySummary]);
+	}, [
+		finalOutputProject,
+		currentStage,
+		characters,
+		shots,
+		recoverySummary,
+		currentRunProviderSnapshot?.video?.valid,
+	]);
 
 	// 监听分镜更新，清除加载状态
 	useEffect(() => {
@@ -581,16 +591,22 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 				</Section>
 
 				{/* 最终视频 */}
-				{finalVideoUrl && finalOutputMeta && (
+				{finalOutputMeta && (
 					<Section
 						title="最终视频"
 						icon={<VideoCameraIcon className="w-5 h-5" aria-hidden="true" />}
 					>
 						<div className="card-doodle bg-base-100 overflow-hidden max-w-2xl">
 							<div className="relative aspect-video bg-black">
-								<video className="w-full h-full object-contain" src={finalVideoUrl} controls>
-									<track kind="captions" label="中文字幕" src="" />
-								</video>
+								{finalVideoUrl ? (
+									<video className="w-full h-full object-contain" src={finalVideoUrl} controls>
+										<track kind="captions" label="中文字幕" src="" />
+									</video>
+								) : (
+									<div className="w-full h-full flex items-center justify-center text-sm text-base-content/60">
+										暂无最终视频（已跳过视频阶段时可在修复后重试）
+									</div>
+								)}
 							</div>
 							<div className="p-4 space-y-3">
 								<div className="flex flex-wrap items-center gap-2">
@@ -611,7 +627,9 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 									<button
 										type="button"
 										className="btn btn-secondary btn-sm"
+									disabled={!finalVideoUrl}
 									onClick={() =>
+										finalVideoUrl &&
 										handleVideoPreview(finalVideoUrl, project?.title || "最终视频", {
 											isFinalOutput: true,
 										})
@@ -622,6 +640,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 									<button
 										type="button"
 										className="btn btn-primary btn-sm"
+										disabled={!finalVideoUrl}
 										onClick={handleFinalVideoDownload}
 									>
 										{finalOutputMeta.downloadLabel}

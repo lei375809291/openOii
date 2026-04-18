@@ -33,6 +33,7 @@ export function SettingsModal() {
   const queryClient = useQueryClient();
   const [formState, setFormState] = useState<Record<string, ConfigValue>>({});
   const [activeTab, setActiveTab] = useState("database");
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>({
     show: false,
     type: "success",
@@ -99,6 +100,63 @@ export function SettingsModal() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormState(prevState => ({ ...prevState, [name]: value }));
+  };
+
+  const getTestConnectionService = () => {
+    if (activeTab === "text") {
+      return "llm";
+    }
+
+    if (activeTab === "image") {
+      return "image";
+    }
+
+    if (activeTab === "video") {
+      return "video";
+    }
+
+    return null;
+  };
+
+  const handleTestConnection = async () => {
+    const service = getTestConnectionService();
+    if (!service) {
+      return;
+    }
+
+    const normalizedFormState = Object.fromEntries(
+      Object.entries(formState).map(([key, value]) => [
+        key,
+        value === null ? null : String(value),
+      ])
+    ) as Record<string, string | null>;
+
+    setIsTestingConnection(true);
+    try {
+      const result = await configApi.testConnection(service, normalizedFormState);
+      const alertType = result.status === "degraded" ? "warning" : result.success ? "success" : "error";
+      setAlertState({
+        show: true,
+        type: alertType,
+        title:
+          result.status === "degraded"
+            ? "连接测试部分通过"
+            : result.success
+              ? "连接测试成功"
+              : "连接测试失败",
+        message: result.message,
+        details: result.details || undefined,
+      });
+    } catch (error) {
+      setAlertState({
+        show: true,
+        type: "error",
+        title: "连接测试失败",
+        message: error instanceof Error ? error.message : "连接测试失败",
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -537,6 +595,17 @@ export function SettingsModal() {
               >
                 {updateMutation.isPending && <span className="loading loading-spinner loading-sm"></span>}
                 保存配置
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline border-2 border-black"
+                onClick={handleTestConnection}
+                disabled={
+                  updateMutation.isPending || isTestingConnection || !getTestConnectionService()
+                }
+              >
+                {isTestingConnection && <span className="loading loading-spinner loading-sm"></span>}
+                测试连接
               </button>
             </div>
           </form>

@@ -1,4 +1,5 @@
 import { ApiError } from "~/types/errors";
+import { getApiBase } from "~/utils/runtimeBase";
 import type {
   Character,
   CharacterUpdatePayload,
@@ -9,7 +10,7 @@ import type {
   UpdateProjectPayload,
 } from "~/types";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:18765";
+const API_BASE = getApiBase();
 
 /**
  * 将后端静态文件路径转换为完整 URL
@@ -148,6 +149,12 @@ export const projectsApi = {
   
   delete: (id: number) =>
     fetchApi<void>(`/api/v1/projects/${id}`, { method: "DELETE" }),
+
+  deleteMany: (ids: number[]) =>
+    fetchApi<void>("/api/v1/projects/batch-delete", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
   
   getCharacters: (id: number) =>
     fetchApi<Character[]>(`/api/v1/projects/${id}/characters`),
@@ -231,7 +238,7 @@ export const configApi = {
       body: JSON.stringify({ configs: config }),
     }),
   testConnection: (service: "llm" | "image" | "video", configOverrides?: Record<string, string | null>) =>
-    fetchApi<{ success: boolean; message: string; details: string | null }>("/api/v1/config/test-connection", {
+    fetchApi<{ success: boolean; message: string; details: string | null; status?: "valid" | "degraded" | "invalid" | null; capabilities?: { generate?: boolean | null; stream?: boolean | null } | null }>("/api/v1/config/test-connection", {
       method: "POST",
       body: JSON.stringify({ service, config_overrides: configOverrides }),
     }),

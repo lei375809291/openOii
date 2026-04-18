@@ -416,6 +416,20 @@ describe('ProjectPage live hydration', () => {
 		expect(screen.getByText('source：默认继承')).toBeInTheDocument();
 	});
 
+	it('degrades provider warning when active run snapshot exists', () => {
+		currentProjectData = {
+			...projectDataWithTextProviderIssue,
+		};
+		storeState.currentRunProviderSnapshot = providerSnapshotSample;
+
+		render(<ProjectPage />);
+
+		expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+		expect(screen.getByText('Provider 需要关注')).toBeInTheDocument();
+		expect(screen.getByText('1 项待处理')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: '编辑 Provider' })).toBeInTheDocument();
+	});
+
 	it('prefers latest run snapshot proof card over project provider defaults and keeps minimal fields', () => {
 		currentProjectData = {
 			...projectData,

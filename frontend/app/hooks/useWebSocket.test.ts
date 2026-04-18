@@ -468,6 +468,7 @@ describe("useProjectWebSocket", () => {
     } as never);
     store.setRecoveryControl({ type: "retry" } as never);
     store.setRecoverySummary({ from: "before" } as never);
+    const addMessageSpy = vi.spyOn(store, "addMessage");
     store.setRecoveryGate({
       run_id: 111,
       agent: "director",
@@ -487,7 +488,9 @@ describe("useProjectWebSocket", () => {
     applyWsEvent(
       {
         type: "run_completed",
-        data: {} as never,
+        data: {
+          message: "视频未配置，已完成文本和图片生成",
+        } as never,
       },
       store
     );
@@ -503,10 +506,14 @@ describe("useProjectWebSocket", () => {
       recoveryGate: null,
       currentStage: "deploy",
     });
-    expect(useEditorStore.getState().currentRunProviderSnapshot).toMatchObject({
-      text: { selected_key: "openai" },
-      video: { selected_key: "doubao" },
-    });
+    expect(useEditorStore.getState().currentRunProviderSnapshot).toBeNull();
+    expect(addMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        agent: "system",
+        content: "视频未配置，已完成文本和图片生成",
+      })
+    );
 
     applyWsEvent(
       {
@@ -518,10 +525,7 @@ describe("useProjectWebSocket", () => {
 
     expect(useEditorStore.getState().isGenerating).toBe(false);
     expect(useEditorStore.getState().recoveryControl).toBeNull();
-    expect(useEditorStore.getState().currentRunProviderSnapshot).toMatchObject({
-      image: { selected_key: "openai" },
-      video: { resolved_key: "doubao" },
-    });
+    expect(useEditorStore.getState().currentRunProviderSnapshot).toBeNull();
     expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
       role: "error",
       content: "生成失败: 生成失败",
@@ -572,6 +576,7 @@ describe("useProjectWebSocket", () => {
       recoverySummary: null,
       recoveryGate: null,
     });
+    expect(useEditorStore.getState().currentRunProviderSnapshot).toBeNull();
     expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
       role: "info",
       agent: "system",

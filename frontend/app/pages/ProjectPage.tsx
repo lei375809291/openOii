@@ -1,6 +1,7 @@
 import {
 	ArrowPathIcon,
 	Bars3Icon,
+	ExclamationTriangleIcon,
 	FaceFrownIcon,
 	PencilIcon,
 	StopIcon,
@@ -21,6 +22,7 @@ import { useEditorStore } from "~/stores/editorStore";
 import { useSidebarStore } from "~/stores/sidebarStore";
 import type {
 	Project,
+	ProjectProviderSettings,
 	ProjectProviderOverridesPayload,
 	RecoveryControlRead,
 	WorkflowStage,
@@ -33,6 +35,8 @@ const PROVIDER_LABELS = {
 	image: "图像",
 	video: "视频",
 } as const;
+
+const GENERATE_BLOCKING_PROVIDER_KEYS = new Set(["text", "image"]);
 
 function deriveProviderOverridesFromProject(
 	project: Pick<Project, "provider_settings">,
@@ -61,6 +65,7 @@ export function ProjectPage() {
 	const store = useEditorStore();
 	const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarStore();
 	const autoStartTriggered = useRef(false);
+	const generateRequestTokenRef = useRef(0);
 	const retryCount = useRef(0);
 	const [isEditingProviders, setIsEditingProviders] = useState(false);
 	const [providerDraft, setProviderDraft] =
@@ -71,6 +76,24 @@ export function ProjectPage() {
 		});
 
 	const { send } = useProjectWebSocket(projectId);
+	const hasActiveRun = store.isGenerating || Boolean(store.currentRunId);
+
+	const syncStoreWithActiveRun = (run: {
+		id: number;
+		current_agent?: string | null;
+		progress?: number | null;
+		provider_snapshot?: ProjectProviderSettings | null;
+	}) => {
+		store.setGenerating(true);
+		store.setCurrentRunId(run.id);
+		store.setCurrentAgent(run.current_agent ?? "orchestrator");
+		store.setProgress(typeof run.progress === "number" ? run.progress : 0);
+		store.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
+		store.setAwaitingConfirm(false, null, run.id);
+		store.setRecoveryControl(null);
+		store.setRecoverySummary(null);
+		store.setRecoveryGate(null);
+	};
 
 	const {
 		data: project,
@@ -121,6 +144,68 @@ export function ProjectPage() {
 		enabled: !!project,
 	});
 
+	const providerRows = project
+		? [
+				{
+					key: "text" as const,
+					label: PROVIDER_LABELS.text,
+					entry: project.provider_settings.text,
+				},
+				{
+					key: "image" as const,
+					label: PROVIDER_LABELS.image,
+					entry: project.provider_settings.image,
+				},
+				{
+					key: "video" as const,
+					label: PROVIDER_LABELS.video,
+					entry: project.provider_settings.video,
+				},
+			]
+		: [];
+	const providerRowsWithStatus = providerRows.map((row) => ({
+		...row,
+		status: row.entry.status ?? (row.entry.valid ? "valid" : "invalid"),
+	}));
+	const invalidProviderEntry = providerRowsWithStatus.find(
+		(row) =>
+			GENERATE_BLOCKING_PROVIDER_KEYS.has(row.key) && !row.entry.valid,
+	);
+	const nonHealthyProviderRows = providerRowsWithStatus.filter((row) => row.status !== "valid");
+	const hasProviderIssue = nonHealthyProviderRows.length > 0;
+	const shouldShowProviderCard = hasProviderIssue || isEditingProviders;
+	const generateDisabledReason = invalidProviderEntry?.entry.reason_message ?? undefined;
+	const generateDisabled = Boolean(generateDisabledReason);
+
+	const activeRunProviderSnapshot =
+		store.currentRunProviderSnapshot ??
+		(store.recoveryControl?.state === "active" || store.recoveryControl?.state === "recoverable"
+			? store.recoveryControl?.active_run?.provider_snapshot
+			: null);
+	const runProviderRows = activeRunProviderSnapshot
+		? [
+			{
+				key: "text" as const,
+				label: PROVIDER_LABELS.text,
+				entry: activeRunProviderSnapshot.text,
+			},
+			{
+				key: "image" as const,
+				label: PROVIDER_LABELS.image,
+				entry: activeRunProviderSnapshot.image,
+			},
+			{
+				key: "video" as const,
+				label: PROVIDER_LABELS.video,
+				entry: activeRunProviderSnapshot.video,
+			},
+		]
+		: [];
+	const hasRunProviderSnapshot = runProviderRows.length > 0;
+	const runVideoProviderInvalid = Boolean(
+		runProviderRows.find((row) => row.key === "video" && !row.entry.valid),
+	);
+
 	// 当项目数据加载完成后，更新到 store（依赖 projectId 确保切换时重新加载）
 	useEffect(() => {
 		if (characters) {
@@ -160,6 +245,8 @@ export function ProjectPage() {
 			return;
 		}
 
+		generateRequestTokenRef.current += 1;
+
 		const editorStore = useEditorStore.getState();
 
 		// 重置消息加载标记
@@ -185,6 +272,7 @@ export function ProjectPage() {
 
 		// 清空项目视频
 		editorStore.setProjectVideoUrl(null);
+		editorStore.setCurrentRunProviderSnapshot(null);
 
 		// 注意：不清空画布数据（characters/shots），让 React Query 的数据自然覆盖
 		// 避免竞态条件导致数据被清空
@@ -211,12 +299,20 @@ export function ProjectPage() {
 	}, [messages]);
 
 	const generateMutation = useMutation({
-		mutationFn: () => projectsApi.generate(projectId),
-		onSuccess: () => {
+		mutationFn: ({ requestToken }: { requestToken: number }) =>
+			projectsApi.generate(projectId).then((run) => ({ run, requestToken })),
+		onSuccess: ({ run, requestToken }) => {
+			if (requestToken !== generateRequestTokenRef.current) {
+				return;
+			}
+			syncStoreWithActiveRun(run);
 			// 重置重试计数
 			retryCount.current = 0;
 		},
-		onError: async (error: Error | ApiError) => {
+		onError: async (error: Error | ApiError, variables) => {
+			if (variables?.requestToken !== generateRequestTokenRef.current) {
+				return;
+			}
 			const apiError = error instanceof ApiError ? error : null;
 			const isConflict =
 				apiError?.status === 409 || error.message.includes("409");
@@ -287,6 +383,7 @@ export function ProjectPage() {
 			store.setCurrentAgent(null);
 			store.setAwaitingConfirm(false, null, null);
 			store.setCurrentRunId(null);
+			store.setCurrentRunProviderSnapshot(null);
 			store.setRecoveryControl(null);
 			store.setRecoverySummary(null);
 			store.setRecoveryGate(null);
@@ -314,6 +411,9 @@ export function ProjectPage() {
 			store.setCurrentRunId(run.id);
 			store.setCurrentAgent(run.current_agent);
 			store.setProgress(run.progress);
+			store.setCurrentRunProviderSnapshot(
+				run.provider_snapshot ?? null,
+			);
 			if (control) {
 				const nextStage =
 					control.recovery_summary.next_stage ??
@@ -359,9 +459,14 @@ export function ProjectPage() {
 	});
 
 	const handleGenerate = async () => {
+		if (generateMutation.isPending || hasActiveRun) {
+			return;
+		}
+		const requestToken = generateRequestTokenRef.current + 1;
+		generateRequestTokenRef.current = requestToken;
 		store.clearMessages();
 		store.setCurrentStage("ideate");
-		generateMutation.mutate();
+		generateMutation.mutate({ requestToken });
 	};
 
 	const handleFeedback = (content: string) => {
@@ -394,6 +499,11 @@ export function ProjectPage() {
 	};
 
 	const handleCancel = () => {
+		const activeRunId = store.currentRunId ?? store.recoveryControl?.active_run.id ?? null;
+		if (!activeRunId && !store.isGenerating && store.recoveryControl?.state !== "active") {
+			return;
+		}
+		generateRequestTokenRef.current += 1;
 		cancelMutation.mutate();
 	};
 
@@ -443,15 +553,33 @@ export function ProjectPage() {
 			autoStart === "true" &&
 			project &&
 			!autoStartTriggered.current &&
-			!store.isGenerating
+			!hasActiveRun
 		) {
+			const editorStore = useEditorStore.getState();
 			autoStartTriggered.current = true;
 			setSearchParams({}, { replace: true });
-			store.clearMessages();
-			store.setCurrentStage("ideate");
-			generateMutation.mutate();
+			if (generateDisabled) {
+				toast.warning({
+					title: "暂时无法自动开始",
+					message: generateDisabledReason ?? "请先补全当前项目的 Provider 配置",
+				});
+				return;
+			}
+			const requestToken = generateRequestTokenRef.current + 1;
+			generateRequestTokenRef.current = requestToken;
+			editorStore.clearMessages();
+			editorStore.setCurrentStage("ideate");
+			generateMutation.mutate({ requestToken });
 		}
-	}, [project, searchParams, setSearchParams, store, generateMutation]);
+	}, [
+		generateDisabled,
+		generateDisabledReason,
+		hasActiveRun,
+		project,
+		searchParams,
+		setSearchParams,
+		generateMutation,
+	]);
 
 	if (projectLoading) {
 		return (
@@ -480,27 +608,6 @@ export function ProjectPage() {
 			</div>
 		);
 	}
-
-	const providerRows = [
-		{
-			key: "text" as const,
-			label: PROVIDER_LABELS.text,
-			entry: project.provider_settings.text,
-		},
-		{
-			key: "image" as const,
-			label: PROVIDER_LABELS.image,
-			entry: project.provider_settings.image,
-		},
-		{
-			key: "video" as const,
-			label: PROVIDER_LABELS.video,
-			entry: project.provider_settings.video,
-		},
-	];
-	const invalidProviderEntry = providerRows.find((row) => !row.entry.valid);
-	const generateDisabledReason = invalidProviderEntry?.entry.reason_message ?? undefined;
-	const generateDisabled = Boolean(generateDisabledReason);
 
 	return (
 		<>
@@ -536,113 +643,148 @@ export function ProjectPage() {
 					</div>
 				</header>
 
-				<div className="px-2 sm:px-4 pt-2 sm:pt-4">
-					<Card className="border border-base-300 bg-base-100 shadow-none">
-						<div className="flex flex-col gap-4">
-							<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-								<div>
-									<h2 className="text-lg font-heading font-bold">Provider 选择</h2>
-									<p className="mt-1 text-sm text-base-content/70">
-										这里展示真实解析结果：当前选择、解析结果，以及它来自项目覆盖还是默认继承。
-									</p>
-								</div>
+				{shouldShowProviderCard ? (
+					<div className="px-2 sm:px-4 pt-2 sm:pt-4">
+						{isEditingProviders ? (
+							<Card className="border border-base-300 bg-base-100 shadow-none">
+								<div className="flex flex-col gap-4">
+									<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+										<div>
+											<h2 className="text-lg font-heading font-bold">Provider 选择</h2>
+											<p className="mt-1 text-sm text-base-content/70">
+												这里展示真实解析结果：当前选择、解析结果，以及它来自项目覆盖还是默认继承。
+											</p>
+										</div>
 
-								{!isEditingProviders ? (
-									<Button
-										variant="secondary"
-										onClick={() => setIsEditingProviders(true)}
-									>
+										<div className="flex flex-wrap gap-2">
+											<Button
+												variant="ghost"
+												onClick={handleProviderEditCancel}
+												disabled={updateProvidersMutation.isPending}
+											>
+												取消
+											</Button>
+											<Button
+												variant="primary"
+												onClick={handleProviderSave}
+												loading={updateProvidersMutation.isPending}
+											>
+												保存 Provider 设置
+											</Button>
+										</div>
+									</div>
+
+									<ProviderSelectionFields
+										value={providerDraft}
+										onChange={setProviderDraft}
+										disabled={updateProvidersMutation.isPending}
+										defaultKeys={{
+											text:
+												project.provider_settings.text.source === "default"
+													? project.provider_settings.text.selected_key
+													: "anthropic",
+											image:
+												project.provider_settings.image.source === "default"
+													? project.provider_settings.image.selected_key
+													: "openai",
+											video:
+												project.provider_settings.video.source === "default"
+													? project.provider_settings.video.selected_key
+													: "openai",
+										}}
+									/>
+								</div>
+							</Card>
+						) : hasProviderIssue ? (
+							hasRunProviderSnapshot ? (
+								<div className="flex flex-col gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-base-content/80 sm:flex-row sm:items-center sm:justify-between">
+									<div className="flex items-center gap-2">
+										<ExclamationTriangleIcon className="h-4 w-4 flex-shrink-0 text-warning" />
+										<span className="font-semibold">Provider 需要关注</span>
+										<span className="badge badge-warning badge-sm">{nonHealthyProviderRows.length} 项待处理</span>
+									</div>
+									<Button variant="secondary" size="sm" onClick={() => setIsEditingProviders(true)}>
 										编辑 Provider
 									</Button>
-								) : (
-									<div className="flex flex-wrap gap-2">
-										<Button
-											variant="ghost"
-											onClick={handleProviderEditCancel}
-											disabled={updateProvidersMutation.isPending}
-										>
-											取消
-										</Button>
-										<Button
-											variant="primary"
-											onClick={handleProviderSave}
-											loading={updateProvidersMutation.isPending}
-										>
-											保存 Provider 设置
-										</Button>
+								</div>
+							) : (
+							<div
+								role="alert"
+								className="flex flex-col gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+							>
+								<div className="flex min-w-0 gap-3">
+									<ExclamationTriangleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" />
+									<div className="min-w-0">
+										<div className="flex flex-wrap items-center gap-2">
+											<p className="text-sm font-semibold text-base-content">
+												Provider 需要关注
+											</p>
+											<span className="badge badge-warning badge-sm">
+												{nonHealthyProviderRows.length} 项待处理
+											</span>
+										</div>
+										<p className="mt-1 text-sm text-base-content/80">
+											{generateDisabledReason ?? "当前项目存在降级或未解析的 Provider，建议先检查设置。"}
+										</p>
+										<div className="mt-2 flex flex-wrap gap-2 text-xs text-base-content/75">
+											{nonHealthyProviderRows.map((row) => (
+												<span
+													key={row.key}
+													className="rounded-full border border-warning/30 bg-base-100/70 px-2.5 py-1"
+												>
+													{row.label}：{row.entry.reason_message ?? "未解析"}
+												</span>
+											))}
+										</div>
 									</div>
-								)}
-							</div>
+								</div>
 
-							{!isEditingProviders ? (
-								<div className="grid gap-3 md:grid-cols-3">
-									{providerRows.map((row) => (
+								<Button variant="secondary" size="sm" onClick={() => setIsEditingProviders(true)}>
+									编辑 Provider
+								</Button>
+							</div>
+							)
+						) : null}
+					</div>
+				) : null}
+				{runProviderRows.length > 0 ? (
+					<div className="px-2 sm:px-4 pt-2 sm:pt-4">
+						<Card className="border border-black/20 bg-base-100 shadow-[4px_4px_0_0_#000]">
+							<div className="flex flex-col gap-3 p-4 sm:p-5">
+								<p className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
+									本次运行冻结 Provider
+								</p>
+								<h2 className="text-lg font-heading font-bold text-base-content">
+									本次运行冻结 Provider 快照
+								</h2>
+								<p className="text-sm text-base-content/80">
+									{runVideoProviderInvalid
+										? "检测到本次运行视频 provider 无效，clip/merge 已自动跳过。可在完成运行后配置视频 provider 并重试。"
+										: "resume 会继续沿用本次运行冻结的 Provider 配置。"}
+								</p>
+								<div className="grid gap-3 sm:grid-cols-3 text-sm">
+									{runProviderRows.map((row) => (
 										<div
 											key={row.key}
-											className="rounded-2xl border border-base-300 bg-base-200/50 p-4"
+											className="rounded-xl border border-black/10 bg-base-100/70 p-3"
 										>
-											<div className="flex items-center justify-between gap-3">
-												<span className="text-sm font-semibold text-base-content">
-													{row.label}
-												</span>
-												<span
-													className={`badge ${
-														row.entry.source === "project"
-															? "badge-primary"
-															: "badge-ghost"
-													}`}
-												>
-													{row.entry.source === "project"
-														? "项目覆盖"
-														: "默认继承"}
-												</span>
+											<div className="text-xs text-base-content/60">{row.label}</div>
+											<div className="mt-1 text-xs text-base-content/80">
+												selected：{row.entry.selected_key}
 											</div>
-											<p className="mt-3 text-xs text-base-content/60">
-												selected
-											</p>
-											<p className="font-mono text-sm text-base-content">
-												{row.entry.selected_key}
-											</p>
-											<p className="mt-1 text-xs text-base-content/60">
-												resolved
-											</p>
-											<p className="font-mono text-sm text-base-content">
-												{row.entry.resolved_key ?? "未解析"}
-											</p>
-											{row.entry.reason_message ? (
-												<p className="mt-2 text-xs text-warning">
-													{row.entry.reason_message}
-												</p>
-											) : (
-												<p className="mt-2 text-xs text-success">解析有效</p>
-											)}
+											<div className="text-xs text-base-content/80">
+												resolved：{row.entry.resolved_key ?? "未解析"}
+											</div>
+											<div className="text-xs text-base-content/80">
+												source：{row.entry.source === "project" ? "项目覆盖" : "默认继承"}
+											</div>
 										</div>
 									))}
 								</div>
-							) : (
-								<ProviderSelectionFields
-									value={providerDraft}
-									onChange={setProviderDraft}
-									disabled={updateProvidersMutation.isPending}
-									defaultKeys={{
-										text:
-											project.provider_settings.text.source === "default"
-												? project.provider_settings.text.selected_key
-												: "anthropic",
-										image:
-											project.provider_settings.image.source === "default"
-												? project.provider_settings.image.selected_key
-												: "openai",
-										video:
-											project.provider_settings.video.source === "default"
-												? project.provider_settings.video.selected_key
-												: "openai",
-									}}
-								/>
-							)}
-						</div>
-					</Card>
-				</div>
+							</div>
+						</Card>
+					</div>
+				) : null}
 
 				{store.recoveryControl && (
 					<div className="px-2 sm:px-4 pt-2 sm:pt-4">
@@ -731,7 +873,7 @@ export function ProjectPage() {
 							onConfirm={handleConfirm}
 							onGenerate={handleGenerate}
 							onCancel={handleCancel}
-							isGenerating={store.isGenerating || generateMutation.isPending}
+							isGenerating={hasActiveRun}
 							generateDisabled={generateDisabled}
 							generateDisabledReason={generateDisabledReason}
 						/>

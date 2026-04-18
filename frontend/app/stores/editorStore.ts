@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   AgentMessage,
   Character,
+  ProjectProviderSettings,
   RecoveryControlRead,
   RecoverySummaryRead,
   RunAwaitingConfirmEventData,
@@ -31,6 +32,7 @@ interface EditorState {
   awaitingConfirm: boolean;
   awaitingAgent: string | null;
   currentRunId: number | null;
+  currentRunProviderSnapshot: ProjectProviderSettings | null;
 
   // Data cache
   characters: Character[];
@@ -58,6 +60,7 @@ interface EditorState {
   setProjectUpdatedAt: (timestamp: number) => void;
   setAwaitingConfirm: (awaiting: boolean, agent?: string | null, runId?: number | null) => void;
   setCurrentRunId: (runId: number | null) => void;
+  setCurrentRunProviderSnapshot: (snapshot: ProjectProviderSettings | null) => void;
   // 精细化控制 Actions
   updateCharacter: (character: Character) => void;
   updateShot: (shot: Shot) => void;
@@ -81,6 +84,7 @@ const initialState = {
   awaitingConfirm: false,
   awaitingAgent: null,
   currentRunId: null,
+  currentRunProviderSnapshot: null,
   characters: [],
   shots: [],
   projectVideoUrl: null,
@@ -115,6 +119,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       currentRunId: runId !== undefined ? runId : state.currentRunId
     })),
   setCurrentRunId: (runId) => set({ currentRunId: runId }),
+  setCurrentRunProviderSnapshot: (snapshot) => set({ currentRunProviderSnapshot: snapshot }),
   // 精细化控制 Actions
   updateCharacter: (character) =>
     set((state) => ({

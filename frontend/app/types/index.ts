@@ -5,8 +5,13 @@ export interface ProjectProviderEntry {
   source: "project" | "default";
   resolved_key: string | null;
   valid: boolean;
+  status?: "valid" | "degraded" | "invalid" | null;
   reason_code: string | null;
   reason_message: string | null;
+  capabilities?: {
+    generate?: boolean | null;
+    stream?: boolean | null;
+  } | null;
 }
 
 export interface ProjectProviderSettings {
@@ -110,6 +115,7 @@ export interface AgentRun {
   current_agent: string | null;
   progress: number;
   error: string | null;
+  provider_snapshot?: ProjectProviderSettings | null;
   created_at: string;
   updated_at: string;
 }
