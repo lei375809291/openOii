@@ -4,10 +4,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectPage } from './ProjectPage';
 import { projectsApi } from '~/services/api';
-import type { Project } from '~/types';
+import type { AgentRun, Project, RecoveryControlRead } from '~/types';
+import { ApiError } from '~/types/errors';
+import { toast } from '~/utils/toast';
 
 const invalidateQueries = vi.fn();
 const setSearchParams = vi.fn();
+let currentSearchParams = new URLSearchParams();
+let projectQueryState: { isLoading: boolean; error: Error | null } = {
+  isLoading: false,
+  error: null,
+};
 const projectData: Project = {
   id: 9,
   title: 'Realtime Story',
@@ -46,10 +53,83 @@ const projectData: Project = {
   },
 };
 let currentProjectData = projectData;
+const providerSnapshotSample = {
+	text: { ...projectData.provider_settings.text },
+	image: { ...projectData.provider_settings.image },
+	video: { ...projectData.provider_settings.video },
+};
+const projectDataWithTextProviderIssue: Project = {
+	  ...projectData,
+	  provider_settings: {
+	    ...projectData.provider_settings,
+	    text: {
+	      ...projectData.provider_settings.text,
+	      selected_key: 'openai',
+	      source: 'project',
+	      resolved_key: null,
+	      valid: false,
+	      reason_code: 'provider_missing_credentials',
+	      reason_message: '缺少 OpenAI 文本凭据',
+	    },
+	  },
+};
+const projectDataWithDegradedTextProvider: Project = {
+  ...projectData,
+  provider_settings: {
+    ...projectData.provider_settings,
+    text: {
+      ...projectData.provider_settings.text,
+      valid: true,
+      status: 'degraded',
+      reason_code: 'provider_stream_unavailable',
+      reason_message: '文本 Provider 流式不可用，已自动回退非流式生成。',
+      capabilities: {
+        generate: true,
+        stream: false,
+      },
+    },
+  },
+};
 const emptyCharacters: never[] = [];
 const emptyShots: never[] = [];
 const emptyMessages: never[] = [];
-const storeState = {
+const storeState: {
+  isGenerating: boolean;
+  progress: number;
+  currentStage: string;
+  currentAgent: string | null;
+  awaitingConfirm: boolean;
+  awaitingAgent: string | null;
+  currentRunId: number | null;
+  currentRunProviderSnapshot: unknown | null;
+  recoveryControl: RecoveryControlRead | null;
+  recoverySummary: unknown;
+  recoveryGate: unknown;
+  projectUpdatedAt: number | null;
+  characters: never[];
+  shots: never[];
+  projectVideoUrl: string | null;
+  messages: never[];
+  clearMessages: ReturnType<typeof vi.fn>;
+  setGenerating: ReturnType<typeof vi.fn>;
+  setProgress: ReturnType<typeof vi.fn>;
+  setCurrentAgent: ReturnType<typeof vi.fn>;
+  setCurrentStage: ReturnType<typeof vi.fn>;
+  setAwaitingConfirm: ReturnType<typeof vi.fn>;
+  setCurrentRunId: ReturnType<typeof vi.fn>;
+  setCurrentRunProviderSnapshot: ReturnType<typeof vi.fn>;
+  setSelectedShot: ReturnType<typeof vi.fn>;
+  setSelectedCharacter: ReturnType<typeof vi.fn>;
+  setHighlightedMessage: ReturnType<typeof vi.fn>;
+  setProjectVideoUrl: ReturnType<typeof vi.fn>;
+  setCharacters: ReturnType<typeof vi.fn>;
+  setShots: ReturnType<typeof vi.fn>;
+  setRecoveryControl: ReturnType<typeof vi.fn>;
+  setRecoverySummary: ReturnType<typeof vi.fn>;
+  setRecoveryGate: ReturnType<typeof vi.fn>;
+  setProjectUpdatedAt: ReturnType<typeof vi.fn>;
+  addMessage: ReturnType<typeof vi.fn>;
+} = {
   isGenerating: false,
   progress: 0,
   currentStage: 'ideate',
@@ -57,6 +137,7 @@ const storeState = {
   awaitingConfirm: false,
   awaitingAgent: null,
   currentRunId: null as number | null,
+  currentRunProviderSnapshot: null,
   recoveryControl: null,
   recoverySummary: null,
   recoveryGate: null,
@@ -72,6 +153,7 @@ const storeState = {
   setCurrentStage: vi.fn(),
   setAwaitingConfirm: vi.fn(),
   setCurrentRunId: vi.fn(),
+  setCurrentRunProviderSnapshot: vi.fn(),
   setSelectedShot: vi.fn(),
   setSelectedCharacter: vi.fn(),
   setHighlightedMessage: vi.fn(),
@@ -87,6 +169,8 @@ const storeState = {
   addMessage: vi.fn(),
 };
 const mutateSpy = vi.fn();
+const sendMock = vi.fn();
+let mutationPendingStates: boolean[] = [];
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -94,9 +178,18 @@ vi.mock('react-router-dom', async () => {
     ...actual,
     Link: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     useParams: () => ({ id: '9' }),
-    useSearchParams: () => [new URLSearchParams(), setSearchParams],
+    useSearchParams: () => [currentSearchParams, setSearchParams],
   };
 });
+
+vi.mock('~/utils/toast', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+}));
 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
@@ -104,8 +197,8 @@ vi.mock('@tanstack/react-query', () => ({
     if (queryKey[0] === 'project') {
       return {
         data: currentProjectData,
-        isLoading: false,
-        error: null,
+        isLoading: projectQueryState.isLoading,
+        error: projectQueryState.error,
       };
     }
 
@@ -123,15 +216,33 @@ vi.mock('@tanstack/react-query', () => ({
 
     return { data: undefined, isLoading: false, error: null };
   },
-  useMutation: () => ({
-    mutate: mutateSpy,
-    isPending: false,
-  }),
+  useMutation: (options: {
+    mutationFn: (variables?: unknown) => Promise<unknown>;
+    onSuccess?: (data: unknown, variables?: unknown) => void;
+    onError?: (error: Error, variables?: unknown) => void;
+    onSettled?: () => void;
+  }) => {
+    const isPending = mutationPendingStates.shift() ?? false;
+    return {
+      mutate: async (variables?: unknown) => {
+        mutateSpy(variables);
+        try {
+          const result = await options.mutationFn(variables);
+          options.onSuccess?.(result, variables);
+        } catch (error) {
+          options.onError?.(error as Error, variables);
+        } finally {
+          options.onSettled?.();
+        }
+      },
+      isPending,
+    };
+  },
 }));
 
 vi.mock('~/hooks/useWebSocket', () => ({
   useProjectWebSocket: () => ({
-    send: vi.fn(),
+    send: sendMock,
     disconnect: vi.fn(),
     reconnect: vi.fn(),
   }),
@@ -162,10 +273,38 @@ vi.mock('~/services/api', () => ({
 }));
 
 vi.mock('~/components/chat/ChatPanel', () => ({
-  ChatPanel: ({ generateDisabled, generateDisabledReason }: { generateDisabled?: boolean; generateDisabledReason?: string }) => (
+  ChatPanel: ({
+    generateDisabled,
+    generateDisabledReason,
+    isGenerating,
+    onGenerate,
+    onSendFeedback,
+    onConfirm,
+    onCancel,
+  }: {
+    generateDisabled?: boolean;
+    generateDisabledReason?: string;
+    isGenerating?: boolean;
+    onGenerate?: () => void;
+    onSendFeedback?: (content: string) => void;
+    onConfirm?: (content?: string) => void;
+    onCancel?: () => void;
+  }) => (
     <div data-testid="chat-panel">
-      <button type="button" disabled={generateDisabled}>
+      <span data-testid="chat-generating-state">
+        {isGenerating ? 'generating' : 'idle'}
+      </span>
+      <button type="button" disabled={generateDisabled} onClick={onGenerate}>
         开始生成
+      </button>
+      <button type="button" onClick={() => onSendFeedback?.('继续调整故事节奏')}>
+        发送反馈
+      </button>
+      <button type="button" onClick={() => onConfirm?.('请微调这一版')}>
+        确认并继续
+      </button>
+      <button type="button" onClick={onCancel}>
+        停止生成
       </button>
       {generateDisabledReason ? <span>{generateDisabledReason}</span> : null}
     </div>
@@ -187,29 +326,179 @@ vi.mock('~/components/settings/SettingsModal', () => ({
 describe('ProjectPage live hydration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mutationPendingStates = [];
+    currentSearchParams = new URLSearchParams();
+    projectQueryState = { isLoading: false, error: null };
     currentProjectData = projectData;
     storeState.isGenerating = true;
     storeState.progress = 0.35;
     storeState.currentStage = 'visualize';
     storeState.projectUpdatedAt = null;
+    storeState.currentRunId = null;
+    storeState.currentRunProviderSnapshot = null;
+    storeState.recoveryControl = null;
+    storeState.recoverySummary = null;
+    storeState.recoveryGate = null;
     vi.mocked(projectsApi.update).mockResolvedValue(projectData as never);
+    vi.mocked(projectsApi.generate).mockResolvedValue({
+		id: 77,
+		provider_snapshot: providerSnapshotSample,
+	} as never);
+    vi.mocked(projectsApi.feedback).mockResolvedValue({ id: 88 } as never);
+    vi.mocked(projectsApi.cancel).mockResolvedValue(undefined as never);
+    vi.mocked(projectsApi.resume).mockResolvedValue({
+      id: 55,
+      project_id: 9,
+      status: 'processing',
+      current_agent: 'director',
+      progress: 0.61,
+      error: null,
+      created_at: '2026-04-11T00:00:00Z',
+      updated_at: '2026-04-11T00:00:00Z',
+    } as never);
   });
 
-  it('renders creator-visible provider proof with resolved keys and source badges', () => {
+  it('hides provider warning when no provider exception exists', () => {
     render(<ProjectPage />);
 
-    expect(screen.getByText('Provider 选择')).toBeInTheDocument();
-    expect(screen.getByText('文本')).toBeInTheDocument();
-    expect(screen.getByText('图像')).toBeInTheDocument();
-    expect(screen.getByText('视频')).toBeInTheDocument();
-    expect(screen.getAllByText('openai').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('doubao').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('项目覆盖')).toHaveLength(2);
-    expect(screen.getByText('默认继承')).toBeInTheDocument();
-    expect(screen.getAllByText('解析有效')).toHaveLength(3);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('Provider 选择')).not.toBeInTheDocument();
   });
 
-  it('shows invalid provider reason and disables generate before creator starts a run', () => {
+  it('shows compact provider warning when provider exception exists', () => {
+    currentProjectData = projectDataWithTextProviderIssue;
+
+    render(<ProjectPage />);
+
+    expect(screen.queryByText('Provider 选择')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Provider 需要关注');
+    expect(screen.getByRole('alert')).toHaveTextContent('1 项待处理');
+    expect(screen.getByRole('alert')).toHaveTextContent('文本：缺少 OpenAI 文本凭据');
+    expect(screen.getByRole('button', { name: '编辑 Provider' })).toBeInTheDocument();
+  });
+
+	it('renders run provider snapshot proof card from recoveryControl', () => {
+		storeState.recoveryControl = {
+			state: 'active',
+			detail: '可恢复运行',
+			available_actions: ['resume', 'cancel'],
+			thread_id: 'thread-proof',
+			active_run: {
+				id: 77,
+				project_id: 9,
+				status: 'running',
+				current_agent: 'director',
+				progress: 0.5,
+				error: null,
+				provider_snapshot: providerSnapshotSample,
+				created_at: '2026-04-11T00:00:00Z',
+				updated_at: '2026-04-11T00:00:00Z',
+			},
+			recovery_summary: {
+				project_id: 9,
+				run_id: 77,
+				thread_id: 'thread-proof',
+				current_stage: 'ideate',
+				next_stage: null,
+				preserved_stages: [],
+				stage_history: [],
+				resumable: true,
+			},
+		};
+
+		render(<ProjectPage />);
+
+		expect(screen.getByText('本次运行冻结 Provider 快照')).toBeInTheDocument();
+		expect(screen.getAllByText('selected：openai')).toHaveLength(2);
+		expect(screen.getByText('selected：doubao')).toBeInTheDocument();
+		expect(screen.getAllByText('resolved：openai')[0]).toBeInTheDocument();
+		expect(screen.getAllByText('source：项目覆盖')).toHaveLength(2);
+		expect(screen.getByText('source：默认继承')).toBeInTheDocument();
+	});
+
+	it('prefers latest run snapshot proof card over project provider defaults and keeps minimal fields', () => {
+		currentProjectData = {
+			...projectData,
+			provider_settings: {
+				text: {
+					selected_key: 'anthropic',
+					source: 'default',
+					resolved_key: 'anthropic',
+					valid: true,
+					reason_code: null,
+					reason_message: null,
+				},
+				image: {
+					selected_key: 'openai',
+					source: 'default',
+					resolved_key: 'openai',
+					valid: true,
+					reason_code: null,
+					reason_message: null,
+				},
+				video: {
+					selected_key: 'openai',
+					source: 'default',
+					resolved_key: 'openai',
+					valid: true,
+					reason_code: null,
+					reason_message: null,
+				},
+			},
+		};
+		storeState.currentRunProviderSnapshot = {
+			text: {
+				selected_key: 'openai',
+				source: 'project',
+				resolved_key: 'openai',
+				valid: true,
+				status: 'valid',
+				reason_code: null,
+				reason_message: null,
+			},
+			image: {
+				selected_key: 'openai',
+				source: 'default',
+				resolved_key: null,
+				valid: false,
+				status: 'invalid',
+				reason_code: 'provider_missing_credentials',
+				reason_message: '缺少图像凭据',
+			},
+			video: {
+				selected_key: 'doubao',
+				source: 'project',
+				resolved_key: 'doubao',
+				valid: true,
+				status: 'valid',
+				reason_code: null,
+				reason_message: null,
+			},
+		} as Project['provider_settings'];
+
+		render(<ProjectPage />);
+
+		expect(screen.getAllByText('selected：openai')).toHaveLength(2);
+		expect(screen.getByText('resolved：未解析')).toBeInTheDocument();
+		expect(screen.getByText('selected：doubao')).toBeInTheDocument();
+		expect(screen.getAllByText('source：项目覆盖')).toHaveLength(2);
+		expect(screen.queryByText('selected：anthropic')).not.toBeInTheDocument();
+		expect(screen.queryByText(/valid/i)).not.toBeInTheDocument();
+		expect(screen.queryByText(/invalid/i)).not.toBeInTheDocument();
+		expect(screen.queryByText('缺少图像凭据')).not.toBeInTheDocument();
+	});
+
+  it('shows degraded provider warning without disabling generate', () => {
+    currentProjectData = projectDataWithDegradedTextProvider;
+
+    render(<ProjectPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Provider 需要关注');
+    expect(screen.getByRole('alert')).toHaveTextContent('文本：文本 Provider 流式不可用，已自动回退非流式生成。');
+    expect(screen.queryByText('缺少 OpenAI 文本凭据')).not.toBeInTheDocument();
+  });
+
+  it('keeps generate enabled when only the video provider is invalid', () => {
     currentProjectData = {
       ...projectData,
       provider_settings: {
@@ -227,13 +516,115 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    expect(screen.getByText('未解析')).toBeInTheDocument();
-    expect(screen.getAllByText('缺少 Doubao API Key').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('视频：缺少 Doubao API Key');
+    expect(screen.getByRole('button', { name: '开始生成' })).toBeEnabled();
+  });
+
+  it('renders the loading page while the project query is loading', () => {
+    projectQueryState = { isLoading: true, error: null };
+    currentProjectData = undefined as never;
+
+    render(<ProjectPage />);
+
+    expect(screen.getByText('正在加载项目...')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
+  });
+
+  it('renders the not found page when the project query resolves empty', () => {
+    currentProjectData = undefined as never;
+
+    render(<ProjectPage />);
+
+    expect(screen.getByText('项目未找到')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回首页' })).toBeInTheDocument();
+  });
+
+  it('shows a toast when the project query errors', async () => {
+    projectQueryState = { isLoading: false, error: new Error('加载失败') };
+    currentProjectData = undefined as never;
+
+    render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith({
+        title: '无法加载项目',
+        message: '项目数据获取失败，请重试',
+        actions: [
+          expect.objectContaining({ label: '重试' }),
+        ],
+      });
+    });
+  });
+
+  it('shows ApiError details when loading project fails with API error', async () => {
+    projectQueryState = {
+      isLoading: false,
+      error: new ApiError({ code: 'not_found', message: '项目不存在', status: 404 }),
+    };
+    currentProjectData = undefined as never;
+
+    render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '无法加载项目',
+          message: '项目不存在',
+        })
+      );
+    });
+  });
+
+  it('auto-starts generation when only the video provider is invalid', async () => {
+    currentSearchParams = new URLSearchParams('autoStart=true');
+    currentProjectData = {
+      ...projectData,
+      provider_settings: {
+        ...projectData.provider_settings,
+        video: {
+          selected_key: 'doubao',
+          source: 'project',
+          resolved_key: null,
+          valid: false,
+          reason_code: 'provider_missing_credentials',
+          reason_message: '缺少 Doubao API Key',
+        },
+      },
+    };
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(projectsApi.generate).toHaveBeenCalledWith(9);
+    });
+    expect(setSearchParams).toHaveBeenCalledWith({}, { replace: true });
+  });
+
+  it('still disables generate when a blocking text provider is invalid', () => {
+    currentProjectData = {
+      ...projectData,
+      provider_settings: {
+        ...projectData.provider_settings,
+        text: {
+          selected_key: 'openai',
+          source: 'project',
+          resolved_key: null,
+          valid: false,
+          reason_code: 'provider_missing_credentials',
+          reason_message: '缺少 OpenAI 文本凭据',
+        },
+      },
+    };
+
+    render(<ProjectPage />);
+
     expect(screen.getByRole('button', { name: '开始生成' })).toBeDisabled();
   });
 
   it('hydrates provider edit defaults from provider_settings overrides after refresh', async () => {
     const user = userEvent.setup();
+    currentProjectData = projectDataWithTextProviderIssue;
 
     render(<ProjectPage />);
 
@@ -278,6 +669,7 @@ describe('ProjectPage live hydration', () => {
 
   it('saves provider overrides without resetting recovery and live progress state', async () => {
     const user = userEvent.setup();
+    currentProjectData = projectDataWithTextProviderIssue;
 
     render(<ProjectPage />);
     vi.clearAllMocks();
@@ -304,5 +696,587 @@ describe('ProjectPage live hydration', () => {
     expect(storeState.setRecoverySummary).not.toHaveBeenCalled();
     expect(storeState.isGenerating).toBe(true);
     expect(storeState.progress).toBe(0.35);
+  });
+
+  it('submits feedback through the API when no active run is in progress', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+    storeState.currentRunId = null;
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '发送反馈' }));
+
+    await waitFor(() => {
+      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏');
+    });
+    expect(storeState.addMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'user',
+        role: 'user',
+        content: '继续调整故事节奏',
+      })
+    );
+  });
+
+  it('routes confirm feedback through websocket when an active run exists', async () => {
+    const user = userEvent.setup();
+    storeState.currentRunId = 42;
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '确认并继续' }));
+
+    expect(sendMock).toHaveBeenCalledWith({
+      type: 'confirm',
+      data: { run_id: 42, feedback: '请微调这一版' },
+    });
+    expect(projectsApi.feedback).not.toHaveBeenCalled();
+    expect(storeState.addMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'user',
+        content: '请微调这一版',
+      })
+    );
+  });
+
+  it('resumes recoverable runs and clears recovery state after success', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+    storeState.recoveryControl = {
+      state: 'recoverable',
+      detail: '可以从上一阶段继续。',
+      available_actions: ['resume', 'cancel'],
+      thread_id: 'thread-9',
+      active_run: {
+        id: 17,
+        project_id: 9,
+        status: 'blocked',
+        current_agent: 'director',
+        progress: 0.45,
+        error: null,
+        created_at: '2026-04-11T00:00:00Z',
+        updated_at: '2026-04-11T00:00:00Z',
+      },
+      recovery_summary: {
+        project_id: 9,
+        run_id: 17,
+        thread_id: 'thread-9',
+        current_stage: 'visualize',
+        next_stage: 'animate',
+        preserved_stages: ['ideate'],
+        stage_history: [],
+        resumable: true,
+      },
+    };
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '恢复运行' }));
+
+    await waitFor(() => {
+      expect(projectsApi.resume).toHaveBeenCalledWith(9, 17);
+    });
+    expect(storeState.setGenerating).toHaveBeenCalledWith(true);
+    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(55);
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('director');
+    expect(storeState.setProgress).toHaveBeenCalledWith(0.61);
+    expect(storeState.setCurrentStage).toHaveBeenCalledWith('animate');
+    expect(storeState.setRecoveryControl).toHaveBeenCalledWith(null);
+    expect(storeState.setRecoverySummary).toHaveBeenCalledWith(null);
+    expect(storeState.setRecoveryGate).toHaveBeenCalledWith(null);
+  });
+
+  it('cancels recoverable runs and resets the live state after settle', async () => {
+    const user = userEvent.setup();
+    storeState.recoveryControl = {
+      state: 'active',
+      detail: '当前运行仍可取消。',
+      available_actions: ['resume', 'cancel'],
+      thread_id: 'thread-10',
+      active_run: {
+        id: 18,
+        project_id: 9,
+        status: 'processing',
+        current_agent: 'director',
+        progress: 0.5,
+        error: null,
+        created_at: '2026-04-11T00:00:00Z',
+        updated_at: '2026-04-11T00:00:00Z',
+      },
+      recovery_summary: {
+        project_id: 9,
+        run_id: 18,
+        thread_id: 'thread-10',
+        current_stage: 'animate',
+        next_stage: 'deploy',
+        preserved_stages: ['ideate', 'visualize'],
+        stage_history: [],
+        resumable: true,
+      },
+    };
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '取消运行' }));
+
+    await waitFor(() => {
+      expect(projectsApi.cancel).toHaveBeenCalledWith(9);
+    });
+    expect(storeState.setGenerating).toHaveBeenCalledWith(false);
+    expect(storeState.setProgress).toHaveBeenCalledWith(0);
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith(null);
+    expect(storeState.setAwaitingConfirm).toHaveBeenCalledWith(false, null, null);
+    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(null);
+    expect(storeState.addMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'system',
+        content: '生成已停止',
+      })
+    );
+  });
+
+  it('shows a warning instead of auto-starting when a blocking provider is unresolved', async () => {
+    currentSearchParams = new URLSearchParams('autoStart=true');
+    currentProjectData = {
+      ...projectData,
+      provider_settings: {
+        ...projectData.provider_settings,
+        text: {
+          selected_key: 'openai',
+          source: 'project',
+          resolved_key: null,
+          valid: false,
+          reason_code: 'provider_missing_credentials',
+          reason_message: '缺少 OpenAI 文本凭据',
+        },
+      },
+    };
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledWith({
+        title: '暂时无法自动开始',
+        message: '缺少 OpenAI 文本凭据',
+      });
+    });
+    expect(projectsApi.generate).not.toHaveBeenCalled();
+  });
+
+  it('shows a warning instead of auto-starting when the image provider is unresolved', async () => {
+    currentSearchParams = new URLSearchParams('autoStart=true');
+    currentProjectData = {
+      ...projectData,
+      provider_settings: {
+        ...projectData.provider_settings,
+        image: {
+          selected_key: 'openai',
+          source: 'project',
+          resolved_key: null,
+          valid: false,
+          reason_code: 'provider_missing_credentials',
+          reason_message: '缺少 OpenAI 图像凭据',
+        },
+      },
+    };
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledWith({
+        title: '暂时无法自动开始',
+        message: '缺少 OpenAI 图像凭据',
+      });
+    });
+    expect(projectsApi.generate).not.toHaveBeenCalled();
+  });
+
+  it('hydrates active run state immediately after generate succeeds', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+    vi.clearAllMocks();
+
+    await user.click(screen.getByRole('button', { name: '开始生成' }));
+
+    await waitFor(() => {
+      expect(projectsApi.generate).toHaveBeenCalledWith(9);
+    });
+    expect(storeState.clearMessages).toHaveBeenCalled();
+    expect(storeState.setCurrentStage).toHaveBeenCalledWith('ideate');
+    expect(storeState.setGenerating).toHaveBeenCalledWith(true);
+    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(77);
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('orchestrator');
+    expect(storeState.setProgress).toHaveBeenCalledWith(0);
+    expect(storeState.setCurrentRunProviderSnapshot).toHaveBeenCalledWith(providerSnapshotSample);
+    expect(storeState.setAwaitingConfirm).toHaveBeenCalledWith(false, null, 77);
+    expect(storeState.setRecoveryControl).toHaveBeenCalledWith(null);
+    expect(storeState.setRecoverySummary).toHaveBeenCalledWith(null);
+    expect(storeState.setRecoveryGate).toHaveBeenCalledWith(null);
+  });
+
+  it('does not treat a stale pending generate request as active generation after run context clears', () => {
+    mutationPendingStates = [true, false, false, false, false];
+    storeState.isGenerating = false;
+    storeState.currentRunId = null;
+
+    render(<ProjectPage />);
+
+    expect(screen.getByTestId('chat-generating-state')).toHaveTextContent('idle');
+  });
+
+  it('ignores a late generate success after the user has already cancelled the run', async () => {
+    const user = userEvent.setup();
+    let resolveGenerate!: (value: AgentRun) => void;
+    vi.mocked(projectsApi.generate).mockImplementationOnce(
+      () =>
+        new Promise<AgentRun>((resolve) => {
+          resolveGenerate = resolve;
+        })
+    );
+    vi.mocked(projectsApi.cancel).mockResolvedValueOnce({ status: 'cancelled', cancelled: 1 } as never);
+    storeState.isGenerating = false;
+    storeState.currentRunId = null;
+
+    const { rerender } = render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '开始生成' }));
+
+    storeState.isGenerating = true;
+    storeState.currentRunId = 321;
+    rerender(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '停止生成' }));
+
+    resolveGenerate({
+      id: 321,
+      project_id: 9,
+      status: 'processing',
+      current_agent: 'orchestrator',
+      progress: 0,
+      error: null,
+      created_at: '2026-04-11T00:00:00Z',
+      updated_at: '2026-04-11T00:00:00Z',
+    });
+
+    await waitFor(() => {
+      expect(projectsApi.cancel).toHaveBeenCalledWith(9);
+    });
+
+    expect(storeState.setGenerating).not.toHaveBeenCalledWith(true);
+    expect(storeState.setCurrentRunId).not.toHaveBeenCalledWith(321);
+  });
+
+  it('ignores cancel clicks when there is no active run context', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+    storeState.currentRunId = null;
+    storeState.recoveryControl = null;
+
+    render(<ProjectPage />);
+    vi.clearAllMocks();
+
+    await user.click(screen.getByRole('button', { name: '停止生成' }));
+
+    expect(projectsApi.cancel).not.toHaveBeenCalled();
+  });
+
+  it('shows an error toast when generate fails with a non-409 error', async () => {
+    const user = userEvent.setup();
+    vi.mocked(projectsApi.generate).mockRejectedValueOnce(new Error('服务器炸了'));
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '开始生成' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '生成失败',
+          message: '服务器炸了',
+        })
+      );
+    });
+  });
+
+  it('restores recovery state when generate returns 409 with control payload', async () => {
+    const user = userEvent.setup();
+    const control: RecoveryControlRead = {
+      state: 'active',
+      detail: '任务仍在进行',
+      available_actions: ['cancel'],
+      thread_id: 'thread-rollback',
+      active_run: {
+        id: 101,
+        project_id: 9,
+        status: 'processing',
+        current_agent: 'director',
+        progress: 0.22,
+        error: null,
+        created_at: '2026-04-11T00:00:00Z',
+        updated_at: '2026-04-11T00:00:00Z',
+      },
+      recovery_summary: {
+        project_id: 9,
+        run_id: 101,
+        thread_id: 'thread-rollback',
+        current_stage: 'ideate',
+        next_stage: 'visualize',
+        preserved_stages: [],
+        stage_history: [],
+        resumable: true,
+      },
+    };
+
+    vi.mocked(projectsApi.generate).mockRejectedValueOnce(
+      new ApiError({
+        code: 'conflict',
+        message: '409 conflict',
+        status: 409,
+        response: control,
+      })
+    );
+
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '开始生成' }));
+
+    await waitFor(() => {
+      expect(storeState.setRecoveryControl).toHaveBeenCalledWith(control);
+    });
+    expect(storeState.setRecoverySummary).toHaveBeenCalledWith(control.recovery_summary);
+    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(101);
+    expect(storeState.setGenerating).toHaveBeenCalledWith(true);
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('director');
+    expect(storeState.setProgress).toHaveBeenCalledWith(0.22);
+  });
+
+  it('shows a warning toast when generate 409 does not include recovery control', async () => {
+    const user = userEvent.setup();
+    vi.mocked(projectsApi.generate).mockRejectedValueOnce(
+      new ApiError({
+        code: 'conflict',
+        message: '409 conflict',
+        status: 409,
+      })
+    );
+
+    storeState.isGenerating = false;
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '开始生成' }));
+
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '请稍等片刻',
+          message: '另一个任务正在进行，完成后再试',
+        })
+      );
+    });
+  });
+
+  it('handles feedback conflict and generic error paths', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+
+    vi.mocked(projectsApi.feedback).mockRejectedValueOnce(
+      new ApiError({
+        code: 'conflict',
+        message: '409 conflict',
+        status: 409,
+      })
+    );
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '发送反馈' }));
+
+    await waitFor(() => {
+      expect(toast.info).toHaveBeenCalledWith({
+        title: 'AI 正在思考',
+        message: '请等待当前任务完成',
+      });
+    });
+
+    vi.mocked(projectsApi.feedback).mockRejectedValueOnce(new Error('feedback failed'));
+
+    await user.click(screen.getByRole('button', { name: '发送反馈' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '提交失败',
+          message: 'feedback failed',
+        })
+      );
+    });
+  });
+
+  it('resets state on cancel even when cancel request fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(projectsApi.cancel).mockRejectedValueOnce(new Error('cancel failed'));
+    storeState.recoveryControl = {
+      state: 'active',
+      detail: '当前运行仍可取消。',
+      available_actions: ['resume', 'cancel'],
+      thread_id: 'thread-10',
+      active_run: {
+        id: 18,
+        project_id: 9,
+        status: 'processing',
+        current_agent: 'director',
+        progress: 0.5,
+        error: null,
+        created_at: '2026-04-11T00:00:00Z',
+        updated_at: '2026-04-11T00:00:00Z',
+      },
+      recovery_summary: {
+        project_id: 9,
+        run_id: 18,
+        thread_id: 'thread-10',
+        current_stage: 'animate',
+        next_stage: 'deploy',
+        preserved_stages: ['ideate', 'visualize'],
+        stage_history: [],
+        resumable: true,
+      },
+    };
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '取消运行' }));
+
+    await waitFor(() => {
+      expect(projectsApi.cancel).toHaveBeenCalledWith(9);
+    });
+    expect(storeState.setGenerating).toHaveBeenCalledWith(false);
+    expect(storeState.setProgress).toHaveBeenCalledWith(0);
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith(null);
+    expect(storeState.setAwaitingConfirm).toHaveBeenCalledWith(false, null, null);
+    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(null);
+    expect(storeState.addMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'system',
+        content: '生成已停止',
+      })
+    );
+  });
+
+  it('surfaces error for failed resume mutation', async () => {
+    const user = userEvent.setup();
+    storeState.recoveryControl = {
+      state: 'recoverable',
+      detail: '可以从上一阶段继续执行',
+      available_actions: ['resume', 'cancel'],
+      thread_id: 'thread-11',
+      active_run: {
+        id: 55,
+        project_id: 9,
+        status: 'blocked',
+        current_agent: 'director',
+        progress: 0.33,
+        error: null,
+        created_at: '2026-04-11T00:00:00Z',
+        updated_at: '2026-04-11T00:00:00Z',
+      },
+      recovery_summary: {
+        project_id: 9,
+        run_id: 55,
+        thread_id: 'thread-11',
+        current_stage: 'visualize',
+        next_stage: 'animate',
+        preserved_stages: ['ideate'],
+        stage_history: [],
+        resumable: true,
+      },
+    };
+
+    vi.mocked(projectsApi.resume).mockRejectedValueOnce(
+      new ApiError({
+        code: 'resume_fail',
+        message: '无法恢复',
+        status: 500,
+      })
+    );
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '恢复运行' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '恢复失败',
+          message: '无法恢复',
+        })
+      );
+    });
+  });
+
+  it('saves provider overrides successfully and invalidates related caches', async () => {
+    const user = userEvent.setup();
+    currentProjectData = projectDataWithTextProviderIssue;
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
+    const videoFieldset = screen.getByText('视频').closest('fieldset');
+    await user.click(
+      within(videoFieldset as HTMLElement).getByRole('radio', {
+        name: '继承默认（当前：OpenAI）',
+      })
+    );
+    await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Provider 已保存',
+        })
+      );
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project', 9] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['projects'] });
+  });
+
+  it('shows toast when provider save fails', async () => {
+    const user = userEvent.setup();
+    currentProjectData = projectDataWithTextProviderIssue;
+
+    vi.mocked(projectsApi.update).mockRejectedValueOnce(
+      new ApiError({
+        code: 'provider_save',
+        message: '保存失败',
+        status: 500,
+      })
+    );
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
+    const videoFieldset = screen.getByText('视频').closest('fieldset');
+    await user.click(
+      within(videoFieldset as HTMLElement).getByRole('radio', {
+        name: '继承默认（当前：OpenAI）',
+      })
+    );
+    await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '保存失败',
+          message: '保存失败',
+        })
+      );
+    });
   });
 });
