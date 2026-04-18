@@ -7,6 +7,8 @@ import pytest
 from app.api.v1.routes import generation as generation_routes
 from app.schemas.project import (
     AgentRunRead,
+    ProjectProviderEntry,
+    ProviderResolution,
     RecoveryControlRead,
     RecoveryStageRead,
     RecoverySummaryRead,
@@ -47,11 +49,46 @@ def _recovery_control(run, *, state: str, detail: str):
     )
 
 
+def _invalid_provider_resolution() -> ProviderResolution:
+    return ProviderResolution(
+        valid=False,
+        text=ProjectProviderEntry(
+            selected_key="openai",
+            source="project",
+            resolved_key=None,
+            valid=False,
+            reason_code="provider_missing_credentials",
+            reason_message="缺少 OpenAI 文本凭据",
+        ),
+        image=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+        video=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_generate_project_rejects_second_active_full_run(
     async_client, test_session, monkeypatch
 ):
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings",
+        lambda project, settings: _invalid_provider_resolution(),
+    )
 
     project = await create_project(test_session)
     active_run = await create_run(test_session, project_id=project.id, status="running")
@@ -83,6 +120,11 @@ async def test_generate_project_conflict_is_explicit_about_resume_or_cancel(
     async_client, test_session, monkeypatch
 ):
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings",
+        lambda project, settings: _invalid_provider_resolution(),
+    )
 
     project = await create_project(test_session)
     resumable_run = await create_run(test_session, project_id=project.id, status="failed")

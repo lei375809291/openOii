@@ -12,6 +12,7 @@ from app.agents.review import ReviewAgent
 from app.api.v1.routes import generation as generation_routes
 from app.main import create_app
 from app.models.agent_run import AgentRun
+from app.schemas.project import ProjectProviderEntry
 from tests.agent_fixtures import FakeLLM, make_context
 from tests.factories import create_project, create_run, create_shot
 
@@ -25,6 +26,36 @@ def _immediate_task(coro):
     return future
 
 
+def _invalid_provider_resolution() -> generation_routes.ProviderResolution:
+    return generation_routes.ProviderResolution(
+        valid=False,
+        text=ProjectProviderEntry(
+            selected_key="openai",
+            source="project",
+            resolved_key=None,
+            valid=False,
+            reason_code="provider_missing_credentials",
+            reason_message="缺少 OpenAI 文本凭据",
+        ),
+        image=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+        video=ProjectProviderEntry(
+            selected_key="openai",
+            source="default",
+            resolved_key="openai",
+            valid=True,
+            reason_code=None,
+            reason_message=None,
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_generate_project_not_found(async_client):
     res = await async_client.post("/api/v1/projects/99999/generate", json={})
@@ -34,6 +65,37 @@ async def test_generate_project_not_found(async_client):
 @pytest.mark.asyncio
 async def test_generate_project_success(async_client, test_session, monkeypatch):
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings",
+        lambda project, settings: generation_routes.ProviderResolution(
+            valid=True,
+            text=ProjectProviderEntry(
+                selected_key="anthropic",
+                source="default",
+                resolved_key="anthropic",
+                valid=True,
+                reason_code=None,
+                reason_message=None,
+            ),
+            image=ProjectProviderEntry(
+                selected_key="openai",
+                source="default",
+                resolved_key="openai",
+                valid=True,
+                reason_code=None,
+                reason_message=None,
+            ),
+            video=ProjectProviderEntry(
+                selected_key="openai",
+                source="default",
+                resolved_key="openai",
+                valid=True,
+                reason_code=None,
+                reason_message=None,
+            ),
+        ),
+    )
 
     project = await create_project(test_session)
     res = await async_client.post(f"/api/v1/projects/{project.id}/generate", json={})
@@ -42,6 +104,32 @@ async def test_generate_project_success(async_client, test_session, monkeypatch)
     run = await test_session.get(AgentRun, data["id"])
     assert run is not None
     assert run.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_generate_project_returns_provider_precheck_failed_without_creating_run(
+    async_client, test_session, monkeypatch
+):
+    monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(
+        generation_routes,
+        "resolve_project_provider_settings",
+        lambda project, settings: _invalid_provider_resolution(),
+    )
+
+    project = await create_project(test_session)
+    before = (await test_session.execute(select(AgentRun))).scalars().all()
+
+    res = await async_client.post(f"/api/v1/projects/{project.id}/generate", json={})
+
+    assert res.status_code == 422
+    data = res.json()
+    assert data["error"]["code"] == "PROVIDER_PRECHECK_FAILED"
+    assert data["error"]["details"]["provider_resolution"]["modalities"]["text"]["reason_code"] == (
+        "provider_missing_credentials"
+    )
+    after = (await test_session.execute(select(AgentRun))).scalars().all()
+    assert len(after) == len(before)
 
 
 @pytest.mark.asyncio
