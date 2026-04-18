@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.config import apply_settings_overrides
 from app.models.project import Project
 from tests.factories import create_message, create_project, create_run
 
@@ -45,23 +46,12 @@ async def test_create_project_persists_bootstrap_payload(async_client, test_sess
     assert data["story"] == "Once upon a time"
     assert data["style"] == "cinematic"
     assert data["status"] == "draft"
-    assert data["provider_settings"] == {
-        "text": {
-            "override_key": "openai",
-            "effective_key": "openai",
-            "source": "project",
-        },
-        "image": {
-            "override_key": "openai",
-            "effective_key": "openai",
-            "source": "project",
-        },
-        "video": {
-            "override_key": "doubao",
-            "effective_key": "doubao",
-            "source": "project",
-        },
-    }
+    assert data["provider_settings"]["text"]["selected_key"] == "openai"
+    assert data["provider_settings"]["text"]["source"] == "project"
+    assert data["provider_settings"]["image"]["resolved_key"] == "openai"
+    assert data["provider_settings"]["video"]["selected_key"] == "doubao"
+    assert data["provider_settings"]["video"]["valid"] is False
+    assert data["provider_settings"]["video"]["reason_code"] == "provider_missing_credentials"
     assert isinstance(data["id"], int)
 
     project = await test_session.get(Project, data["id"])
@@ -76,6 +66,7 @@ async def test_create_project_persists_bootstrap_payload(async_client, test_sess
 
 @pytest.mark.asyncio
 async def test_get_project(async_client, test_session):
+    apply_settings_overrides({"text_provider": "openai", "text_api_key": "text-key"})
     project = await create_project(
         test_session,
         title="Get Test",
@@ -87,23 +78,41 @@ async def test_get_project(async_client, test_session):
     data = res.json()
     assert data["id"] == project.id
     assert data["title"] == "Get Test"
-    assert data["provider_settings"] == {
-        "text": {
-            "override_key": "openai",
-            "effective_key": "openai",
-            "source": "project",
-        },
-        "image": {
-            "override_key": "openai",
-            "effective_key": "openai",
-            "source": "project",
-        },
-        "video": {
-            "override_key": None,
-            "effective_key": "openai",
-            "source": "default",
-        },
+    assert data["provider_settings"]["text"] == {
+        "selected_key": "openai",
+        "source": "project",
+        "resolved_key": "openai",
+        "valid": True,
+        "reason_code": None,
+        "reason_message": None,
     }
+    assert data["provider_settings"]["image"]["selected_key"] == "openai"
+    assert data["provider_settings"]["image"]["resolved_key"] is None
+    assert data["provider_settings"]["image"]["valid"] is False
+    assert data["provider_settings"]["video"]["selected_key"] == "openai"
+    assert data["provider_settings"]["video"]["source"] == "default"
+    assert data["provider_settings"]["video"]["reason_message"]
+
+
+@pytest.mark.asyncio
+async def test_get_project_provider_settings_follow_runtime_defaults(async_client, test_session):
+    apply_settings_overrides(
+        {
+            "text_provider": "openai",
+            "text_api_key": "text-key",
+            "video_provider": "doubao",
+        }
+    )
+    project = await create_project(test_session, title="Runtime Default")
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["provider_settings"]["text"]["selected_key"] == "openai"
+    assert data["provider_settings"]["text"]["resolved_key"] == "openai"
+    assert data["provider_settings"]["video"]["selected_key"] == "doubao"
+    assert data["provider_settings"]["video"]["valid"] is False
 
 
 @pytest.mark.asyncio
@@ -129,23 +138,10 @@ async def test_update_project(async_client, test_session, method):
     data = res.json()
     assert data["title"] == "New Title"
     assert data["style"] == "noir"
-    assert data["provider_settings"] == {
-        "text": {
-            "override_key": "openai",
-            "effective_key": "openai",
-            "source": "project",
-        },
-        "image": {
-            "override_key": None,
-            "effective_key": "openai",
-            "source": "default",
-        },
-        "video": {
-            "override_key": None,
-            "effective_key": "openai",
-            "source": "default",
-        },
-    }
+    assert data["provider_settings"]["text"]["selected_key"] == "openai"
+    assert data["provider_settings"]["text"]["resolved_key"] == "openai"
+    assert data["provider_settings"]["image"]["selected_key"] == "openai"
+    assert data["provider_settings"]["video"]["selected_key"] == "openai"
 
     round_trip = await async_client.get(f"/api/v1/projects/{project.id}")
     assert round_trip.status_code == 200
