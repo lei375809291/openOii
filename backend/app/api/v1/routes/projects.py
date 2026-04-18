@@ -9,18 +9,15 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.api.deps import AdminDep, SessionDep
+from app.api.deps import AdminDep, SessionDep, SettingsDep
+from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Character, Project, Shot
 from app.schemas.project import (
     CharacterRead,
-    DEFAULT_IMAGE_PROVIDER,
-    DEFAULT_TEXT_PROVIDER,
-    DEFAULT_VIDEO_PROVIDER,
     MessageRead,
     ProjectCreate,
-    ProjectProviderEntry,
     ProjectProviderSettingsRead,
     ProjectListRead,
     ProjectRead,
@@ -28,6 +25,7 @@ from app.schemas.project import (
     ShotRead,
 )
 from app.services.file_cleaner import delete_file, delete_files, get_local_path
+from app.services.provider_resolution import resolve_project_provider_settings
 
 router = APIRouter()
 
@@ -36,29 +34,11 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _provider_entry(override_key: str | None, default_key: str) -> ProjectProviderEntry:
-    if override_key:
-        return ProjectProviderEntry(
-            override_key=override_key,
-            effective_key=override_key,
-            source="project",
-        )
-    return ProjectProviderEntry(
-        override_key=None,
-        effective_key=default_key,
-        source="default",
-    )
+def _project_provider_settings(project: Project, settings: Settings) -> ProjectProviderSettingsRead:
+    return resolve_project_provider_settings(project, settings).as_project_provider_settings()
 
 
-def _project_provider_settings(project: Project) -> ProjectProviderSettingsRead:
-    return ProjectProviderSettingsRead(
-        text=_provider_entry(project.text_provider_override, DEFAULT_TEXT_PROVIDER),
-        image=_provider_entry(project.image_provider_override, DEFAULT_IMAGE_PROVIDER),
-        video=_provider_entry(project.video_provider_override, DEFAULT_VIDEO_PROVIDER),
-    )
-
-
-def _project_read_model(project: Project) -> ProjectRead:
+def _project_read_model(project: Project, settings: Settings) -> ProjectRead:
     return ProjectRead(
         id=project.id if project.id is not None else 0,
         title=project.title,
@@ -67,7 +47,7 @@ def _project_read_model(project: Project) -> ProjectRead:
         summary=project.summary,
         video_url=project.video_url,
         status=project.status,
-        provider_settings=_project_provider_settings(project),
+        provider_settings=_project_provider_settings(project, settings),
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
@@ -122,7 +102,11 @@ async def _delete_project_data(session: AsyncSession, project_id: int) -> None:
 
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
-async def create_project(payload: ProjectCreate, session: AsyncSession = SessionDep):
+async def create_project(
+    payload: ProjectCreate,
+    session: AsyncSession = SessionDep,
+    settings: Settings = SettingsDep,
+):
     style = (payload.style or "").strip() or "anime"
     project = Project(
         title=payload.title,
@@ -136,23 +120,27 @@ async def create_project(payload: ProjectCreate, session: AsyncSession = Session
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    return _project_read_model(project)
+    return _project_read_model(project, settings)
 
 
 @router.get("", response_model=ProjectListRead)
-async def list_projects(session: AsyncSession = SessionDep):
+async def list_projects(session: AsyncSession = SessionDep, settings: Settings = SettingsDep):
     project_created_at_col = cast(InstrumentedAttribute[datetime], cast(object, Project.created_at))
     res = await session.execute(select(Project).order_by(project_created_at_col.desc()))
     items = res.scalars().all()
-    return {"items": [_project_read_model(p) for p in items], "total": len(items)}
+    return {"items": [_project_read_model(p, settings) for p in items], "total": len(items)}
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
-async def get_project(project_id: int, session: AsyncSession = SessionDep):
+async def get_project(
+    project_id: int,
+    session: AsyncSession = SessionDep,
+    settings: Settings = SettingsDep,
+):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return _project_read_model(project)
+    return _project_read_model(project, settings)
 
 
 @router.get("/{project_id}/final-video")
@@ -171,7 +159,10 @@ async def download_final_video(project_id: int, session: AsyncSession = SessionD
 @router.put("/{project_id}", response_model=ProjectRead)
 @router.patch("/{project_id}", response_model=ProjectRead)
 async def update_project(
-    project_id: int, payload: ProjectUpdate, session: AsyncSession = SessionDep
+    project_id: int,
+    payload: ProjectUpdate,
+    session: AsyncSession = SessionDep,
+    settings: Settings = SettingsDep,
 ):
     project = await session.get(Project, project_id)
     if not project:
@@ -185,7 +176,7 @@ async def update_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    return _project_read_model(project)
+    return _project_read_model(project, settings)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

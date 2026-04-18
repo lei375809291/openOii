@@ -15,7 +15,12 @@ def make_project(**overrides: str | None) -> SimpleNamespace:
 
 
 def test_resolver_uses_runtime_defaults_for_text_provider() -> None:
-    settings = Settings(text_provider="openai", text_api_key="text-key", image_api_key="image-key")
+    settings = Settings(
+        text_provider="openai",
+        text_api_key="text-key",
+        image_api_key="image-key",
+        video_api_key="video-key",
+    )
 
     result = resolve_project_provider_settings(make_project(), settings)
 

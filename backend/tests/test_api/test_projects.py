@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import apply_settings_overrides
 from app.models.project import Project
 from tests.factories import create_message, create_project, create_run
 
@@ -29,7 +28,10 @@ async def test_list_projects_with_data(async_client, test_session):
 
 
 @pytest.mark.asyncio
-async def test_create_project_persists_bootstrap_payload(async_client, test_session):
+async def test_create_project_persists_bootstrap_payload(async_client, test_session, test_settings):
+    test_settings.text_api_key = "text-key"
+    test_settings.image_api_key = "image-key"
+    test_settings.video_provider = "openai"
     payload = {
         "title": "New Project",
         "story": "Once upon a time",
@@ -64,9 +66,10 @@ async def test_create_project_persists_bootstrap_payload(async_client, test_sess
     assert project.video_provider_override == "doubao"
 
 
-@pytest.mark.asyncio
-async def test_get_project(async_client, test_session):
-    apply_settings_overrides({"text_provider": "openai", "text_api_key": "text-key"})
+async def test_get_project(async_client, test_session, test_settings):
+    test_settings.text_provider = "openai"
+    test_settings.text_api_key = "text-key"
+    test_settings.video_provider = "openai"
     project = await create_project(
         test_session,
         title="Get Test",
@@ -87,22 +90,23 @@ async def test_get_project(async_client, test_session):
         "reason_message": None,
     }
     assert data["provider_settings"]["image"]["selected_key"] == "openai"
-    assert data["provider_settings"]["image"]["resolved_key"] is None
-    assert data["provider_settings"]["image"]["valid"] is False
+    assert data["provider_settings"]["image"]["resolved_key"] == "openai"
+    assert data["provider_settings"]["image"]["valid"] is True
     assert data["provider_settings"]["video"]["selected_key"] == "openai"
     assert data["provider_settings"]["video"]["source"] == "default"
-    assert data["provider_settings"]["video"]["reason_message"]
+    assert data["provider_settings"]["video"]["resolved_key"] == "openai"
+    assert data["provider_settings"]["video"]["reason_message"] is None
 
 
 @pytest.mark.asyncio
-async def test_get_project_provider_settings_follow_runtime_defaults(async_client, test_session):
-    apply_settings_overrides(
-        {
-            "text_provider": "openai",
-            "text_api_key": "text-key",
-            "video_provider": "doubao",
-        }
-    )
+async def test_get_project_provider_settings_follow_runtime_defaults(
+    async_client,
+    test_session,
+    test_settings,
+):
+    test_settings.text_provider = "openai"
+    test_settings.text_api_key = "text-key"
+    test_settings.video_provider = "doubao"
     project = await create_project(test_session, title="Runtime Default")
 
     res = await async_client.get(f"/api/v1/projects/{project.id}")
@@ -123,7 +127,9 @@ async def test_get_project_not_found(async_client):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["put", "patch"])
-async def test_update_project(async_client, test_session, method):
+async def test_update_project(async_client, test_session, test_settings, method):
+    test_settings.text_api_key = "text-key"
+    test_settings.video_provider = "openai"
     project = await create_project(test_session, title="Old Title")
     res = await getattr(async_client, method)(
         f"/api/v1/projects/{project.id}",

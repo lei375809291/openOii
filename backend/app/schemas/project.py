@@ -10,15 +10,14 @@ TextProviderKey = Literal["anthropic", "openai"]
 ImageProviderKey = Literal["openai"]
 VideoProviderKey = Literal["openai", "doubao"]
 
-DEFAULT_TEXT_PROVIDER: TextProviderKey = "anthropic"
-DEFAULT_IMAGE_PROVIDER: ImageProviderKey = "openai"
-DEFAULT_VIDEO_PROVIDER: VideoProviderKey = "openai"
-
 
 class ProjectProviderEntry(BaseModel):
-    override_key: str | None
-    effective_key: str
+    selected_key: str
     source: Literal["project", "default"]
+    resolved_key: str | None
+    valid: bool
+    reason_code: str | None
+    reason_message: str | None
 
 
 class ProjectProviderSettingsRead(BaseModel):
