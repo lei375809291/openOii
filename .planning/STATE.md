@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v1.1
 milestone_name: milestone
-status: ready
-stopped_at: Phase 08 complete; ready to plan Phase 09
-last_updated: "2026-04-18T01:33:20.956Z"
-last_activity: 2026-04-18 -- Phase 08 execution complete
+status: complete
+stopped_at: Milestone v1.1 complete; cleanup finished
+last_updated: "2026-04-18T17:06:30Z"
+last_activity: 2026-04-18 -- Phase 10 execution complete; milestone audit passed
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  completed_phases: 4
+  total_plans: 8
+  completed_plans: 8
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** An independent creator can go from a raw story idea to a coherent final video in one guided, resumable workflow.
-**Current focus:** Phase 09 — runtime-snapshot-semantics
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 09 (runtime-snapshot-semantics) — READY
-Plan: Not started
-Status: Ready to plan Phase 09
-Last activity: 2026-04-18 -- Phase 08 execution complete
+Phase: Complete
+Plan: Complete
+Status: Milestone v1.1 complete
+Last activity: 2026-04-18 - Completed quick task 260418-o51: 保证主要业务功能的测试覆盖率，并运行完整测试
 
 Progress: [██████████] 100%
 
@@ -55,6 +55,10 @@ Progress: [██████████] 100%
 **Recent Trend:**
 
 - v1.1 roadmap defined as a tight 4-phase portability proof: contracts → validation → runtime snapshot semantics → proof/evidence.
+- [Phase 09]: `AgentRun.provider_snapshot` is the run-level source of truth for frozen provider choices.
+- [Phase 09]: resume must rebuild services from run snapshot, not current project provider state.
+- [Phase 10]: front-end keeps the latest run provider snapshot visible after completion until project reset/switch.
+- [Phase 10]: creator-visible proof surface stays minimal: selected / resolved / source, not a full provider telemetry dashboard.
 
 *Updated after each plan completion*
 | Phase 03 P04 | ~1 session | 3 tasks | 6 files |
@@ -88,18 +92,20 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Keep Phase 09 semantics explicit: fresh run freezes current selection, resume reuses old snapshot, rerun/new run adopts updated selection.
-- Keep proof scope tight to creator-visible evidence plus deterministic automated acceptance.
-- Use Phase 08 resolver/preflight contracts as fixed inputs; Phase 09 should add snapshot semantics, not reopen fallback rules.
+- None.
 
 ### Blockers/Concerns
 
-- **Snapshot drift risk**: Resume must stay pinned to the original run snapshot even after project provider edits.
-- **Silent fallback risk**: Resolution must fail explicitly instead of quietly switching to another provider.
-- **Scope creep risk**: Proof must stay at project-level portability; no automatic fallback, per-asset switching, or generalized routing engine work.
+- None blocking. Milestone closed with snapshot semantics and proof surface in place.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260418-o51 | 保证主要业务功能的测试覆盖率，并运行完整测试 | 2026-04-18 | c1cc72c | Verified | [260418-o51-core-business-test-coverage](./quick/260418-o51-core-business-test-coverage/) |
 
 ## Session Continuity
 
-Last session: 2026-04-18T01:33:20.954Z
-Stopped at: Phase 08 complete; ready to plan Phase 09
+Last session: 2026-04-18T17:46:12Z
+Stopped at: Quick task 260418-o51 verified; ready for next task
 Resume file: None
