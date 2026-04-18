@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-18)
 Phase: Complete
 Plan: Complete
 Status: Milestone v1.1 complete
-Last activity: 2026-04-18 - Completed quick task 260418-o51: 保证主要业务功能的测试覆盖率，并运行完整测试
+Last activity: 2026-04-18 - Completed quick task 260418-umj: 清理项目死代码和冗余
 
 Progress: [██████████] 100%
 
@@ -103,6 +103,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 260418-o51 | 保证主要业务功能的测试覆盖率，并运行完整测试 | 2026-04-18 | c1cc72c | Verified | [260418-o51-core-business-test-coverage](./quick/260418-o51-core-business-test-coverage/) |
+| 260418-umj | 清理项目死代码和冗余 | 2026-04-18 | 53e65b5 |  | [260418-umj-cleanup-dead-code-redundancy](./quick/260418-umj-cleanup-dead-code-redundancy/) |
 
 ## Session Continuity
 
