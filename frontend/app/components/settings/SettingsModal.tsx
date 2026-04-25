@@ -294,7 +294,7 @@ export function SettingsModal() {
                 />
                 <div>
                   <div className="font-bold">Anthropic Claude</div>
-                  <div className="text-xs text-base-content/60">Claude Agent SDK，推荐使用</div>
+                  <div className="text-xs text-base-content/60">Anthropic 兼容接口，推荐使用</div>
                 </div>
               </label>
               <label className={`
@@ -686,7 +686,7 @@ function getConfigDescription(key: string): string {
     TEXT_PROVIDER: "文本生成服务提供商：anthropic（Claude）/ openai（OpenAI 兼容）",
     TEXT_BASE_URL: "文本生成服务地址（OpenAI 兼容接口）",
     TEXT_API_KEY: "文本生成 API 密钥（OpenAI 兼容）",
-    TEXT_MODEL: "文本生成模型名称（OpenAI 兼容），如 gpt-4o-mini",
+    TEXT_MODEL: "文本生成模型名称（OpenAI 兼容），如 deepseek-chat",
     TEXT_ENDPOINT: "文本生成 API 端点路径（OpenAI 兼容）",
 
     // 图像服务

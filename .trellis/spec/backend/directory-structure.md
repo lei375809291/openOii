@@ -14,7 +14,7 @@ The backend is a FastAPI + SQLModel + LangGraph application. It follows a layere
 - **Services layer** — pure business logic, no HTTP concerns.
 - **Orchestration layer** — LangGraph state machine, persistence, runtime.
 - **Agents layer** — LLM agent implementations (orchestrator, scriptwriter, etc.).
-- **Tools layer** — Claude Agent SDK tools (MCP-style).
+- **Tools layer** — demo MCP tools (MCP-style).
 - **WS layer** — WebSocket connection manager.
 
 Application entry: `backend/app/main.py` (`create_app()`).
@@ -45,7 +45,7 @@ backend/app/
 │
 ├── agents/                  # LLM agents: orchestrator.py, scriptwriter.py, director.py, ..., base.py, prompts/
 │
-├── tools/                   # Claude Agent SDK tools (e.g., media_tools.py)
+├── tools/                   # demo MCP tools (e.g., media_tools.py)
 │
 ├── ws/                      # WebSocket manager
 │

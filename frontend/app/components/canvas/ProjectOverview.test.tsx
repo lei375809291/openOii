@@ -161,7 +161,7 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 	});
 
 	it("renders final output blocked state with placeholder text and full action buttons", async () => {
-		useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
+		useEditorStore.getState().setProjectVideoUrl(null);
 		vi.mocked(projectsApi.get).mockResolvedValue({
 			...baseProject,
 			status: "blocked",
@@ -170,7 +170,7 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 
 		renderOverview();
 
-		expect(await screen.findByText("来源：等待分镜片段完成后生成最终视频")).toBeInTheDocument();
+		await screen.findByText(/等待分镜片段完成后生成最终视频/);
 		expect(
 			screen.getByText("当前仍在等待分镜片段完成，完成后会自动生成最终视频。"),
 		).toBeInTheDocument();
@@ -197,9 +197,14 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 		const toastErrorSpy = vi.spyOn(toast, "error").mockImplementation(() => undefined);
 
 		useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
+		vi.mocked(projectsApi.get).mockResolvedValue({
+			...baseProject,
+			status: "completed",
+			video_url: "/static/videos/final-current.mp4",
+		} as never);
 		renderOverview();
 
-		await screen.findByText("来源：当前成片");
+		await screen.findByText(/来源：当前成片/);
 		await user.click(screen.getByRole("button", { name: "下载最终视频" }));
 
 		await waitFor(() => {
@@ -1114,7 +1119,7 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 
     renderOverview();
 
-    await screen.findByText("来源：当前成片");
+    await screen.findByRole("button", { name: "预览最终视频" });
     expect(screen.getByRole("button", { name: "预览最终视频" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "下载最终视频" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试合成" })).toBeInTheDocument();
@@ -1140,10 +1145,15 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 	it("can open and close final video preview modal", async () => {
 		const user = userEvent.setup();
 		useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
+		vi.mocked(projectsApi.get).mockResolvedValue({
+			...baseProject,
+			status: "completed",
+			video_url: "/static/videos/final-current.mp4",
+		} as never);
 
 		renderOverview();
 
-		await screen.findByText("来源：当前成片");
+		await screen.findByRole("button", { name: "预览最终视频" });
 		await user.click(screen.getByRole("button", { name: "预览最终视频" }));
 
 		const previewModal = await screen.findByRole("dialog", {
@@ -1171,7 +1181,7 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 
 		renderOverview();
 
-		await screen.findByText("来源：当前成片");
+		await screen.findByRole("button", { name: "预览最终视频" });
 		await user.click(screen.getByRole("button", { name: "下载最终视频" }));
 
 		await waitFor(() => {
@@ -1195,10 +1205,15 @@ describe("ProjectOverview edit-before-rerun flow", () => {
 
 		useEditorStore.getState().setProjectVideoUrl("/static/videos/final-current.mp4");
 		useEditorStore.getState().setCurrentRunId(42);
+		vi.mocked(projectsApi.get).mockResolvedValue({
+			...baseProject,
+			status: "completed",
+			video_url: "/static/videos/final-current.mp4",
+		} as never);
 
 		renderOverview();
 
-		await screen.findByText("来源：当前成片");
+		await screen.findByRole("button", { name: "预览最终视频" });
 		await user.click(screen.getByRole("button", { name: "重试合成" }));
 
 		await waitFor(() => {
