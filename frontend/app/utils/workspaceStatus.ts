@@ -1,4 +1,5 @@
 import type { Character, Project, RecoverySummaryRead, Shot } from "~/types";
+import { getWorkflowStageUnlockRank } from "~/utils/workflowStage";
 
 export type WorkspaceSectionKey =
   | "script"
@@ -36,6 +37,37 @@ export interface WorkspaceProjectionInput {
 export interface WorkspaceStatus {
   stageLabel: WorkspaceSectionState;
   sections: WorkspaceSectionStatus[];
+}
+
+export function deriveWorkspaceRunState(input: {
+  projectStatus?: string | null;
+  isGenerating?: boolean;
+  awaitingConfirm?: boolean;
+  currentRunId?: number | null;
+}): string {
+  const { projectStatus, isGenerating = false, awaitingConfirm = false, currentRunId = null } = input;
+
+  if (projectStatus === "failed") {
+    return "failed";
+  }
+
+  if (awaitingConfirm) {
+    return "awaiting_confirm";
+  }
+
+  if (isGenerating) {
+    return "running";
+  }
+
+  if (currentRunId) {
+    return "blocked";
+  }
+
+  if (projectStatus === "ready" || projectStatus === "completed") {
+    return "completed";
+  }
+
+  return "draft";
 }
 
 export interface WorkspaceFinalOutputMeta {
@@ -78,24 +110,33 @@ const SECTION_PLACEHOLDERS: Record<WorkspaceSectionKey, string> = {
   "final-output": "等待最终输出...",
 };
 
-const STAGE_ORDER: Record<string, number> = {
-  ideate: 0,
-  visualize: 1,
-  animate: 2,
-  deploy: 3,
-};
-
 const SECTION_STAGE_ORDER: Record<WorkspaceSectionKey, number> = {
   script: 0,
-  characters: 1,
-  storyboards: 1,
-  clips: 2,
-  "final-output": 3,
+  characters: 2,
+  storyboards: 3,
+  clips: 4,
+  "final-output": 5,
 };
 
-function isAtOrPastStage(currentStage: string, targetStage: number) {
-  const currentOrder = STAGE_ORDER[currentStage] ?? -1;
-  return currentOrder >= targetStage;
+function getPreservedUnlockRank(recoverySummary?: RecoverySummaryRead | null) {
+  if (!recoverySummary?.preserved_stages?.length) {
+    return -1;
+  }
+
+  return recoverySummary.preserved_stages.reduce((maxRank, stage) => {
+    return Math.max(maxRank, getWorkflowStageUnlockRank(stage));
+  }, -1);
+}
+
+function getEffectiveUnlockRank(input: Pick<WorkspaceProjectionInput, "currentStage" | "recoverySummary">) {
+  return Math.max(
+    getWorkflowStageUnlockRank(input.currentStage),
+    getPreservedUnlockRank(input.recoverySummary)
+  );
+}
+
+function isAtOrPastStage(input: WorkspaceProjectionInput, targetStage: number) {
+  return getEffectiveUnlockRank(input) >= targetStage;
 }
 
 function hasApprovedContent(characters: Character[]) {
@@ -111,7 +152,7 @@ function hasClipContent(shots: Shot[]) {
 }
 
 function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSectionKey): WorkspaceSectionState {
-  const { project, currentStage, runState, characters, shots } = input;
+  const { project, runState, characters, shots } = input;
 
   if (project.status === "failed" || runState === "failed") {
     return "failed";
@@ -130,7 +171,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
 			return "draft";
 		}
 
-    return isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key]) ? "generating" : "draft";
+    return isAtOrPastStage(input, SECTION_STAGE_ORDER[key]) ? "generating" : "draft";
   }
 
   if (key === "characters") {
@@ -138,7 +179,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
       return "blocked";
     }
 
-    if (isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key])) {
+    if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
       return hasApprovedContent(characters) ? "complete" : "draft";
     }
 
@@ -150,7 +191,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
       return "blocked";
     }
 
-    if (isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key])) {
+    if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
       return hasStoryboardContent(shots) ? "complete" : "generating";
     }
 
@@ -162,7 +203,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
       return "blocked";
     }
 
-    if (isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key])) {
+    if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
       return hasClipContent(shots) ? "complete" : "generating";
     }
 
@@ -182,7 +223,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
 			return "blocked";
 		}
 
-		if (isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key])) {
+		if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
 			return runState === "running" ? "generating" : "draft";
 		}
 
@@ -193,7 +234,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
     return "complete";
   }
 
-  if (isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key])) {
+  if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
     return runState === "running" ? "generating" : "draft";
   }
 
@@ -232,8 +273,9 @@ export function toCreatorStageLabel(input: {
 }
 
 export function buildWorkspaceStatus(input: WorkspaceProjectionInput): WorkspaceStatus {
+  const effectiveUnlockRank = getEffectiveUnlockRank(input);
   const sections = CANONICAL_SECTIONS.filter((section) =>
-    isSectionVisible(input.currentStage, section.key)
+    isSectionVisible(effectiveUnlockRank, section.key)
   ).map((section) => {
     const state = resolveSectionState(input, section.key);
     const placeholder =
@@ -259,12 +301,12 @@ export function buildWorkspaceStatus(input: WorkspaceProjectionInput): Workspace
   };
 }
 
-function isSectionVisible(currentStage: string, key: WorkspaceSectionKey) {
+function isSectionVisible(effectiveUnlockRank: number, key: WorkspaceSectionKey) {
   if (key === "script") {
     return true;
   }
 
-  return isAtOrPastStage(currentStage, SECTION_STAGE_ORDER[key]);
+  return effectiveUnlockRank >= SECTION_STAGE_ORDER[key];
 }
 
 export function getWorkspaceSectionStatusLabel(state: WorkspaceSectionState | string) {

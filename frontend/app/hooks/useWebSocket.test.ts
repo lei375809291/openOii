@@ -307,7 +307,7 @@ describe("useProjectWebSocket", () => {
       data: {
         current_agent: "director",
         progress: 0.42,
-        stage: "visualize",
+        stage: "storyboard",
       },
     };
 
@@ -405,7 +405,7 @@ describe("useProjectWebSocket", () => {
           agent: "director",
           run_id: 202,
           message: "请确认",
-          stage: "visualize",
+          stage: "storyboard",
           recovery_summary: { test: true } as never,
         },
       } as never,
@@ -420,7 +420,7 @@ describe("useProjectWebSocket", () => {
         agent: "director",
         run_id: 202,
       },
-      currentStage: "visualize",
+      currentStage: "storyboard",
     });
 
     expect(useEditorStore.getState().recoverySummary).toMatchObject({ test: true });
@@ -436,7 +436,7 @@ describe("useProjectWebSocket", () => {
         data: {
           agent: "director",
           run_id: 202,
-          stage: "animate",
+          stage: "clip",
           recovery_summary: { updated: true } as never,
         },
       } as never,
@@ -445,7 +445,7 @@ describe("useProjectWebSocket", () => {
 
     expect(useEditorStore.getState().awaitingConfirm).toBe(false);
     expect(useEditorStore.getState().recoveryGate).toBeNull();
-    expect(useEditorStore.getState().currentStage).toBe("animate");
+    expect(useEditorStore.getState().currentStage).toBe("clip");
     expect(useEditorStore.getState().recoverySummary).toEqual({ updated: true });
     expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
       role: "info",
@@ -504,7 +504,7 @@ describe("useProjectWebSocket", () => {
       recoveryControl: null,
       recoverySummary: null,
       recoveryGate: null,
-      currentStage: "deploy",
+      currentStage: "merge",
     });
     expect(useEditorStore.getState().currentRunProviderSnapshot).toBeNull();
     expect(addMessageSpy).toHaveBeenCalledWith(

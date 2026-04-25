@@ -29,7 +29,7 @@ from app.orchestration.runtime import (
     build_phase2_runtime_context,
     build_stage_recovery_config,
 )
-from app.orchestration.state import Phase2Stage
+from app.orchestration.state import Phase2Stage, next_production_stage, workflow_progress_for_stage
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
 from app.services.provider_resolution import settings_with_provider_snapshot
@@ -37,19 +37,6 @@ from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary
 from app.services.text_factory import create_text_service
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
-
-
-# Agent 到工作流阶段的映射
-AGENT_STAGE_MAP = {
-    "onboarding": "ideate",
-    "director": "ideate",
-    "scriptwriter": "ideate",
-    "character_artist": "visualize",
-    "storyboard_artist": "visualize",
-    "video_generator": "animate",
-    "video_merger": "deploy",
-    "review": "ideate",
-}
 
 
 def _next_phase2_stage(stage: str | None) -> str | None:
@@ -71,6 +58,9 @@ GRAPH_STAGE_FOR_AGENT = {
     "video_merger": "merge",
     "review": "review",
 }
+
+# 兼容细粒度阶段映射的历史导入点
+AGENT_STAGE_MAP = GRAPH_STAGE_FOR_AGENT
 
 RESUME_AGENT_FOR_STAGE = {
     "script": "scriptwriter",
@@ -627,7 +617,11 @@ class GenerationOrchestrator:
         try:
             self._agent_index(resume_agent)
             await self._set_run(
-                run, status="running", current_agent="orchestrator", progress=0.01, error=None
+                run,
+                status="running",
+                current_agent="orchestrator",
+                progress=workflow_progress_for_stage(resume_stage),
+                error=None,
             )
 
             ctx = self._build_agent_context(
@@ -645,8 +639,10 @@ class GenerationOrchestrator:
                         "run_id": run_id,
                         "project_id": project_id,
                         "provider_snapshot": run.provider_snapshot,
+                        "current_stage": resume_stage,
                         "stage": resume_stage,
                         "next_stage": recovery.next_stage,
+                        "progress": workflow_progress_for_stage(resume_stage),
                         "recovery_summary": recovery.model_dump(mode="json"),
                     },
                 },
@@ -733,8 +729,13 @@ class GenerationOrchestrator:
             self._agent_index(agent_name)
 
             await self._set_run(
-                run, status="running", current_agent="orchestrator", progress=0.01, error=None
+                run,
+                status="running",
+                current_agent="orchestrator",
+                progress=workflow_progress_for_stage(GRAPH_STAGE_FOR_AGENT[agent_name]),
+                error=None,
             )
+            initial_stage = GRAPH_STAGE_FOR_AGENT[agent_name]
             await self.ws.send_event(
                 project_id,
                 {
@@ -743,6 +744,10 @@ class GenerationOrchestrator:
                         "run_id": run_id,
                         "project_id": project_id,
                         "provider_snapshot": run.provider_snapshot,
+                        "current_stage": initial_stage,
+                        "stage": initial_stage,
+                        "next_stage": next_production_stage(initial_stage),
+                        "progress": workflow_progress_for_stage(initial_stage),
                     },
                 },
             )
@@ -790,10 +795,10 @@ class GenerationOrchestrator:
                         "data": {
                             "run_id": run_id,
                             "current_agent": review_agent.name,
-                            "current_stage": AGENT_STAGE_MAP.get(review_agent.name, "ideate"),
-                            "stage": AGENT_STAGE_MAP.get(review_agent.name, "ideate"),
+                            "current_stage": GRAPH_STAGE_FOR_AGENT.get(review_agent.name, "review"),
+                            "stage": GRAPH_STAGE_FOR_AGENT.get(review_agent.name, "review"),
                             "next_stage": _next_phase2_stage(
-                                AGENT_STAGE_MAP.get(review_agent.name, "ideate")
+                                GRAPH_STAGE_FOR_AGENT.get(review_agent.name, "review")
                             ),
                             "progress": 0.0,
                         },

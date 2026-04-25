@@ -7,7 +7,12 @@ from langgraph.types import interrupt
 
 from app.agents.review import ALLOWED_START_AGENTS
 from app.services.approval_gate import can_enter_clip_generation
-from .state import Phase2RuntimeContext, Phase2State
+from .state import (
+    Phase2RuntimeContext,
+    Phase2State,
+    next_production_stage,
+    workflow_progress_for_stage,
+)
 
 
 _STAGE_ARTIFACT_KEYS: dict[str, str] = {
@@ -102,7 +107,8 @@ async def _run_agent_sequence(
                 },
             )
 
-        progress = index / max(total, 1)
+        stage_progress = index / max(total, 1)
+        progress = workflow_progress_for_stage(stage, within_stage=stage_progress)
         await orchestrator._set_run(  # noqa: SLF001 - orchestration helper
             agent_ctx.run,
             current_agent=agent_name,
@@ -115,7 +121,9 @@ async def _run_agent_sequence(
                 "data": {
                     "run_id": agent_ctx.run.id,
                     "current_agent": agent_name,
+                    "current_stage": stage,
                     "stage": stage,
+                    "next_stage": next_production_stage(stage),
                     "progress": progress,
                 },
             },

@@ -25,8 +25,9 @@ import type {
 } from "~/types";
 import { toast } from "~/utils/toast";
 import {
-  buildWorkspaceStatus,
-  getWorkspaceFinalOutputMeta,
+	buildWorkspaceStatus,
+	deriveWorkspaceRunState,
+	getWorkspaceFinalOutputMeta,
 } from "~/utils/workspaceStatus";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { canvasEvents } from "./canvasEvents";
@@ -136,6 +137,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		projectVideoUrl,
 		currentStage,
 		isGenerating,
+		awaitingConfirm,
 		recoverySummary,
 		currentRunProviderSnapshot,
 		currentRunId,
@@ -259,7 +261,12 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		return getWorkspaceFinalOutputMeta({
 			project: finalOutputProject,
 			currentStage: recoverySummary?.current_stage ?? currentStage,
-			runState: finalOutputProject.status || (isGenerating ? "running" : "draft"),
+			runState: deriveWorkspaceRunState({
+				projectStatus: finalOutputProject.status,
+				isGenerating,
+				awaitingConfirm,
+				currentRunId,
+			}),
 			characters,
 			shots,
 			recoverySummary,
@@ -270,9 +277,11 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		recoverySummary,
 		currentStage,
 		isGenerating,
+		awaitingConfirm,
 		characters,
 		shots,
 		videoProviderValid,
+		currentRunId,
 	]);
 
 	// 计算布局
@@ -291,7 +300,12 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			return buildWorkspaceStatus({
 				project,
 				currentStage: recoverySummary?.current_stage ?? currentStage,
-				runState: project.status || (isGenerating ? "running" : "draft"),
+				runState: deriveWorkspaceRunState({
+					projectStatus: project.status,
+					isGenerating,
+					awaitingConfirm,
+					currentRunId,
+				}),
 				characters,
 				shots,
 				recoverySummary,
@@ -302,9 +316,11 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			recoverySummary,
 			currentStage,
 			isGenerating,
+			awaitingConfirm,
 			characters,
 			shots,
 			videoProviderValid,
+			currentRunId,
 		]),
 		finalOutputMeta,
 	});

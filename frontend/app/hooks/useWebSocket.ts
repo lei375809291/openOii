@@ -12,6 +12,7 @@ import type {
   WorkflowStage,
 } from "~/types";
 import { toast } from "~/utils/toast";
+import { isWorkflowStage } from "~/utils/workflowStage";
 import { getWsBase } from "~/utils/runtimeBase";
 
 const WS_BASE = getWsBase();
@@ -196,7 +197,7 @@ function clearLoadingStates(
 
 function resolveEventStage(data: Record<string, unknown>): WorkflowStage | undefined {
   const stage = data.stage ?? data.current_stage;
-  if (stage === "ideate" || stage === "visualize" || stage === "animate" || stage === "deploy") {
+  if (isWorkflowStage(stage)) {
     return stage;
   }
 
@@ -354,7 +355,7 @@ export function applyWsEvent(
       store.setRecoverySummary(null);
       store.setRecoveryGate(null);
       store.setCurrentRunProviderSnapshot(null);
-      store.setCurrentStage("deploy");
+      store.setCurrentStage("merge");
       if (typeof event.data?.message === "string" && event.data.message.trim()) {
         store.addMessage({
           id: generateMessageId(),

@@ -12,6 +12,7 @@ from app.models.agent_run import AgentRun
 from app.models.artifact import Artifact
 from app.models.stage import Stage
 from app.orchestration import build_phase2_graph, get_checkpoint_history
+from app.orchestration.state import PRODUCTION_STAGE_SEQUENCE
 from app.orchestration.persistence import build_postgres_checkpointer
 from app.schemas.project import (
     AgentRunRead,
@@ -91,6 +92,58 @@ def _stage_from_snapshot(snapshot: Any) -> str | None:
     return None
 
 
+def _snapshot_values(snapshots: Sequence[Any]) -> dict[str, Any]:
+    for snapshot in snapshots:
+        values = getattr(snapshot, "values", None)
+        if isinstance(values, dict):
+            return values
+    return {}
+
+
+def _snapshot_next_stage(snapshots: Sequence[Any]) -> str | None:
+    for snapshot in snapshots:
+        next_nodes = getattr(snapshot, "next", ())
+        if isinstance(next_nodes, (list, tuple)) and next_nodes:
+            next_stage = _safe_stage_name(next_nodes[0])
+            if next_stage is not None:
+                return next_stage
+    return None
+
+
+def _normalize_stage_history(values: dict[str, Any]) -> list[str]:
+    raw_history = values.get("stage_history")
+    if not isinstance(raw_history, list):
+        return []
+
+    completed: list[str] = []
+    for entry in raw_history:
+        if isinstance(entry, str) and entry in PRODUCTION_STAGE_SEQUENCE and entry not in completed:
+            completed.append(entry)
+    return completed
+
+
+def _production_stage_for_approval(stage: str | None) -> str | None:
+    if not isinstance(stage, str) or not stage.endswith("_approval"):
+        return None
+    production_stage = stage.removesuffix("_approval")
+    return production_stage if production_stage in PRODUCTION_STAGE_SEQUENCE else None
+
+
+def _resume_target_stage(current_stage: str, *, values: dict[str, Any], completed_stages: Sequence[str]) -> str | None:
+    route_stage = _safe_stage_name(values.get("route_stage"))
+
+    if current_stage == "review":
+        return route_stage or current_stage
+
+    if current_stage.endswith("_approval"):
+        return current_stage
+
+    if current_stage in completed_stages:
+        return route_stage or _next_stage(current_stage)
+
+    return current_stage
+
+
 async def _checkpoint_history(database_url: str, run: AgentRun) -> list[Any]:
     if run.id is None:
         return []
@@ -147,22 +200,31 @@ async def build_recovery_summary(
     run_id = run.id
     run_pk = run_id if run_id is not None else 0
     snapshots = await _checkpoint_history(database_url, run)
-    current_stage = _infer_current_stage(run, snapshots)
-    next_stage = _next_stage(current_stage)
+    latest_values = _snapshot_values(snapshots)
+    pending_stage = _snapshot_next_stage(snapshots)
+    current_stage = pending_stage or _infer_current_stage(run, snapshots)
+    completed_stages = _normalize_stage_history(latest_values)
+    approval_parent = _production_stage_for_approval(current_stage)
+    if approval_parent is not None and approval_parent not in completed_stages:
+        completed_stages.append(approval_parent)
+    next_stage = _resume_target_stage(
+        current_stage,
+        values=latest_values,
+        completed_stages=completed_stages,
+    )
     artifact_counts = await _stage_artifact_counts(session, run_pk)
 
-    current_index = _stage_index(current_stage)
     stage_history = [
         RecoveryStageRead(
             name=stage,
             status="current"
             if stage == current_stage
             else "completed"
-            if index < current_index
+            if stage in completed_stages
             else "pending",
             artifact_count=artifact_counts.get(stage, 0),
         )
-        for index, stage in enumerate(PHASE2_STAGE_ORDER)
+        for stage in PHASE2_STAGE_ORDER
     ]
 
     preserved_stages = [stage.name for stage in stage_history if stage.status == "completed"]

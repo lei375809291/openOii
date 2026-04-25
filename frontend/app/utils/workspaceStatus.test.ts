@@ -56,9 +56,10 @@ const baseInput: WorkspaceProjectionInput = {
 describe("buildWorkspaceStatus", () => {
   it.each([
     ["ideate", ["script"]],
-    ["visualize", ["script", "characters", "storyboards"]],
-    ["animate", ["script", "characters", "storyboards", "clips"]],
-    ["deploy", ["script", "characters", "storyboards", "clips", "final-output"]],
+    ["character", ["script", "characters"]],
+    ["storyboard", ["script", "characters", "storyboards"]],
+    ["clip", ["script", "characters", "storyboards", "clips"]],
+    ["merge", ["script", "characters", "storyboards", "clips", "final-output"]],
   ] as const)("reveals only sections available at %s", (currentStage, expectedKeys) => {
     const result = buildWorkspaceStatus({
       ...baseInput,
@@ -85,7 +86,7 @@ describe("buildWorkspaceStatus", () => {
   it("keeps visible sections' status semantics intact after reveal", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
-      currentStage: "visualize",
+      currentStage: "storyboard",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",
@@ -113,10 +114,10 @@ describe("buildWorkspaceStatus", () => {
     );
   });
 
-  it("marks partially generated sections without hiding the missing ones once visualize has started", () => {
+  it("marks partially generated sections without hiding the missing ones once storyboard generation has started", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
-      currentStage: "visualize",
+      currentStage: "storyboard",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",
@@ -167,7 +168,7 @@ describe("buildWorkspaceStatus", () => {
         status: "superseded",
         summary: "一个已经被新版本替代的项目",
       },
-      currentStage: "deploy",
+      currentStage: "merge",
       runState: "completed",
       characters: [
         {
@@ -319,7 +320,7 @@ describe("buildWorkspaceStatus", () => {
   it("shows explicit skip copy when video provider is invalid at final output", () => {
     const meta = getWorkspaceFinalOutputMeta({
       ...baseInput,
-      currentStage: "deploy",
+      currentStage: "merge",
       runState: "completed",
       videoProviderValid: false,
       project: {

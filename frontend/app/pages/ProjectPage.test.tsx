@@ -332,7 +332,7 @@ describe('ProjectPage live hydration', () => {
     currentProjectData = projectData;
     storeState.isGenerating = true;
     storeState.progress = 0.35;
-    storeState.currentStage = 'visualize';
+    storeState.currentStage = 'storyboard';
     storeState.projectUpdatedAt = null;
     storeState.currentRunId = null;
     storeState.currentRunProviderSnapshot = null;
@@ -678,7 +678,7 @@ describe('ProjectPage live hydration', () => {
 
     expect(storeState.isGenerating).toBe(true);
     expect(storeState.progress).toBe(0.35);
-    expect(storeState.currentStage).toBe('visualize');
+    expect(storeState.currentStage).toBe('storyboard');
   });
 
   it('saves provider overrides without resetting recovery and live progress state', async () => {
@@ -775,8 +775,8 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 17,
         thread_id: 'thread-9',
-        current_stage: 'visualize',
-        next_stage: 'animate',
+        current_stage: 'storyboard',
+        next_stage: 'clip',
         preserved_stages: ['ideate'],
         stage_history: [],
         resumable: true,
@@ -794,7 +794,7 @@ describe('ProjectPage live hydration', () => {
     expect(storeState.setCurrentRunId).toHaveBeenCalledWith(55);
     expect(storeState.setCurrentAgent).toHaveBeenCalledWith('director');
     expect(storeState.setProgress).toHaveBeenCalledWith(0.61);
-    expect(storeState.setCurrentStage).toHaveBeenCalledWith('animate');
+    expect(storeState.setCurrentStage).toHaveBeenCalledWith('clip');
     expect(storeState.setRecoveryControl).toHaveBeenCalledWith(null);
     expect(storeState.setRecoverySummary).toHaveBeenCalledWith(null);
     expect(storeState.setRecoveryGate).toHaveBeenCalledWith(null);
@@ -821,9 +821,9 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 18,
         thread_id: 'thread-10',
-        current_stage: 'animate',
-        next_stage: 'deploy',
-        preserved_stages: ['ideate', 'visualize'],
+        current_stage: 'clip',
+        next_stage: 'merge',
+        preserved_stages: ['ideate', 'script', 'character', 'storyboard'],
         stage_history: [],
         resumable: true,
       },
@@ -1039,7 +1039,7 @@ describe('ProjectPage live hydration', () => {
         run_id: 101,
         thread_id: 'thread-rollback',
         current_stage: 'ideate',
-        next_stage: 'visualize',
+        next_stage: 'storyboard',
         preserved_stages: [],
         stage_history: [],
         resumable: true,
@@ -1156,9 +1156,9 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 18,
         thread_id: 'thread-10',
-        current_stage: 'animate',
-        next_stage: 'deploy',
-        preserved_stages: ['ideate', 'visualize'],
+        current_stage: 'clip',
+        next_stage: 'merge',
+        preserved_stages: ['ideate', 'script', 'character', 'storyboard'],
         stage_history: [],
         resumable: true,
       },
@@ -1205,8 +1205,8 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 55,
         thread_id: 'thread-11',
-        current_stage: 'visualize',
-        next_stage: 'animate',
+        current_stage: 'storyboard',
+        next_stage: 'clip',
         preserved_stages: ['ideate'],
         stage_history: [],
         resumable: true,

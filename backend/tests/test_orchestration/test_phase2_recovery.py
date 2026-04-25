@@ -7,6 +7,7 @@ from typing import get_type_hints
 
 from app.agents.orchestrator import GenerationOrchestrator
 from app.schemas.project import RecoverySummaryRead
+from app.services.run_recovery import build_recovery_summary
 from tests.factories import create_project, create_run
 
 
@@ -184,3 +185,107 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
     run_completed_events = [event for event in captured_events if event.get("type") == "run_completed"]
     assert run_completed_events, "resume flow should publish run_completed"
     assert run_completed_events[0].get("data", {}).get("message") == "视频未配置，已完成文本和图片生成"
+
+
+@pytest.mark.asyncio
+async def test_build_recovery_summary_keeps_approval_stage_as_resume_target(test_session, monkeypatch):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id, status="failed")
+    run.current_agent = "scriptwriter"
+    await test_session.commit()
+
+    async def _fake_checkpoint_history(_database_url, _run):
+        return [
+            SimpleNamespace(
+                values={
+                    "current_stage": "script_approval",
+                    "stage_history": ["ideate", "script"],
+                }
+            )
+        ]
+
+    async def _fake_stage_artifact_counts(_session, _run_id):
+        return {"ideate": 2, "script": 1}
+
+    monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
+    monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
+
+    summary = await build_recovery_summary(
+        session=test_session,
+        database_url="postgresql://test",
+        run=run,
+    )
+
+    assert summary.current_stage == "script_approval"
+    assert summary.next_stage == "script_approval"
+    assert summary.preserved_stages == ["ideate", "script"]
+
+
+@pytest.mark.asyncio
+async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(test_session, monkeypatch):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id, status="failed")
+    run.current_agent = "review"
+    await test_session.commit()
+
+    async def _fake_checkpoint_history(_database_url, _run):
+        return [
+            SimpleNamespace(
+                values={
+                    "current_stage": "review",
+                    "route_stage": "character",
+                    "stage_history": ["ideate", "script"],
+                }
+            )
+        ]
+
+    async def _fake_stage_artifact_counts(_session, _run_id):
+        return {"ideate": 2, "script": 1, "character": 0}
+
+    monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
+    monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
+
+    summary = await build_recovery_summary(
+        session=test_session,
+        database_url="postgresql://test",
+        run=run,
+    )
+
+    assert summary.current_stage == "review"
+    assert summary.next_stage == "character"
+    assert summary.preserved_stages == ["ideate", "script"]
+
+
+@pytest.mark.asyncio
+async def test_build_recovery_summary_promotes_pending_approval_checkpoint_to_current_stage(test_session, monkeypatch):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id, status="running")
+    run.current_agent = "director"
+    await test_session.commit()
+
+    async def _fake_checkpoint_history(_database_url, _run):
+        return [
+            SimpleNamespace(
+                values={
+                    "current_stage": "ideate",
+                    "stage_history": ["ideate"],
+                },
+                next=("ideate_approval",),
+            )
+        ]
+
+    async def _fake_stage_artifact_counts(_session, _run_id):
+        return {"ideate": 2}
+
+    monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
+    monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
+
+    summary = await build_recovery_summary(
+        session=test_session,
+        database_url="postgresql://test",
+        run=run,
+    )
+
+    assert summary.current_stage == "ideate_approval"
+    assert summary.next_stage == "ideate_approval"
+    assert summary.preserved_stages == ["ideate"]

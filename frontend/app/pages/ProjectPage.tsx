@@ -25,10 +25,10 @@ import type {
 	ProjectProviderSettings,
 	ProjectProviderOverridesPayload,
 	RecoveryControlRead,
-	WorkflowStage,
 } from "~/types";
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
+import { isWorkflowStage } from "~/utils/workflowStage";
 
 const PROVIDER_LABELS = {
 	text: "文本",
@@ -418,8 +418,8 @@ export function ProjectPage() {
 				const nextStage =
 					control.recovery_summary.next_stage ??
 					control.recovery_summary.current_stage;
-				if (nextStage) {
-					store.setCurrentStage(nextStage as WorkflowStage);
+				if (isWorkflowStage(nextStage)) {
+					store.setCurrentStage(nextStage);
 				}
 			}
 			store.setRecoveryControl(null);

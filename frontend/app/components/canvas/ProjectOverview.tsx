@@ -40,6 +40,7 @@ import {
 } from "./PreviewModals";
 import { toast } from "~/utils/toast";
 import {
+	deriveWorkspaceRunState,
 	getWorkspaceFinalOutputMeta,
 	getWorkspaceSectionStatusBadgeClass,
 } from "~/utils/workspaceStatus";
@@ -153,6 +154,8 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		currentStage,
 		currentRunId,
 		currentRunProviderSnapshot,
+		awaitingConfirm,
+		isGenerating,
 		recoverySummary,
 		updateCharacter,
 		updateShot,
@@ -210,7 +213,12 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 		return getWorkspaceFinalOutputMeta({
 			project: finalOutputProject,
 			currentStage,
-			runState: finalOutputProject.status || "draft",
+			runState: deriveWorkspaceRunState({
+				projectStatus: finalOutputProject.status,
+				isGenerating,
+				awaitingConfirm,
+				currentRunId,
+			}),
 			characters,
 			shots,
 			recoverySummary,
@@ -219,8 +227,11 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 	}, [
 		finalOutputProject,
 		currentStage,
+		currentRunId,
 		characters,
 		shots,
+		awaitingConfirm,
+		isGenerating,
 		recoverySummary,
 		currentRunProviderSnapshot?.video?.valid,
 	]);

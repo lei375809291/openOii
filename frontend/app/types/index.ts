@@ -236,8 +236,20 @@ export interface Message {
   created_at: string;
 }
 
-// 工作流阶段类型
-export type WorkflowStage = "ideate" | "visualize" | "animate" | "deploy";
+// 工作流阶段类型（与后端 Phase2 graph 对齐）
+export type WorkflowStage =
+  | "ideate"
+  | "ideate_approval"
+  | "script"
+  | "script_approval"
+  | "character"
+  | "character_approval"
+  | "storyboard"
+  | "storyboard_approval"
+  | "clip"
+  | "clip_approval"
+  | "merge"
+  | "review";
 
 // Config types
 export type ConfigValue = string | number | boolean | null;

@@ -14,6 +14,7 @@ import {
   StopIcon,
 } from "@heroicons/react/24/outline";
 import { toCreatorStageLabel } from "~/utils/workspaceStatus";
+import { getWorkflowStageInfo } from "~/utils/workflowStage";
 
 interface ChatPanelProps {
   onSendFeedback: (content: string) => void;
@@ -26,35 +27,21 @@ interface ChatPanelProps {
 }
 // ... (imports and interface definition remain the same) ...
 
-const stageInfo: Record<
-  WorkflowStage,
-  {
-    title: string;
-    description: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+function getStageIcon(stage: WorkflowStage) {
+  if (stage === "merge") {
+    return RocketLaunchIcon;
   }
-> = {
-  ideate: {
-    title: "构思阶段",
-    description: "告诉我你的故事创意，我来帮你写剧本",
-    icon: LightBulbIcon,
-  },
-  visualize: {
-    title: "可视化阶段",
-    description: "正在设计角色形象和绘制分镜画面",
-    icon: PaintBrushIcon,
-  },
-  animate: {
-    title: "动画阶段",
-    description: "正在生成动画视频片段",
-    icon: FilmIcon,
-  },
-  deploy: {
-    title: "完成",
-    description: "你的漫剧已经生成完毕！",
-    icon: RocketLaunchIcon,
-  },
-};
+  if (stage === "clip" || stage === "clip_approval") {
+    return FilmIcon;
+  }
+  if (stage === "character" || stage === "character_approval") {
+    return PaintBrushIcon;
+  }
+  if (stage === "storyboard" || stage === "storyboard_approval") {
+    return FilmIcon;
+  }
+  return LightBulbIcon;
+}
 
 // Agent 名称映射
 const agentNameMap: Record<string, string> = {
@@ -123,8 +110,8 @@ export function ChatPanel({
     setInput("");
   };
 
-  const info = stageInfo[currentStage];
-  const StageIcon = info.icon;
+  const info = getWorkflowStageInfo(currentStage);
+  const StageIcon = getStageIcon(currentStage);
   const hasMessages = messages.length > 0;
   const agentDisplayName = awaitingAgent ? agentNameMap[awaitingAgent] || awaitingAgent : "";
   const currentAgentDisplayName = currentAgent ? agentNameMap[currentAgent] || currentAgent : "";
