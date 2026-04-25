@@ -19,16 +19,8 @@ static
 playwright-report/
 test-results/
 coverage/
-CLAUDE.md
-.openspec
-openspec
-*.sh
-.bg-shell/
-.gsd/
-findings.md
-progress.md
-task_plan.md
 .coverage
 backend/.coverage
+backend/coverage.json
 .opencode
 .planning/

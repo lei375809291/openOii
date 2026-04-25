@@ -45,16 +45,43 @@ class StubWsManager:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def test_session(test_settings: Settings) -> AsyncGenerator[AsyncSession, None]:
-    engine = create_async_engine(test_settings.database_url, echo=False)
+async def test_db_engine_sessionmaker(
+    tmp_path: Path,
+) -> AsyncGenerator[tuple, None]:
+    """Function-scoped sqlite engine + sessionmaker.
+
+    Shared between test_session (for direct DB writes) and closure_app
+    (for route-level async_session_maker patching) so both layers see the
+    same data.
+    """
+    db_path = tmp_path / "test.db"
+    database_url = f"sqlite+aiosqlite:///{db_path}"
+    engine = create_async_engine(database_url, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        yield engine, session_maker
+    finally:
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_session(test_db_engine_sessionmaker) -> AsyncGenerator[AsyncSession, None]:
+    _, session_maker = test_db_engine_sessionmaker
     async with session_maker() as session:
         yield session
 
-    await engine.dispose()
+
+@pytest.fixture()
+def shared_session_maker(test_db_engine_sessionmaker):
+    """Sessionmaker shared with test_session.
+
+    Used by closure_app fixture to patch route-level async_session_maker
+    so route _task() closures hit the same sqlite db as test_session.
+    """
+    _, session_maker = test_db_engine_sessionmaker
+    return session_maker
 
 
 @pytest_asyncio.fixture(scope="function")
