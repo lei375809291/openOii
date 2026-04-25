@@ -7,8 +7,7 @@ from sqlmodel import select
 
 import app.agents.orchestrator as orchestrator_mod
 from app.agents.orchestrator import GenerationOrchestrator
-from app.models.agent_run import AgentRun
-from app.models.project import Character, Project, Shot
+from app.models.project import Character, Shot
 from app.schemas.project import GenerateRequest
 from app.services.llm import LLMResponse
 from tests.agent_fixtures import DummyWsManager

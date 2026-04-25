@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings
 from app.main import app
 
 from app.api.deps import require_admin

@@ -31,7 +31,7 @@ from app.orchestration.runtime import (
     build_stage_recovery_config,
 )
 from app.orchestration.state import Phase2Stage, next_production_stage, workflow_progress_for_stage
-from app.services.file_cleaner import delete_file, delete_files
+from app.services.file_cleaner import delete_files
 from app.services.image import ImageService
 from app.services.provider_resolution import settings_with_provider_snapshot
 from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary

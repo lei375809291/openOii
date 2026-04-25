@@ -9,7 +9,14 @@ from sqlmodel import SQLModel, select
 from starlette.websockets import WebSocketState
 
 from app.agents.base import BaseAgent
-from app.models import agent_run, artifact, message, project, run, stage  # noqa: F401
+from app.models import (  # noqa: F401
+    agent_run,
+    artifact,
+    message,
+    project as _project_models,
+    run as _run_models,
+    stage,
+)
 from app.models.message import Message
 from app.ws.manager import ws_manager
 from tests.agent_fixtures import make_context

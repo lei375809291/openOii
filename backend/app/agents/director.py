@@ -77,4 +77,4 @@ class DirectorAgent(BaseAgent):
         ctx.session.add(ctx.project)
         await ctx.session.commit()
 
-        await self.send_message(ctx, f"✅ 导演规划完成，接下来将由编剧创作详细剧本。", progress=1.0)
+        await self.send_message(ctx, "✅ 导演规划完成，接下来将由编剧创作详细剧本。", progress=1.0)
