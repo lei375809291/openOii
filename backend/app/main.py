@@ -222,22 +222,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-async def _run_demo_mcp_server() -> None:
-    try:
-        from app.tools.media_tools import create_tools_mcp_server
-    except ModuleNotFoundError as exc:
-        if exc.name == "claude_agent_sdk":
-            raise RuntimeError(
-                "Missing dependency `claude-agent-sdk`. Install: `cd backend && uv sync --extra agents` "
-                "or `pip install 'openOii-backend[agents]'`."
-            ) from exc
-        raise
-
-    server = create_tools_mcp_server()
-    await server.serve_stdio()
-
-
-if __name__ == "__main__":
-    asyncio.run(_run_demo_mcp_server())

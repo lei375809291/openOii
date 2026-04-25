@@ -43,8 +43,7 @@ class LLMService:
             import anthropic  # type: ignore
         except ModuleNotFoundError as exc:  # pragma: no cover
             raise RuntimeError(
-                "Missing dependency `anthropic`. Install optional deps: `uv sync --extra agents` "
-                "or `pip install 'openOii-backend[agents]'`."
+                "Missing dependency `anthropic`. Run `uv sync` to install."
             ) from exc
         self._anthropic = anthropic
         return anthropic
