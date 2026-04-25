@@ -103,7 +103,10 @@ def create_app() -> FastAPI:
 
     @app.websocket("/ws/projects/{project_id}")
     async def ws_projects(websocket: WebSocket, project_id: int):
-        from app.agents.orchestrator import trigger_confirm_redis
+        from app.agents.orchestrator import (
+            get_awaiting_payload,
+            trigger_confirm_redis,
+        )
         from starlette.websockets import WebSocketDisconnect
 
         try:
@@ -111,6 +114,29 @@ def create_app() -> FastAPI:
             await ws_manager.send_event(
                 project_id, {"type": "connected", "data": {"project_id": project_id}}
             )
+
+            # 补发当前项目下任意 running run 的 awaiting payload，防止客户端错过事件
+            try:
+                from app.db.session import async_session_maker
+                from app.models.agent_run import AgentRun
+                from sqlalchemy import select
+
+                async with async_session_maker() as session:
+                    res = await session.execute(
+                        select(AgentRun)
+                        .where(AgentRun.project_id == project_id)
+                        .where(AgentRun.status == "running")
+                        .order_by(AgentRun.created_at.desc())
+                    )
+                    for run in res.scalars().all():
+                        payload = await get_awaiting_payload(run.id)
+                        if payload:
+                            await ws_manager.send_event(
+                                project_id,
+                                {"type": "run_awaiting_confirm", "data": payload},
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to replay awaiting payload for project {project_id}: {e}")
 
             while True:
                 try:

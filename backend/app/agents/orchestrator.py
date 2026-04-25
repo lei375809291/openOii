@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, UTC
 from typing import Any, cast
 
@@ -37,6 +38,8 @@ from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary
 from app.services.text_factory import create_text_service
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
+
+logger = logging.getLogger(__name__)
 
 
 def _next_phase2_stage(stage: str | None) -> str | None:
@@ -149,6 +152,45 @@ def get_confirm_event_key(run_id: int) -> str:
 
 def get_confirm_channel(run_id: int) -> str:
     return f"openoii:confirm_channel:{run_id}"
+
+
+def get_awaiting_payload_key(run_id: int) -> str:
+    """Redis 缓存 run 当前 gate 的 awaiting payload，用于 WS 重连补发"""
+    return f"openoii:awaiting:{run_id}"
+
+
+async def store_awaiting_payload(run_id: int, payload: dict) -> None:
+    """记录当前 run 在 gate 等待，附带 run_awaiting_confirm 事件 payload"""
+    import json as _json
+    try:
+        r = await get_redis()
+        await r.set(get_awaiting_payload_key(run_id), _json.dumps(payload), ex=7200)
+    except Exception:  # noqa: BLE001 - redis unreachable is non-fatal for orchestration flow
+        logger.exception("store_awaiting_payload failed run_id=%s", run_id)
+
+
+async def clear_awaiting_payload(run_id: int) -> None:
+    try:
+        r = await get_redis()
+        await r.delete(get_awaiting_payload_key(run_id))
+    except Exception:  # noqa: BLE001
+        logger.exception("clear_awaiting_payload failed run_id=%s", run_id)
+
+
+async def get_awaiting_payload(run_id: int) -> dict | None:
+    import json as _json
+    try:
+        r = await get_redis()
+        raw = await r.get(get_awaiting_payload_key(run_id))
+    except Exception:  # noqa: BLE001
+        logger.exception("get_awaiting_payload failed run_id=%s", run_id)
+        return None
+    if not raw:
+        return None
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return None
 
 
 async def clear_confirm_event_redis(run_id: int) -> None:
@@ -386,25 +428,30 @@ class GenerationOrchestrator:
         # 清理上一轮遗留的 confirm（避免误触导致直接跳过等待）
         await clear_confirm_event_redis(run_pk)
 
+        awaiting_payload = {
+            "run_id": run_pk,
+            "project_id": project_id,
+            "agent": agent_name,
+            "gate": agent_name,
+            "current_stage": current_stage,
+            "stage": current_stage,
+            "next_stage": next_stage,
+            "recovery_summary": recovery_summary.model_dump(mode="json"),
+            "preserved_stages": recovery_summary.preserved_stages,
+            "message": full_message,
+            "completed": completed,
+            "next_step": next_step,
+            "question": question,
+        }
+
+        # 缓存 payload 以便 WS 重连补发（事件本身可能在客户端未连接时丢失）
+        await store_awaiting_payload(run_pk, awaiting_payload)
+
         await self.ws.send_event(
             project_id,
             {
                 "type": "run_awaiting_confirm",
-                "data": {
-                    "run_id": run_pk,
-                    "project_id": project_id,
-                    "agent": agent_name,
-                    "gate": agent_name,
-                    "current_stage": current_stage,
-                    "stage": current_stage,
-                    "next_stage": next_stage,
-                    "recovery_summary": recovery_summary.model_dump(mode="json"),
-                    "preserved_stages": recovery_summary.preserved_stages,
-                    "message": full_message,
-                    "completed": completed,
-                    "next_step": next_step,
-                    "question": question,
-                },
+                "data": awaiting_payload,
             },
         )
 
@@ -413,7 +460,10 @@ class GenerationOrchestrator:
             if not ok:
                 raise asyncio.TimeoutError()
         except asyncio.TimeoutError:
+            await clear_awaiting_payload(run_pk)
             raise RuntimeError(f"等待确认超时（agent: {agent_name}）")
+
+        await clear_awaiting_payload(run_pk)
 
         await self.ws.send_event(
             project_id,
@@ -514,15 +564,25 @@ class GenerationOrchestrator:
         payload: Any = initial_payload
         video_generation_skipped = False
         while True:
+            logger.debug("[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__)
             result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
+            logger.debug("[graph] run=%s ainvoke returned result_type=%s", run_pk, type(result).__name__)
             if not isinstance(result, dict):
+                logger.warning("[graph] run=%s result not dict, breaking", run_pk)
                 break
 
             if _video_generation_skipped_in_result(result):
                 video_generation_skipped = True
 
             interrupts = result.get("__interrupt__") or []
+            logger.debug(
+                "[graph] run=%s interrupts_count=%s keys=%s",
+                run_pk,
+                len(interrupts),
+                list(result.keys()),
+            )
             if not interrupts:
+                logger.debug("[graph] run=%s no interrupts, breaking", run_pk)
                 break
 
             interrupt_value = getattr(interrupts[0], "value", None)
@@ -533,9 +593,11 @@ class GenerationOrchestrator:
             if not isinstance(gate_agent, str) or not gate_agent.strip():
                 raise RuntimeError("LangGraph approval gate did not include a valid gate name")
 
+            logger.debug("[graph] run=%s interrupt gate=%s auto_mode=%s", run_pk, gate_agent, auto_mode)
             feedback = ""
             if not auto_mode:
                 feedback = await self._wait_for_confirm(project_pk, run, gate_agent.strip()) or ""
+            logger.debug("[graph] run=%s resume with feedback=%r", run_pk, feedback)
 
             payload = Command(resume=feedback)
 
@@ -710,6 +772,7 @@ class GenerationOrchestrator:
             )
         finally:
             await clear_confirm_event_redis(run_id)
+            await clear_awaiting_payload(run_id)
 
     async def run_from_agent(
         self,
@@ -871,6 +934,7 @@ class GenerationOrchestrator:
             )
         finally:
             await clear_confirm_event_redis(run_id)
+            await clear_awaiting_payload(run_id)
 
     async def run(
         self, *, project_id: int, run_id: int, request: GenerateRequest, auto_mode: bool = False
