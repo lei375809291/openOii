@@ -51,3 +51,67 @@ async def test_onboarding_skips_empty_update_fields(test_session, test_settings)
     await test_session.refresh(ctx.project)
     assert ctx.project.status == "planning"
     assert ctx.project.title != "   "
+
+
+@pytest.mark.asyncio
+async def test_onboarding_all_fields_covered(test_session, test_settings):
+    """Cover genre/themes/setting/tone display lines."""
+    payload = {
+        "story_breakdown": {
+            "logline": "A hero's journey",
+            "genre": ["Fantasy", "Adventure"],
+            "themes": ["courage", "friendship"],
+            "setting": "Middle Earth",
+            "tone": "Epic",
+        },
+        "key_elements": {"characters": ["Frodo", "Gandalf"]},
+        "style_recommendation": {"primary": "anime", "rationale": "High detail"},
+        "project_update": {"title": "Updated", "story": "New story", "style": "anime"},
+    }
+    llm = FakeLLM(json.dumps(payload))
+    ctx = await make_context(test_session, test_settings, llm=llm)
+
+    agent = OnboardingAgent()
+    await agent.run(ctx)
+
+    await test_session.refresh(ctx.project)
+    assert ctx.project.status == "planning"
+    assert ctx.project.title == "Updated"
+    assert ctx.project.story == "New story"
+    assert ctx.project.style == "anime"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_minimal_payload(test_session, test_settings):
+    """Cover branches where story_breakdown has only setting, key_elements has no characters."""
+    payload = {
+        "story_breakdown": {"setting": "City"},
+        "key_elements": {},
+        "style_recommendation": {},
+        "project_update": {},
+    }
+    llm = FakeLLM(json.dumps(payload))
+    ctx = await make_context(test_session, test_settings, llm=llm)
+
+    agent = OnboardingAgent()
+    await agent.run(ctx)
+
+    await test_session.refresh(ctx.project)
+    assert ctx.project.status == "planning"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_tone_only(test_session, test_settings):
+    """Cover tone-only branch without setting."""
+    payload = {
+        "story_breakdown": {"tone": "Dark"},
+        "key_elements": {},
+        "style_recommendation": {},
+        "project_update": {},
+    }
+    llm = FakeLLM(json.dumps(payload))
+    ctx = await make_context(test_session, test_settings, llm=llm)
+
+    agent = OnboardingAgent()
+    await agent.run(ctx)
+    assert ctx.project.status == "planning"
