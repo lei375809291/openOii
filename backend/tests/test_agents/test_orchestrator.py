@@ -49,10 +49,11 @@ class FakeResult:
 
 
 class FakeSession:
-    def __init__(self, project=None, run=None, rows=None):
+    def __init__(self, project=None, run=None, rows=None, scalars_result=None):
         self.project = project
         self.run = run
         self.rows = rows or []
+        self.scalars_result = scalars_result
         self.executed = []
         self.added = []
         self.commits = 0
@@ -61,7 +62,7 @@ class FakeSession:
 
     async def execute(self, statement):
         self.executed.append(statement)
-        return FakeResult(rows=self.rows, scalar=None)
+        return FakeResult(rows=self.scalars_result or self.rows, scalar=None)
 
     async def get(self, model, ident):
         if model.__name__ == "Project":
@@ -679,3 +680,409 @@ async def test_run_from_agent_review_branch(monkeypatch):
 
     assert ctx.user_feedback == "notes"
     assert ctx.rerun_mode == "incremental"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_incremental_character_artist(monkeypatch):
+    """Incremental mode: character_artist clears character+shot images/videos."""
+    cleared = []
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    async def clear_chars(pid): cleared.append("chars")
+    async def clear_shots(pid): cleared.append("shots")
+    async def clear_videos(pid): cleared.append("videos")
+
+    monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
+    monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
+    monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
+
+    await orchestrator._cleanup_for_rerun(1, "character_artist", mode="incremental")
+
+    assert cleared == ["chars", "shots", "videos"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_incremental_video_generator(monkeypatch):
+    """Incremental mode: video_generator only clears shot videos."""
+    cleared = []
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    async def clear_videos(pid): cleared.append("videos")
+
+    monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
+
+    await orchestrator._cleanup_for_rerun(1, "video_generator", mode="incremental")
+
+    assert cleared == ["videos"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_incremental_video_merger(monkeypatch):
+    """Incremental mode: video_merger does nothing (pass branch)."""
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    await orchestrator._cleanup_for_rerun(1, "video_merger", mode="incremental")
+    assert session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_incremental_unknown_raises():
+    """Incremental mode: unknown agent raises ValueError."""
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    with pytest.raises(ValueError, match="Unsupported start_agent"):
+        await orchestrator._cleanup_for_rerun(1, "unknown", mode="incremental")
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_full_character_artist(monkeypatch):
+    """Full mode: character_artist clears character+shot images/videos."""
+    cleared = []
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    async def clear_chars(pid): cleared.append("chars")
+    async def clear_shots(pid): cleared.append("shots")
+    async def clear_videos(pid): cleared.append("videos")
+
+    monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
+    monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
+    monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
+
+    await orchestrator._cleanup_for_rerun(1, "character_artist", mode="full")
+
+    assert cleared == ["chars", "shots", "videos"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_full_video_merger(monkeypatch):
+    """Full mode: video_merger does nothing (pass branch)."""
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    await orchestrator._cleanup_for_rerun(1, "video_merger", mode="full")
+    assert session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
+    """Auto mode: _wait_for_confirm is never called; interrupts are auto-resumed."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=ws,
+        session=session,
+    )
+
+    confirm_called = False
+    async def fake_wait_for_confirm(*args):
+        nonlocal confirm_called
+        confirm_called = True
+        return "ok"
+
+    monkeypatch.setattr(orchestrator, "_wait_for_confirm", fake_wait_for_confirm)
+
+    compiled_graph = FakeCompiledGraph(
+        [
+            {"__interrupt__": [SimpleNamespace(value={"gate": "director"})]},
+            {},
+        ]
+    )
+
+    result = await orchestrator._invoke_phase2_graph(
+        project=project,
+        run=run,
+        ctx=SimpleNamespace(project=project),
+        compiled_graph=compiled_graph,
+        graph_config={"configurable": {"thread_id": "t1"}},
+        runtime_context=SimpleNamespace(),
+        initial_payload={"x": 1},
+        auto_mode=True,
+    )
+
+    assert not confirm_called
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_invoke_phase2_graph_invalid_gate_raises(monkeypatch):
+    """Invalid gate name in interrupt value raises RuntimeError."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    compiled_graph = FakeCompiledGraph(
+        [
+            {"__interrupt__": [SimpleNamespace(value={"gate": ""})]},
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="did not include a valid gate name"):
+        await orchestrator._invoke_phase2_graph(
+            project=project,
+            run=run,
+            ctx=SimpleNamespace(project=project),
+            compiled_graph=compiled_graph,
+            graph_config={"configurable": {"thread_id": "t1"}},
+            runtime_context=SimpleNamespace(),
+            initial_payload={"x": 1},
+            auto_mode=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_invoke_phase2_graph_no_gate_key_raises(monkeypatch):
+    """Interrupt value without 'gate' key raises RuntimeError."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    compiled_graph = FakeCompiledGraph(
+        [
+            {"__interrupt__": [SimpleNamespace(value={})]},
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="did not include a valid gate name"):
+        await orchestrator._invoke_phase2_graph(
+            project=project,
+            run=run,
+            ctx=SimpleNamespace(project=project),
+            compiled_graph=compiled_graph,
+            graph_config={"configurable": {"thread_id": "t1"}},
+            runtime_context=SimpleNamespace(),
+            initial_payload={"x": 1},
+            auto_mode=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_invoke_phase2_graph_non_dict_result_breaks(monkeypatch):
+    """Non-dict result from ainvoke causes immediate break."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    compiled_graph = FakeCompiledGraph(["not-a-dict"])
+
+    result = await orchestrator._invoke_phase2_graph(
+        project=project,
+        run=run,
+        ctx=SimpleNamespace(project=project),
+        compiled_graph=compiled_graph,
+        graph_config={"configurable": {"thread_id": "t1"}},
+        runtime_context=SimpleNamespace(),
+        initial_payload={"x": 1},
+        auto_mode=False,
+    )
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_run_phase2_graph_unsupported_agent_raises():
+    """_run_phase2_graph raises ValueError for agent not in GRAPH_STAGE_FOR_AGENT."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+    ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None)
+
+    with pytest.raises(ValueError, match="Unsupported agent"):
+        await orchestrator._run_phase2_graph(
+            project=project, run=run, request=SimpleNamespace(notes=""),
+            ctx=ctx, agent_name="unknown_agent", auto_mode=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
+    """_run_phase2_graph: review agent sets ctx.user_feedback from request.notes."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+    ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None)
+
+    async def fake_invoke(**kwargs):
+        return False
+
+    monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
+    monkeypatch.setattr("app.agents.orchestrator.build_phase2_graph", lambda: SimpleNamespace(compile=lambda checkpointer=None: FakeCompiledGraph([{}])))
+    monkeypatch.setattr(orchestrator, "_invoke_phase2_graph", fake_invoke)
+
+    await orchestrator._run_phase2_graph(
+        project=project, run=run, request=SimpleNamespace(notes="user feedback text"),
+        ctx=ctx, agent_name="review", auto_mode=False,
+    )
+
+    assert ctx.user_feedback == "user feedback text"
+
+
+@pytest.mark.asyncio
+async def test_resume_from_recovery_missing_project_returns():
+    """resume_from_recovery returns early when project or run not found."""
+    session = FakeSession(project=None, run=None)
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    await orchestrator.resume_from_recovery(project_id=1, run_id=2)
+    assert session.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_wait_for_confirm_timeout(monkeypatch):
+    """_wait_for_confirm raises RuntimeError on timeout."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run)
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=ws,
+        session=session,
+    )
+
+    async def fake_recovery(**kwargs):
+        return SimpleNamespace(model_dump=lambda mode=None: {}, preserved_stages=[])
+
+    async def noop(*args, **kwargs):
+        pass
+
+    async def fake_wait_confirm(run_id, timeout=1800):
+        return False
+
+    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
+    monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop)
+    monkeypatch.setattr("app.agents.orchestrator.store_awaiting_payload", noop)
+    monkeypatch.setattr("app.agents.orchestrator.wait_for_confirm_redis", fake_wait_confirm)
+    monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop)
+
+    with pytest.raises(RuntimeError, match="等待确认超时"):
+        await orchestrator._wait_for_confirm(1, run, "director")
+
+
+@pytest.mark.asyncio
+async def test_wait_for_confirm_with_user_feedback(monkeypatch):
+    """_wait_for_confirm returns user feedback from AgentMessage when present."""
+    from app.models.agent_run import AgentMessage
+
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    msg = AgentMessage(id=10, run_id=2, role="user", content="  user feedback  ", agent="user")
+    session = FakeSession(project=project, run=run, scalars_result=[msg])
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=ws,
+        session=session,
+    )
+
+    async def fake_recovery(**kwargs):
+        return SimpleNamespace(model_dump=lambda mode=None: {}, preserved_stages=[])
+
+    async def noop(*args, **kwargs):
+        pass
+
+    async def fake_wait_confirm(run_id, timeout=1800):
+        return True
+
+    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
+    monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop)
+    monkeypatch.setattr("app.agents.orchestrator.store_awaiting_payload", noop)
+    monkeypatch.setattr("app.agents.orchestrator.wait_for_confirm_redis", fake_wait_confirm)
+    monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop)
+
+    result = await orchestrator._wait_for_confirm(1, run, "director")
+
+    assert result == "user feedback"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_confirm_no_feedback_returns_none(monkeypatch):
+    """_wait_for_confirm returns None when no new user feedback found."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2)
+    session = FakeSession(project=project, run=run, scalars_result=[])
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=ws,
+        session=session,
+    )
+
+    async def fake_recovery(**kwargs):
+        return SimpleNamespace(model_dump=lambda mode=None: {}, preserved_stages=[])
+
+    async def noop(*args, **kwargs):
+        pass
+
+    async def fake_wait_confirm(run_id, timeout=1800):
+        return True
+
+    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
+    monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop)
+    monkeypatch.setattr("app.agents.orchestrator.store_awaiting_payload", noop)
+    monkeypatch.setattr("app.agents.orchestrator.wait_for_confirm_redis", fake_wait_confirm)
+    monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop)
+
+    result = await orchestrator._wait_for_confirm(1, run, "director")
+
+    assert result is None
