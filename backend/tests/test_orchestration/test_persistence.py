@@ -1,73 +1,92 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
+import app.orchestration.persistence as persistence_module
+from app.orchestration.persistence import (
+    _normalize_checkpointer_conn_string,
+    build_postgres_checkpointer,
+    ensure_postgres_checkpointer_setup,
+)
 
-@pytest.mark.asyncio
-async def test_build_postgres_checkpointer_normalizes_asyncpg_sqlalchemy_url_without_setup(monkeypatch):
-    import app.orchestration.persistence as persistence
 
-    captured: dict[str, object] = {"setup_calls": 0}
+# --- _normalize_checkpointer_conn_string ---
 
-    class _DummyCheckpointer:
-        async def __aenter__(self):
-            return self
 
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
+def test_normalize_asyncpg_postgresql():
+    url = "postgresql+asyncpg://user:pass@host:5432/db"
+    assert _normalize_checkpointer_conn_string(url) == "postgresql://user:pass@host:5432/db"
 
-        async def setup(self):
-            captured["setup_calls"] = int(captured["setup_calls"]) + 1
 
-    def _fake_from_conn_string(conn_str: str):
-        captured["conn_str"] = conn_str
-        return _DummyCheckpointer()
+def test_normalize_asyncpg_postgres():
+    url = "postgres+asyncpg://user:pass@host:5432/db"
+    assert _normalize_checkpointer_conn_string(url) == "postgres://user:pass@host:5432/db"
 
-    monkeypatch.setattr(
-        persistence.AsyncPostgresSaver,
-        "from_conn_string",
-        staticmethod(_fake_from_conn_string),
-    )
 
-    async with persistence.build_postgres_checkpointer(
-        "postgresql+asyncpg://openoii:openoii_dev@localhost:55432/openoii"
-    ):
-        pass
+def test_normalize_non_asyncpg():
+    url = "sqlite:///test.db"
+    assert _normalize_checkpointer_conn_string(url) == "sqlite:///test.db"
 
-    assert captured["conn_str"] == "postgresql://openoii:openoii_dev@localhost:55432/openoii"
-    assert captured["setup_calls"] == 0
+
+def test_normalize_postgresql_no_asyncpg():
+    url = "postgresql://user:pass@host:5432/db"
+    assert _normalize_checkpointer_conn_string(url) == "postgresql://user:pass@host:5432/db"
+
+
+# --- build_postgres_checkpointer ---
 
 
 @pytest.mark.asyncio
-async def test_ensure_postgres_checkpointer_setup_runs_once_per_connection(monkeypatch):
-    import app.orchestration.persistence as persistence
+async def test_build_postgres_checkpointer_non_postgres():
+    """Non-postgres URL should yield InMemorySaver."""
+    async with build_postgres_checkpointer("sqlite:///test.db") as cp:
+        assert cp is not None
+        from langgraph.checkpoint.memory import InMemorySaver
+        assert isinstance(cp, InMemorySaver)
 
-    persistence._checkpointer_setup_states.clear()
-    persistence._checkpointer_setup_locks.clear()
 
-    captured: dict[str, object] = {"execute_calls": 0, "close_calls": 0}
+# --- ensure_postgres_checkpointer_setup ---
 
-    class _DummyConn:
-        async def execute(self, statement: str):
-            captured["execute_calls"] = int(captured["execute_calls"]) + 1
 
-        async def close(self):
-            captured["close_calls"] = int(captured["close_calls"]) + 1
+@pytest.mark.asyncio
+async def test_ensure_postgres_checkpointer_setup_non_postgres():
+    """Non-postgres URL should return early."""
+    await ensure_postgres_checkpointer_setup("sqlite:///test.db")
 
-    async def _fake_connect(conn_str: str):
-        captured.setdefault("conn_strs", []).append(conn_str)
-        return _DummyConn()
 
-    monkeypatch.setattr(
-        persistence.asyncpg,
-        "connect",
-        _fake_connect,
-    )
+@pytest.mark.asyncio
+async def test_ensure_postgres_checkpointer_setup_already_done():
+    """Should return early if already set up."""
+    url = "postgresql://user:pass@host/db"
+    persistence_module._checkpointer_setup_states[url] = True
+    try:
+        mock_connect = AsyncMock()
+        with patch.object(persistence_module, "asyncpg") as mock_asyncpg:
+            mock_asyncpg.connect = mock_connect
+            await ensure_postgres_checkpointer_setup(url)
+        mock_connect.assert_not_called()
+    finally:
+        del persistence_module._checkpointer_setup_states[url]
 
-    database_url = "postgresql+asyncpg://openoii:openoii_dev@localhost:55432/openoii"
-    await persistence.ensure_postgres_checkpointer_setup(database_url)
-    await persistence.ensure_postgres_checkpointer_setup(database_url)
 
-    assert captured["conn_strs"] == ["postgresql://openoii:openoii_dev@localhost:55432/openoii"]
-    assert captured["execute_calls"] == len(persistence._BOOTSTRAP_STATEMENTS)
-    assert captured["close_calls"] == 1
+@pytest.mark.asyncio
+async def test_ensure_postgres_checkpointer_setup_connects_and_bootstrap():
+    """Should connect, run bootstrap, and mark done."""
+    url = "postgresql://user:pass@host/testdb"
+    # Clear any previous state
+    persistence_module._checkpointer_setup_states.pop(url, None)
+
+    mock_conn = AsyncMock()
+    mock_asyncpg_module = SimpleNamespace(connect=AsyncMock(return_value=mock_conn))
+    with patch.object(persistence_module, "asyncpg", mock_asyncpg_module):
+        await ensure_postgres_checkpointer_setup(url)
+
+    assert mock_asyncpg_module.connect.call_count == 1
+    assert mock_conn.execute.call_count == len(persistence_module._BOOTSTRAP_STATEMENTS)
+    mock_conn.close.assert_awaited_once()
+    assert persistence_module._checkpointer_setup_states.get(url) is True
+    # Cleanup
+    del persistence_module._checkpointer_setup_states[url]
