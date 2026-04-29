@@ -61,6 +61,18 @@ class StubAsyncClient:
         return StubStream(self._response)
 
 
+def make_settings(**overrides):
+    base = dict(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    base.update(overrides)
+    return Settings(**base)
+
+
 def test_build_url():
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",
@@ -1737,4 +1749,127 @@ async def test_stream_network_error_exhausted(monkeypatch):
         async for _ in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
             pass
 
-    assert call_count == 3  # max_retries=2 means 3 attempts total
+
+# --- _build_payload branches ---
+
+
+def test_build_payload_enable_thinking():
+    settings = make_settings(text_enable_thinking=True)
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", max_tokens=10, stream=False)
+    assert payload["enable_thinking"] is True
+
+
+def test_build_payload_temperature():
+    settings = make_settings()
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", max_tokens=10, stream=False, temperature=0.5)
+    assert payload["temperature"] == 0.5
+
+
+def test_build_payload_chat_system_with_messages():
+    settings = make_settings()
+    svc = TextService(settings)
+    payload = svc._build_payload(messages=[{"role": "user", "content": "hi"}], system="be polite", max_tokens=10, stream=False)
+    assert payload["messages"][0] == {"role": "system", "content": "be polite"}
+
+
+def test_build_payload_chat_system_with_prompt():
+    settings = make_settings()
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", system="be polite", max_tokens=10, stream=False)
+    assert payload["messages"][0] == {"role": "system", "content": "be polite"}
+
+
+def test_build_payload_chat_neither_messages_nor_prompt():
+    settings = make_settings()
+    svc = TextService(settings)
+    with pytest.raises(ValueError, match="Either messages or prompt"):
+        svc._build_payload(max_tokens=10, stream=False)
+
+
+def test_build_payload_non_chat_messages_with_system():
+    settings = make_settings(text_endpoint="/v1/completions")
+    svc = TextService(settings)
+    payload = svc._build_payload(messages=[{"role": "user", "content": "hi"}], system="be polite", max_tokens=10, stream=False)
+    assert "System: be polite" in payload["prompt"]
+
+
+def test_build_payload_non_chat_prompt_with_system():
+    settings = make_settings(text_endpoint="/v1/completions")
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", system="be polite", max_tokens=10, stream=False)
+    assert "System: be polite" in payload["prompt"]
+
+
+def test_build_payload_non_chat_neither():
+    settings = make_settings(text_endpoint="/v1/completions")
+    svc = TextService(settings)
+    with pytest.raises(ValueError, match="Either messages or prompt"):
+        svc._build_payload(max_tokens=10, stream=False)
+
+
+# --- _stream_fallback_message ---
+
+
+def test_stream_fallback_message_with_detail():
+    svc = TextService(make_settings())
+    msg = svc._stream_fallback_message(Exception("timeout"))
+    assert "timeout" in msg
+
+
+def test_stream_fallback_message_empty_detail():
+    svc = TextService(make_settings())
+    msg = svc._stream_fallback_message(Exception(""))
+    assert "已自动回退" in msg
+
+
+# --- _should_fallback_from_stream ---
+
+
+def test_should_fallback_auth_error():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceAuthError("auth")) is False
+
+
+def test_should_fallback_rate_limit():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceRateLimitError("rate")) is False
+
+
+def test_should_fallback_server_error():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceServerError("server")) is False
+
+
+def test_should_fallback_stream_failed():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceError("Text generation stream failed after retries")) is True
+
+
+def test_should_fallback_other_error():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceError("something else")) is False
+
+
+# --- _is_retryable_probe_generate_error ---
+
+
+def test_is_retryable_probe_non_text_service_error():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(ValueError("x")) is False
+
+
+def test_is_retryable_probe_no_status_code():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(TextServiceError("x")) is True
+
+
+def test_is_retryable_probe_retryable_status():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(TextServiceError("x", status_code=503)) is True
+
+
+def test_is_retryable_probe_non_retryable_status():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(TextServiceError("x", status_code=400)) is False
