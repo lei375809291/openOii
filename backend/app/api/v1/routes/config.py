@@ -112,7 +112,6 @@ async def update_configs(
 @router.post("/test-connection", response_model=TestConnectionResponse)
 async def test_connection(
     payload: TestConnectionRequest,
-    _: None = AdminDep,
 ):
     """测试服务连接"""
     settings = get_settings()
