@@ -1144,3 +1144,142 @@ def test_extract_url_from_text_handles_http_url():
     service = ImageService(settings)
 
     assert service._extract_url_from_text("http://cdn.example.com/a.png") == "http://cdn.example.com/a.png"
+
+
+# --- download_and_save edge cases ---
+
+
+@pytest.mark.asyncio
+async def test_download_and_save_unexpected_content_type_warns(monkeypatch, tmp_path):
+    """Line 150: non-image content type triggers warning but still saves."""
+    import urllib.request
+
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    service = ImageService(settings)
+    save_path = tmp_path / "img.png"
+
+    class FakeResponse:
+        status = 200
+        headers = {"Content-Type": "text/html"}
+
+        def read(self):
+            return b"<html>not an image</html>"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout: FakeResponse())
+
+    await service.download_and_save("https://cdn.example.com/a", save_path)
+    assert save_path.exists()
+    assert save_path.read_bytes() == b"<html>not an image</html>"
+
+
+@pytest.mark.asyncio
+async def test_download_and_save_raises_on_url_error(monkeypatch, tmp_path):
+    """Lines 161-163: URLError raises RuntimeError."""
+    from urllib.error import URLError
+    import urllib.request
+
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    service = ImageService(settings)
+    save_path = tmp_path / "img.png"
+
+    def boom(url, timeout):
+        raise URLError("dns failure")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+
+    with pytest.raises(RuntimeError, match="dns failure"):
+        await service.download_and_save("https://cdn.example.com/a.png", save_path)
+
+
+@pytest.mark.asyncio
+async def test_download_and_save_raises_on_unexpected_error(monkeypatch, tmp_path):
+    """Lines 176-178: generic exception wraps in RuntimeError."""
+    import urllib.request
+
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    service = ImageService(settings)
+    save_path = tmp_path / "img.png"
+
+    def boom(url, timeout):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        await service.download_and_save("https://cdn.example.com/a.png", save_path)
+
+
+# --- generate returns raw response even when empty ---
+
+
+@pytest.mark.asyncio
+async def test_generate_returns_raw_response_even_when_empty(monkeypatch):
+    """generate() returns raw JSON from _post_json_with_retry without validation."""
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        image_base_url="https://img.example.com",
+        image_endpoint="/images/generations",
+        image_api_key="test",
+    )
+    service = ImageService(settings)
+
+    async def fake_post(url, payload):
+        return {"data": []}
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+
+    result = await service.generate(prompt="cat")
+    assert result == {"data": []}
+
+
+# --- _post_stream_with_retry non-retryable status ---
+
+
+@pytest.mark.asyncio
+async def test_post_stream_breaks_on_non_retryable_status(monkeypatch):
+    """Lines 322-326: non-retryable status code breaks immediately."""
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        image_base_url="https://img.example.com",
+        image_endpoint="/chat/completions",
+        image_api_key="test",
+    )
+    service = ImageService(settings, max_retries=3)
+
+    class FakeResponse:
+        status_code = 422
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("bad", request=None, response=self)
+
+        async def aiter_lines(self):
+            if False:
+                yield ""
+
+    class FakeStream:
+        async def __aenter__(self):
+            return FakeResponse()
+
+        async def __aexit__(self, *a):
+            return False
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, *a, **k):
+            return FakeStream()
+
+    monkeypatch.setattr("app.services.image.httpx.AsyncClient", lambda *a, **k: FakeClient())
+
+    with pytest.raises(RuntimeError, match="failed after retries"):
+        await service._post_stream_with_retry("https://example.com", {"stream": True})

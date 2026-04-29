@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 import pytest
@@ -389,3 +390,189 @@ async def test_delete_shot_clears_project_video_when_present(async_client, test_
     res = await async_client.delete(f"/api/v1/shots/{shot.id}")
 
     assert res.status_code == 204
+
+
+# --- _run_agent_plan tests ---
+
+
+class _FailingAgent:
+    name = "failing-agent"
+
+    async def run(self, ctx):
+        raise RuntimeError("shot agent boom")
+
+
+class _SlowAgent:
+    name = "slow-agent"
+
+    async def run(self, ctx):
+        ctx.project.status = "processing"
+        ctx.session.add(ctx.project)
+        await ctx.session.commit()
+        await asyncio.sleep(999)
+
+
+@pytest.mark.asyncio
+async def test_run_agent_plan_handles_exception(test_session, test_settings, monkeypatch):
+    """Line 214-224: Exception path sets run.status=failed and emits run_failed event."""
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+    run = AgentRun(
+        project_id=project.id,
+        status="running",
+        current_agent="failing-agent",
+        progress=0.0,
+        error=None,
+        resource_type="shot",
+        resource_id=shot.id,
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    ws = _CaptureWs()
+
+    @asynccontextmanager
+    async def fake_async_session_maker():
+        yield _SessionProxy(test_session)
+
+    monkeypatch.setattr(shots_routes, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(shots_routes.task_manager, "remove", lambda project_id: None)
+
+    await shots_routes._run_agent_plan(
+        project_id=project.id,
+        run_id=run.id,
+        agent_plan=[_FailingAgent()],
+        settings=test_settings,
+        ws=ws,
+        target_ids=None,
+    )
+
+    await test_session.refresh(run)
+    assert run.status == "failed"
+    assert "shot agent boom" in (run.error or "")
+    assert any(e[1]["type"] == "run_failed" for e in ws.events)
+
+
+@pytest.mark.asyncio
+async def test_run_agent_plan_cancelled(test_session, test_settings, monkeypatch):
+    """Line 204-212: CancelledError sets run.status=cancelled and emits run_cancelled event."""
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+    run = AgentRun(
+        project_id=project.id,
+        status="running",
+        current_agent="slow-agent",
+        progress=0.0,
+        error=None,
+        resource_type="shot",
+        resource_id=shot.id,
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    ws = _CaptureWs()
+
+    @asynccontextmanager
+    async def fake_async_session_maker():
+        yield _SessionProxy(test_session)
+
+    monkeypatch.setattr(shots_routes, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(shots_routes.task_manager, "remove", lambda project_id: None)
+
+    task = asyncio.create_task(
+        shots_routes._run_agent_plan(
+            project_id=project.id,
+            run_id=run.id,
+            agent_plan=[_SlowAgent()],
+            settings=test_settings,
+            ws=ws,
+            target_ids=None,
+        )
+    )
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+    await test_session.refresh(run)
+    assert run.status == "cancelled"
+    assert any(e[1]["type"] == "run_cancelled" for e in ws.events)
+
+
+# --- _validate_shot_approval_ready edge cases ---
+
+
+@pytest.mark.asyncio
+async def test_approve_shot_missing_duration(async_client, test_session):
+    """Line 83-84: _validate_shot_approval_ready raises 400 when duration is missing."""
+    project = await create_project(test_session)
+    character = await create_character(test_session, project_id=project.id, name="Cast")
+    shot = await create_shot(
+        test_session,
+        project_id=project.id,
+        order=1,
+        description="desc",
+        prompt="prompt",
+    )
+    shot.camera = "cam"
+    shot.motion_note = "note"
+    shot.image_prompt = "img prompt"
+    shot.duration = None
+    shot.character_ids = [character.id]
+    test_session.add(shot)
+    await test_session.commit()
+    await test_session.refresh(shot)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_validate_shot_character_ids_empty_list(async_client, test_session):
+    """Empty character_ids → validation passes but approval rejects missing chars."""
+    project = await create_project(test_session)
+    shot = await create_shot(
+        test_session,
+        project_id=project.id,
+        order=1,
+        description="desc",
+        prompt="prompt",
+    )
+    shot.camera = "cam"
+    shot.motion_note = "note"
+    shot.image_prompt = "img prompt"
+    shot.duration = 5
+    shot.character_ids = []
+    test_session.add(shot)
+    await test_session.commit()
+    await test_session.refresh(shot)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_validate_shot_unknown_character_ids(async_client, test_session):
+    """approve with character_ids that don't belong to project → 400."""
+    project = await create_project(test_session)
+    shot = await create_shot(
+        test_session,
+        project_id=project.id,
+        order=1,
+        description="desc",
+        prompt="prompt",
+    )
+    shot.camera = "cam"
+    shot.motion_note = "note"
+    shot.image_prompt = "img prompt"
+    shot.duration = 5
+    shot.character_ids = [99999]
+    test_session.add(shot)
+    await test_session.commit()
+    await test_session.refresh(shot)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+    assert res.status_code == 400
+    assert "Unknown character_ids" in res.json()["detail"]

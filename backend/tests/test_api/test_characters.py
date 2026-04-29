@@ -391,3 +391,141 @@ async def test_approve_character_missing_id(async_client, test_session):
     res = await async_client.post(f"/api/v1/characters/{character.id}/approve")
 
     assert res.status_code == 422
+
+
+class _FailingAgent:
+    name = "failing-agent"
+
+    async def run(self, ctx):
+        raise RuntimeError("agent boom")
+
+
+class _SlowAgent:
+    name = "slow-agent"
+
+    async def run(self, ctx):
+        ctx.project.status = "processing"
+        ctx.session.add(ctx.project)
+        await ctx.session.commit()
+        await asyncio.sleep(999)
+
+
+@pytest.mark.asyncio
+async def test_run_agent_plan_handles_exception(test_session, test_settings, monkeypatch):
+    """Line 143-154: Exception path sets run.status=failed and emits run_failed event."""
+    project = await create_project(test_session)
+    run = AgentRun(
+        project_id=project.id,
+        status="running",
+        current_agent="failing-agent",
+        progress=0.0,
+        error=None,
+        resource_type="character",
+        resource_id=1,
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    ws = _CaptureWs()
+
+    @asynccontextmanager
+    async def fake_async_session_maker():
+        yield _SessionProxy(test_session)
+
+    monkeypatch.setattr(characters_routes, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(characters_routes.task_manager, "remove", lambda project_id: None)
+
+    await characters_routes._run_agent_plan(
+        project_id=project.id,
+        run_id=run.id,
+        agent_plan=[_FailingAgent()],
+        settings=test_settings,
+        ws=ws,
+    )
+
+    await test_session.refresh(run)
+    assert run.status == "failed"
+    assert "agent boom" in (run.error or "")
+    assert any(e[1]["type"] == "run_failed" for e in ws.events)
+
+
+@pytest.mark.asyncio
+async def test_run_agent_plan_cancelled(test_session, test_settings, monkeypatch):
+    """Line 133-142: CancelledError sets run.status=cancelled and emits run_cancelled event."""
+    project = await create_project(test_session)
+    run = AgentRun(
+        project_id=project.id,
+        status="running",
+        current_agent="slow-agent",
+        progress=0.0,
+        error=None,
+        resource_type="character",
+        resource_id=1,
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    ws = _CaptureWs()
+
+    cancel_task = None
+
+    @asynccontextmanager
+    async def fake_async_session_maker():
+        nonlocal cancel_task
+        yield _SessionProxy(test_session)
+        # cancel the agent task after session exits
+        if cancel_task and not cancel_task.done():
+            cancel_task.cancel()
+
+    monkeypatch.setattr(characters_routes, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(characters_routes.task_manager, "remove", lambda project_id: None)
+
+    import app.api.v1.routes.characters as mod
+
+    original_create_task = asyncio.create_task
+
+    def _capture_create_task(coro):
+        nonlocal cancel_task
+        task = original_create_task(coro)
+        cancel_task = task
+        return task
+
+    monkeypatch.setattr(mod.asyncio, "create_task", _capture_create_task)
+
+    # Run in background; the task will cancel itself via fake_async_session_maker
+    # We just need _run_agent_plan to run; it calls _run_agent_plan's own task
+    # Simpler approach: run directly and cancel the asyncio task from outside
+    import contextlib
+
+    task = asyncio.create_task(
+        characters_routes._run_agent_plan(
+            project_id=project.id,
+            run_id=run.id,
+            agent_plan=[_SlowAgent()],
+            settings=test_settings,
+            ws=ws,
+        )
+    )
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+    await test_session.refresh(run)
+    assert run.status == "cancelled"
+    assert any(e[1]["type"] == "run_cancelled" for e in ws.events)
+
+
+@pytest.mark.asyncio
+async def test_approve_character_project_not_found(async_client, test_session):
+    """Line 231: approve character when project deleted → 404."""
+    project = await create_project(test_session)
+    character = await create_character(test_session, project_id=project.id, name="Hero")
+
+    await test_session.delete(project)
+    await test_session.commit()
+
+    res = await async_client.post(f"/api/v1/characters/{character.id}/approve")
+    assert res.status_code == 404
