@@ -120,6 +120,97 @@ Use `SettingsDep` (from `app.api.deps`) inside routes. Inside `get_settings()`-a
 
 ---
 
+## Coverage Configuration for Async Tests
+
+**Critical**: ASGITransport runs request handlers in an anyio thread pool where the coverage tracer doesn't follow by default. Without the concurrency config, coverage for route closure paths (`generation.py` `_task()`, background tasks) shows 0% even though tests pass.
+
+Add to `backend/pyproject.toml`:
+
+```toml
+[tool.coverage.run]
+concurrency = ["thread", "greenlet"]
+```
+
+This is required for any test that exercises `httpx.AsyncClient(ASGITransport(app=...))` request paths.
+
+---
+
+## Testing Gotchas
+
+### 1. WebSocket stub must throw `WebSocketDisconnect`, not `RuntimeError`
+
+When writing test stubs for WebSocket `receive_json()`, the stub must throw `WebSocketDisconnect` when messages are exhausted — **not** `RuntimeError` or `StopAsyncIteration`.
+
+**Why**: `app/main.py` WebSocket handler has `except Exception` as a catch-all that re-enters the `while True` loop. Only `WebSocketDisconnect` triggers the clean `break` path. A `RuntimeError` stub causes an infinite loop that consumes 7GB+ memory.
+
+```python
+# Wrong — causes infinite loop
+async def fake_receive_json():
+    if not messages:
+        raise RuntimeError("no more messages")
+
+# Correct — clean exit
+from starlette.websockets import WebSocketDisconnect
+async def fake_receive_json():
+    if not messages:
+        raise WebSocketDisconnect(code=1000)
+```
+
+### 2. `asyncio.sleep` stubs must return coroutines, not `None`
+
+When monkeypatching `asyncio.sleep`, lambda stubs return `None` which is not awaitable:
+
+```python
+# Wrong — TypeError: object NoneType can't be used in 'await' expression
+monkeypatch.setattr(asyncio, "sleep", lambda _: None)
+
+# Correct — return an awaitable coroutine
+async def immediate_sleep(_):
+    pass
+monkeypatch.setattr(asyncio, "sleep", immediate_sleep)
+```
+
+### 3. Monkeypatch target must be the import location, not the source
+
+When patching functions called by the code under test, patch where they're **imported**, not where they're defined:
+
+```python
+# Wrong — patching the source module
+monkeypatch.setattr("app.services.llm.probe_text_provider", fake_probe)
+
+# Correct — patching where orchestrator.py actually imports it
+monkeypatch.setattr("app.agents.orchestrator.probe_text_provider", fake_probe)
+```
+
+### 4. `AgentMessage` lives in `app.models.agent_run`, not `app.models.message`
+
+The `AgentMessage` SQLModel is co-located with `AgentRun` in `app/models/agent_run.py`. Don't import from `app.models.message` — that module doesn't exist.
+
+```python
+# Wrong
+from app.models.message import AgentMessage
+
+# Correct
+from app.models.agent_run import AgentMessage
+```
+
+### 5. `FakeSession` with multiple query results
+
+When a test needs `session.execute()` to return different results for different queries, use a `scalars_result` parameter:
+
+```python
+class FakeSession:
+    def __init__(self, ..., scalars_result=None):
+        self.scalars_result = scalars_result
+
+    async def execute(self, statement):
+        return FakeResult(rows=self.scalars_result or self.rows)
+```
+
+This is needed for orchestrator tests where `_wait_for_confirm` queries `AgentMessage` after the main `Project`/`AgentRun` lookups.
+
+---
+
 ## Refactoring Discipline
 
 Bug fixes and feature work should be **surgical**:
