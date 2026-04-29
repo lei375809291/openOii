@@ -32,3 +32,22 @@ async def test_onboarding_updates_project_and_messages(test_session, test_settin
     messages = res.scalars().all()
     assert len(messages) >= 2
     assert any(event[1]["type"] == "project_updated" for event in ctx.ws.events)
+
+
+@pytest.mark.asyncio
+async def test_onboarding_skips_empty_update_fields(test_session, test_settings):
+    payload = {
+        "story_breakdown": {},
+        "key_elements": {},
+        "style_recommendation": {},
+        "project_update": {"title": "   ", "story": None, "style": ""},
+    }
+    llm = FakeLLM(json.dumps(payload))
+    ctx = await make_context(test_session, test_settings, llm=llm)
+
+    agent = OnboardingAgent()
+    await agent.run(ctx)
+
+    await test_session.refresh(ctx.project)
+    assert ctx.project.status == "planning"
+    assert ctx.project.title != "   "

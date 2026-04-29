@@ -24,3 +24,4 @@ backend/.coverage
 backend/coverage.json
 .opencode
 .planning/
+backend/.coverage

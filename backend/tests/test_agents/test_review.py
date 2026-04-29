@@ -38,3 +38,35 @@ async def test_review_agent_routing_with_targets(test_session, test_settings):
     assert result["mode"] == "incremental"
     assert result["target_ids"].character_ids == [1]
     assert result["target_ids"].shot_ids == [2]
+
+
+@pytest.mark.asyncio
+async def test_review_agent_fallbacks_to_scriptwriter_when_feedback_empty(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    ctx = await make_context(test_session, test_settings, project=project, run=run, llm=FakeLLM("{}"))
+    ctx.user_feedback = "   "
+
+    agent = ReviewAgent()
+    result = await agent.run(ctx)
+
+    assert result["start_agent"] == "scriptwriter"
+    assert result["reason"] == "未提供具体反馈"
+
+
+@pytest.mark.asyncio
+async def test_review_agent_retry_merge_forces_video_merger(monkeypatch, test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    payload = {
+        "analysis": {"feedback_type": "general", "summary": "Retry"},
+        "routing": {"start_agent": "scriptwriter", "mode": "full", "reason": "Need merge"},
+    }
+    ctx = await make_context(test_session, test_settings, project=project, run=run, llm=FakeLLM(json.dumps(payload)))
+    ctx.user_feedback = "retry merge"
+
+    agent = ReviewAgent()
+    result = await agent.run(ctx)
+
+    assert result["start_agent"] == "video_merger"
+    assert result["mode"] == "incremental"

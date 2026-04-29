@@ -8,7 +8,7 @@ import pytest
 from app.agents.storyboard_artist import StoryboardArtistAgent
 from app.agents.video_generator import VideoGeneratorAgent
 from app.orchestration.nodes import clip_approval_node, storyboard_approval_node
-from app.services.approval_gate import can_enter_clip_generation
+from app.services.approval_gate import can_enter_clip_generation, can_enter_final_merge
 from app.services.shot_binding import resolve_shot_bound_approved_characters
 from tests.factories import create_character, create_project, create_run, create_shot
 
@@ -77,6 +77,43 @@ async def test_clip_generation_stays_blocked_until_every_storyboard_shot_is_appr
 
 
 @pytest.mark.asyncio
+async def test_clip_generation_returns_false_when_run_has_no_id(test_session):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    run.id = None
+
+    assert await can_enter_clip_generation(test_session, run) is False
+
+
+@pytest.mark.asyncio
+async def test_clip_generation_deduplicates_target_ids(test_session):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+
+    first = await create_shot(test_session, project_id=project.id, order=1)
+    second = await create_shot(test_session, project_id=project.id, order=2)
+    first.freeze_approval()
+    second.freeze_approval()
+    test_session.add(first)
+    test_session.add(second)
+    await test_session.commit()
+
+    assert await can_enter_clip_generation(test_session, run, target_ids=SimpleNamespace(shot_ids=[first.id, first.id, second.id])) is True
+
+
+@pytest.mark.asyncio
+async def test_clip_generation_returns_false_when_target_ids_missing_shots(test_session):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+    shot.freeze_approval()
+    test_session.add(shot)
+    await test_session.commit()
+
+    assert await can_enter_clip_generation(test_session, run, target_ids=SimpleNamespace(shot_ids=[shot.id, 999999])) is False
+
+
+@pytest.mark.asyncio
 async def test_clip_generation_is_scoped_to_the_current_shot_run(test_session):
     project = await create_project(test_session)
     assert project.id is not None
@@ -100,6 +137,19 @@ async def test_clip_generation_is_scoped_to_the_current_shot_run(test_session):
     await test_session.commit()
 
     assert await can_enter_clip_generation(test_session, run) is True
+
+
+@pytest.mark.asyncio
+async def test_final_merge_requires_no_blocking_clips(test_session):
+    project = await create_project(test_session)
+    assert project.id is not None
+    assert await can_enter_final_merge(test_session, project) is True
+
+    blocking = await create_shot(test_session, project_id=project.id, order=1, video_url=None)
+    test_session.add(blocking)
+    await test_session.commit()
+
+    assert await can_enter_final_merge(test_session, project) is False
 
 
 @pytest.mark.asyncio

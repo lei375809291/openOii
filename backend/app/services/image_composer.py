@@ -190,7 +190,7 @@ class ImageComposer:
         # 目标高度：使用与 I2V 相同的角色高度策略
         target_height = int(self.max_height * 0.3)
         if target_height <= 0:
-            target_height = min(self.max_height, 256)
+            target_height = max(1, min(self.max_height, 256))
 
         # 等高缩放
         resized: list[Image.Image] = []

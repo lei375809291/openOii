@@ -47,6 +47,79 @@ async def test_video_merger_sets_project_video(test_session, test_settings):
 
 
 @pytest.mark.asyncio
+async def test_video_merger_short_circuits_when_project_already_has_video(test_session, test_settings):
+    project = await create_project(test_session, status="ready")
+    run = await create_run(test_session, project_id=project.id)
+    project.video_url = "/static/videos/existing.mp4"
+    test_session.add(project)
+    await test_session.commit()
+
+    video = TrackingVideoService(merged_url="/static/videos/new.mp4")
+    ctx = await make_context(
+        test_session,
+        test_settings,
+        project=project,
+        run=run,
+        llm=FakeLLM("{}"),
+        video=video,
+    )
+
+    agent = VideoMergerAgent()
+    await agent.run(ctx)
+
+    assert video.merge_calls == []
+    assert any(event[1]["type"] == "run_message" for event in ctx.ws.events)
+
+
+@pytest.mark.asyncio
+async def test_video_merger_reports_when_no_shots_exist(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+
+    video = TrackingVideoService(merged_url="/static/videos/new.mp4")
+    ctx = await make_context(
+        test_session,
+        test_settings,
+        project=project,
+        run=run,
+        llm=FakeLLM("{}"),
+        video=video,
+    )
+
+    agent = VideoMergerAgent()
+    await agent.run(ctx)
+
+    assert video.merge_calls == []
+    assert any(event[1]["type"] == "run_message" for event in ctx.ws.events)
+
+
+@pytest.mark.asyncio
+async def test_video_merger_reports_merge_failure(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    await create_shot(test_session, project_id=project.id, video_url="http://video.test/1.mp4")
+
+    class BrokenVideoService(TrackingVideoService):
+        async def merge_urls(self, video_urls):
+            raise RuntimeError("boom")
+
+    video = BrokenVideoService(merged_url="/static/videos/new.mp4")
+    ctx = await make_context(
+        test_session,
+        test_settings,
+        project=project,
+        run=run,
+        llm=FakeLLM("{}"),
+        video=video,
+    )
+
+    agent = VideoMergerAgent()
+    await agent.run(ctx)
+
+    assert any(event[1]["type"] == "run_message" for event in ctx.ws.events)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("clip_state", ["missing", "generating", "failed"])
 async def test_video_merger_blocks_incomplete_current_clips(
     test_session, test_settings, clip_state

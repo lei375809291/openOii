@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 
 import pytest
 
 from app.api.v1.routes import shots as shots_routes
+from app.models.agent_run import AgentRun
 
-from tests.factories import create_project, create_shot
+from tests.factories import create_character, create_project, create_shot
 
 
 def _immediate_task(coro):
@@ -15,6 +17,48 @@ def _immediate_task(coro):
     fut = loop.create_future()
     fut.set_result(None)
     return fut
+
+
+class _CaptureWs:
+    def __init__(self) -> None:
+        self.events: list[tuple[int, dict]] = []
+
+    async def send_event(self, project_id: int, event: dict):
+        self.events.append((project_id, event))
+
+
+@asynccontextmanager
+async def _session_cm(session):
+    yield session
+
+
+class _FakeAgent:
+    name = "fake-agent"
+
+    async def run(self, ctx):
+        ctx.project.status = "processing"
+        ctx.session.add(ctx.project)
+        await ctx.session.commit()
+
+
+class _SessionProxy:
+    def __init__(self, session, *, get_result=None):
+        self._session = session
+        self._get_result = get_result
+
+    async def get(self, *args, **kwargs):
+        if self._get_result is not None:
+            return self._get_result
+        return await self._session.get(*args, **kwargs)
+
+    def add(self, obj):
+        return self._session.add(obj)
+
+    async def commit(self):
+        return await self._session.commit()
+
+    async def refresh(self, obj):
+        return await self._session.refresh(obj)
 
 
 @pytest.mark.asyncio
@@ -104,3 +148,244 @@ async def test_delete_shot(async_client, test_session):
     list_res = await async_client.get(f"/api/v1/projects/{project.id}/shots")
     assert list_res.status_code == 200
     assert list_res.json() == []
+
+
+
+
+@pytest.mark.asyncio
+async def test_approve_shot(async_client, test_session):
+    project = await create_project(test_session)
+    character = await create_character(test_session, project_id=project.id, name="Cast")
+    shot = await create_shot(
+        test_session,
+        project_id=project.id,
+        order=1,
+        description="desc",
+        prompt="prompt",
+        image_url="http://test.com/shot.png",
+        duration=5,
+    )
+    shot.camera = "cam"
+    shot.motion_note = "note"
+    shot.image_prompt = "image prompt"
+    shot.character_ids = [character.id]
+    test_session.add(shot)
+    await test_session.commit()
+    await test_session.refresh(shot)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["approval_state"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_approve_shot_not_found(async_client):
+    res = await async_client.post("/api/v1/shots/99999/approve")
+
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_approve_shot_rejects_missing_fields(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1, description="desc")
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_regenerate_shot_rejects_duplicate_run_with_existing_run(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    # create an in-flight run for same shot
+    from tests.factories import create_run
+
+    run = await create_run(test_session, project_id=project.id, status="running")
+    run.resource_type = "shot"
+    run.resource_id = shot.id
+    test_session.add(run)
+    await test_session.commit()
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate", json={"type": "image"})
+
+    assert res.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_approve_shot_rejects_missing_character(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1, description="desc")
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_regenerate_shot_happy_path(async_client, test_session, monkeypatch):
+    monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
+
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate", json={"type": "image"})
+
+    assert res.status_code == 201
+    body = res.json()
+    assert body["project_id"] == project.id
+    assert body["resource_type"] == "shot"
+
+
+@pytest.mark.asyncio
+async def test_regenerate_shot_defaults_to_video(async_client, test_session, monkeypatch):
+    monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
+
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate")
+
+    assert res.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_regenerate_shot_rejects_duplicate_run(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    from tests.factories import create_run
+
+    run = await create_run(test_session, project_id=project.id, status="running")
+    run.resource_type = "shot"
+    run.resource_id = shot.id
+    test_session.add(run)
+    await test_session.commit()
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate", json={"type": "image"})
+
+    assert res.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_regenerate_shot_project_not_found(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    await test_session.delete(project)
+    await test_session.commit()
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate", json={"type": "image"})
+
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_regenerate_shot_rejects_invalid_type(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate", json={"type": "bad"})
+
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_run_agent_plan_emits_progress_and_completes(test_session, test_settings, monkeypatch):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+    run = AgentRun(
+        project_id=project.id,
+        status="running",
+        current_agent="fake-agent",
+        progress=0.0,
+        error=None,
+        resource_type="shot",
+        resource_id=shot.id,
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    ws = _CaptureWs()
+
+    @asynccontextmanager
+    async def fake_async_session_maker():
+        yield _SessionProxy(test_session)
+
+    monkeypatch.setattr(shots_routes, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(shots_routes.task_manager, "remove", lambda project_id: None)
+
+    await shots_routes._run_agent_plan(
+        project_id=project.id,
+        run_id=run.id,
+        agent_plan=[_FakeAgent()],
+        settings=test_settings,
+        ws=ws,
+        target_ids=None,
+    )
+
+    await test_session.refresh(run)
+    await test_session.refresh(project)
+
+    assert run.status == "succeeded"
+    assert run.progress == 1.0
+    assert project.status == "processing"
+    assert any(event[1]["type"] == "run_completed" for event in ws.events)
+
+
+@pytest.mark.asyncio
+async def test_approve_shot_not_found_after_delete(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    await test_session.delete(shot)
+    await test_session.commit()
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_shot_not_found_after_delete(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+
+    await test_session.delete(shot)
+    await test_session.commit()
+
+    res = await async_client.patch(f"/api/v1/shots/{shot.id}", json={"description": "x"})
+
+    assert res.status_code == 404
+
+
+
+
+@pytest.mark.asyncio
+async def test_approve_shot_rejects_missing_id(async_client, test_session):
+    project = await create_project(test_session)
+    shot = await create_shot(test_session, project_id=project.id, order=1)
+    shot.id = None
+
+    res = await async_client.post(f"/api/v1/shots/{shot.id}/approve")
+
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_delete_shot_clears_project_video_when_present(async_client, test_session):
+    project = await create_project(test_session)
+    project.video_url = "http://test.com/project.mp4"
+    test_session.add(project)
+    await test_session.commit()
+
+    shot = await create_shot(test_session, project_id=project.id, description="Delete shot")
+
+    res = await async_client.delete(f"/api/v1/shots/{shot.id}")
+
+    assert res.status_code == 204
