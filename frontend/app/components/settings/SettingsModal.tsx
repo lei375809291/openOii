@@ -686,7 +686,7 @@ function getConfigDescription(key: string): string {
     TEXT_PROVIDER: "文本生成服务提供商：anthropic（Claude）/ openai（OpenAI 兼容）",
     TEXT_BASE_URL: "文本生成服务地址（OpenAI 兼容接口）",
     TEXT_API_KEY: "文本生成 API 密钥（OpenAI 兼容）",
-    TEXT_MODEL: "文本生成模型名称（OpenAI 兼容），如 deepseek-chat",
+    TEXT_MODEL: "文本生成模型名称（OpenAI 兼容），如 deepseek-v4-flash",
     TEXT_ENDPOINT: "文本生成 API 端点路径（OpenAI 兼容）",
 
     // 图像服务

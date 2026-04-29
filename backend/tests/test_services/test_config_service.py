@@ -123,7 +123,7 @@ async def test_config_service_list_effective_and_get_raw_value(test_session, mon
 @pytest.mark.asyncio
 async def test_config_service_build_and_apply_overrides(test_session, monkeypatch):
     await create_config_item(test_session, key="TEXT_API_KEY", value="db-key", is_sensitive=True)
-    await create_config_item(test_session, key="TEXT_MODEL", value="deepseek-chat")
+    await create_config_item(test_session, key="TEXT_MODEL", value="deepseek-v4-flash")
 
     captured = {}
 
@@ -135,11 +135,11 @@ async def test_config_service_build_and_apply_overrides(test_session, monkeypatc
     service = ConfigService(test_session)
     overrides = await service.build_settings_overrides()
     assert overrides["text_api_key"] == "db-key"
-    assert overrides["text_model"] == "deepseek-chat"
+    assert overrides["text_model"] == "deepseek-v4-flash"
 
     await service.apply_settings_overrides()
     assert captured["text_api_key"] == "db-key"
-    assert captured["text_model"] == "deepseek-chat"
+    assert captured["text_model"] == "deepseek-v4-flash"
 
 
 @pytest.mark.asyncio

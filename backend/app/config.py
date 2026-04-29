@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     )
     text_api_key: str | None = None
     text_model: str = Field(
-        default="deepseek-chat",
+        default="deepseek-v4-flash",
         description="文本生成模型名称（OpenAI 兼容）",
     )
     text_endpoint: str = Field(
