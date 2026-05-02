@@ -147,7 +147,12 @@ async def generate_project(
                 orchestrator = GenerationOrchestrator(
                     settings=settings, ws=ws, session=task_session
                 )
-                await orchestrator.run(project_id=project_id, run_id=run_id, request=payload)
+                await orchestrator.run(
+                    project_id=project_id,
+                    run_id=run_id,
+                    request=payload,
+                    auto_mode=payload.auto_mode,
+                )
         except asyncio.CancelledError:
             # 任务被取消，更新数据库状态
             async with async_session_maker() as cancel_session:

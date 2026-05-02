@@ -165,6 +165,7 @@ class RegenerateRequest(BaseModel):
 class GenerateRequest(BaseModel):
     seed: int | None = None
     notes: str | None = None
+    auto_mode: bool = False
 
 
 class ResumeRequest(BaseModel):
