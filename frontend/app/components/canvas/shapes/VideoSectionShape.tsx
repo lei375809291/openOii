@@ -7,7 +7,7 @@ import {
   type RecordProps,
 } from "tldraw";
 import type { VideoSectionShape } from "./types";
-import { FireIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { VideoCameraIcon } from "@heroicons/react/24/outline";
 import { canvasEvents } from "../canvasEvents";
 import { getStaticUrl } from "~/services/api";
 import {
@@ -93,7 +93,6 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       videoUrl,
       title,
       downloadUrl,
-      provenanceText,
       blockingText,
       retryFeedback,
       retryRunId,
@@ -103,14 +102,6 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       statusLabel,
       sectionState,
     } = shape.props;
-
-    const handlePreview = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (videoUrl) {
-        canvasEvents.emit("preview-video", { src: videoUrl, title });
-      }
-    };
 
     const handleDownload = async (e: React.MouseEvent) => {
       e.preventDefault();
@@ -158,21 +149,16 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       >
         <div style={{ display: "flex", flexDirection: "column", width: shape.props.w, height: shape.props.h, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
           {/* 标题栏 — 固定高度 */}
-          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-error/20 flex items-center justify-center">
-                <FireIcon className="w-4 h-4 text-error" />
-              </div>
-              <h2 className="text-lg font-heading font-bold text-base-content">艺术总监</h2>
-            </div>
-            <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+          <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1 flex-shrink-0">
+            <h2 className="text-sm font-bold text-base-content">艺术总监</h2>
+            <span className={`badge badge-xs ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
               {statusLabel}
             </span>
           </div>
 
           {/* 内容 — flex 剩余空间 */}
           {videoUrl ? (
-            <div className="overflow-y-auto px-4 pb-3" style={{ height: shape.props.h - 52 - 12 }}>
+            <div className="overflow-y-auto px-3 pb-2" style={{ height: shape.props.h - 32 - 8 }}>
               <video
                 className="w-full rounded-lg bg-black"
                 src={videoUrl}
@@ -190,14 +176,10 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
                   )}`}
                 />
               </video>
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-base-content/70">{provenanceText}</p>
-                {blockingText && <p className="text-xs text-warning-content">{blockingText}</p>}
-                <div className="grid grid-cols-3 gap-2">
-                  <button type="button" onClick={handlePreview} onPointerDown={(e) => e.stopPropagation()} className="btn btn-sm btn-outline btn-secondary">预览</button>
-                  <button type="button" onClick={handleDownload} onPointerDown={(e) => e.stopPropagation()} className="btn btn-sm btn-outline btn-primary">下载</button>
-                  <button type="button" onClick={handleRetry} onPointerDown={(e) => e.stopPropagation()} className="btn btn-sm btn-outline btn-warning">重试</button>
-                </div>
+              {blockingText && <p className="mt-2 text-xs text-warning">{blockingText}</p>}
+              <div className="flex gap-2 mt-2">
+                <button type="button" onClick={handleDownload} onPointerDown={(e) => e.stopPropagation()} className="btn btn-xs btn-primary flex-1">下载</button>
+                <button type="button" onClick={handleRetry} onPointerDown={(e) => e.stopPropagation()} className="btn btn-xs btn-ghost">重试</button>
               </div>
             </div>
           ) : (

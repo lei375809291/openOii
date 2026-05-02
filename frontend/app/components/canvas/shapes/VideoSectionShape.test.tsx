@@ -43,32 +43,24 @@ describe("VideoSectionShape", () => {
       },
     }) as VideoSectionShape;
 
-  it("shows preview, download, and retry controls for the final output", () => {
+  it("shows download and retry controls for the final output", () => {
     render(shapeUtil.component(createShape()));
 
-    expect(screen.getByText("来源：当前成片")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "预览" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "下载" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
   });
 
-  it("emits preview and retry events with the final-output recovery context", async () => {
-    const { container } = render(shapeUtil.component(createShape()));
+  it("emits retry event with the final-output recovery context", async () => {
+    render(shapeUtil.component(createShape()));
 
-    await screen.getByRole("button", { name: "预览" }).click();
     await screen.getByRole("button", { name: "重试" }).click();
 
-    expect(emit).toHaveBeenCalledWith("preview-video", {
-      src: "/static/videos/final-current.mp4",
-      title: "创意项目",
-    });
     expect(emit).toHaveBeenCalledWith("retry-final-output", {
       projectId: 7,
       runId: 42,
       threadId: "thread_42",
       feedback: "请基于现有镜头重新合成最终视频。",
     });
-    expect(container).toBeTruthy();
   });
 
   it("falls back to direct download when the controlled final-video route fails", async () => {
@@ -90,20 +82,15 @@ describe("VideoSectionShape", () => {
     openMock.mockRestore();
   });
 
-  it("marks stale final output with explicit provenance copy", () => {
+  it("shows blocking text when present", () => {
     render(
       shapeUtil.component(
         createShape({
-          sectionState: "superseded",
-          statusLabel: "已失效",
-          provenanceText: "来源：上一次合成结果，已被新版本替代",
+          blockingText: "视频生成中，请稍候...",
         })
       )
     );
 
-    expect(
-      screen.getByText("来源：上一次合成结果，已被新版本替代")
-    ).toBeInTheDocument();
-    expect(screen.getByText("已失效")).toBeInTheDocument();
+    expect(screen.getByText("视频生成中，请稍候...")).toBeInTheDocument();
   });
 });

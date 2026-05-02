@@ -42,9 +42,9 @@ describe("CharacterSectionShape", () => {
   it("shows the current approval state and review controls", () => {
     render(shapeUtil.component(createShape()));
 
-    expect(screen.getByText("已批准")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /批准角色/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /重新审核/i })).toBeInTheDocument();
+    // approval shown as green dot (title="已批准"), not badge text
+    expect(screen.getByTitle("已批准")).toBeInTheDocument();
+    expect(screen.getByTitle(/重新审核/)).toBeInTheDocument();
   });
 
   it("marks superseded characters without exposing version history", () => {
@@ -70,7 +70,8 @@ describe("CharacterSectionShape", () => {
       )
     );
 
-    expect(screen.getByText("已失效")).toBeInTheDocument();
+    // superseded chars show neutral dot (title="待审核")
+    expect(screen.getByTitle("待审核")).toBeInTheDocument();
     expect(screen.queryByText(/version/i)).not.toBeInTheDocument();
   });
 });

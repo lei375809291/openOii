@@ -8,12 +8,9 @@ import {
 } from "tldraw";
 import { type StoryboardSectionShape } from "./types";
 import {
-  FilmIcon,
-  PencilIcon,
-  PhotoIcon,
-  VideoCameraIcon,
   TrashIcon,
   RectangleStackIcon,
+  CheckBadgeIcon,
 } from "@heroicons/react/24/outline";
 import { getStaticUrl } from "~/services/api";
 import type { Shot } from "~/types";
@@ -23,18 +20,6 @@ import {
   getWorkspaceSectionStatusBadgeClass,
   getWorkspaceSectionStatusLabel,
 } from "~/utils/workspaceStatus";
-
-function getReviewStateMeta(state: Shot["approval_state"]) {
-  if (state === "approved") {
-    return { label: "已批准", badge: "badge-success" };
-  }
-
-  if (state === "superseded") {
-    return { label: "已失效", badge: "badge-error" };
-  }
-
-  return { label: "待审核", badge: "badge-ghost" };
-}
 
 export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape> {
   static override type = "storyboard-section" as const;
@@ -121,22 +106,10 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
 function ShotCard({ shot }: { shot: Shot }) {
   const imageUrl = getStaticUrl(shot.image_url);
   const videoUrl = getStaticUrl(shot.video_url);
-  const reviewMeta = getReviewStateMeta(shot.approval_state);
+  const isApproved = shot.approval_state === "approved";
 
   const handleApprove = () => {
     canvasEvents.emit("approve-shot", { id: shot.id });
-  };
-
-  const handleEdit = () => {
-    canvasEvents.emit("edit-shot", shot);
-  };
-
-  const handleRegenerateImage = () => {
-    canvasEvents.emit("regenerate-shot", { id: shot.id, type: "image" });
-  };
-
-  const handleRegenerateVideo = () => {
-    canvasEvents.emit("regenerate-shot", { id: shot.id, type: "video" });
   };
 
   const handleDelete = () => {
@@ -160,7 +133,7 @@ function ShotCard({ shot }: { shot: Shot }) {
   return (
     <div
       className="group bg-base-200 rounded-lg overflow-hidden relative"
-      style={{ height: 250, maxHeight: 250, boxSizing: "border-box", clipPath: "inset(0 round 8px)" }}
+      style={{ boxSizing: "border-box" }}
     >
       {/* 图片预览 */}
       {imageUrl ? (
@@ -174,12 +147,12 @@ function ShotCard({ shot }: { shot: Shot }) {
           <img
             src={imageUrl}
             alt={`镜头 ${shot.order}`}
-            className="w-full h-[110px] object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+            className="w-full h-[70px] object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
           />
         </button>
       ) : (
-        <div className="w-full h-[110px] bg-base-300 flex items-center justify-center">
-          <RectangleStackIcon className="w-6 h-6 text-base-content/20" />
+        <div className="w-full h-[70px] bg-base-300 flex items-center justify-center">
+          <RectangleStackIcon className="w-5 h-5 text-base-content/20" />
         </div>
       )}
 
@@ -187,72 +160,43 @@ function ShotCard({ shot }: { shot: Shot }) {
       {videoUrl && (
         <button
           type="button"
-          className="absolute top-2 right-2 btn btn-xs btn-circle btn-primary shadow"
+          className="absolute top-1 right-1 btn btn-xs btn-circle btn-primary shadow"
           onClick={handlePreviewVideo}
           onPointerDown={(e) => e.stopPropagation()}
           title="播放视频"
         >
-          <span className="text-xs">▶</span>
+          <span className="text-[10px]">▶</span>
         </button>
       )}
 
-      {/* 内容区 - 固定 140px */}
-      <div className="px-2 py-1.5" style={{ height: 140, overflow: "hidden" }}>
-        {/* 标题行 */}
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-xs font-bold text-base-content">#{shot.order}</span>
-          <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
+      {/* 内容区 */}
+      <div className="px-2 py-1">
+        {/* 标题行：序号 + 状态圆点 + 时长 */}
+        <div className="flex items-center gap-1">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isApproved ? "bg-success" : "bg-base-content/30"}`} title={isApproved ? "已批准" : "待审核"} />
+          <span className="text-[11px] font-bold text-base-content">#{shot.order}</span>
           {duration && (
-            <span className="badge badge-xs badge-outline">{duration}</span>
+            <span className="text-[10px] text-base-content/60 ml-auto">{duration}</span>
           )}
         </div>
 
         {/* 描述 - 2行截断 */}
-        <div style={{ height: 64, overflow: "hidden" }}>
-          <p className="text-xs text-base-content/80 leading-relaxed">
+        <div style={{ height: 28, overflow: "hidden" }}>
+          <p className="text-[10px] text-base-content/80 leading-tight">
             {shot.description}
           </p>
         </div>
 
         {/* 操作按钮 - hover 显示 */}
-        <div className="flex items-center justify-end gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            className="btn btn-xs btn-circle btn-ghost text-base-content"
-            onClick={(e) => { e.stopPropagation(); handleEdit(); }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="编辑"
-          >
-            <PencilIcon className="w-3 h-3" />
-          </button>
-          <button
-            type="button"
-            className="btn btn-xs btn-circle btn-secondary"
-            onClick={(e) => { e.stopPropagation(); handleRegenerateImage(); }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="重新生成图片"
-          >
-            <PhotoIcon className="w-3 h-3" />
-          </button>
-          <button
-            type="button"
-            className="btn btn-xs btn-circle btn-accent"
-            onClick={(e) => { e.stopPropagation(); handleRegenerateVideo(); }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="重新生成视频"
-          >
-            <VideoCameraIcon className="w-3 h-3" />
-          </button>
+        <div className="flex items-center justify-end gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
             className="btn btn-xs btn-circle btn-success"
             onClick={(e) => { e.stopPropagation(); handleApprove(); }}
             onPointerDown={(e) => e.stopPropagation()}
-            title={shot.approval_state === "approved" ? "重新审核" : "批准分镜"}
+            title={isApproved ? "重新审核" : "批准分镜"}
           >
-            <svg className="w-3 h-3" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
+            <CheckBadgeIcon className="w-3 h-3" />
           </button>
           <button
             type="button"
@@ -293,21 +237,18 @@ function StoryboardSectionContent({
   return (
     <div style={{ display: "flex", flexDirection: "column", width, height, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
       {/* 标题栏 — 固定高度 */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-            <FilmIcon className="w-4 h-4 text-accent" />
-          </div>
-          <h2 className="text-lg font-heading font-bold text-base-content">{sectionTitle}</h2>
-        </div>
-        <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
-          {statusLabel}
-        </span>
-        {shots.length > 0 && (
-          <span className="badge badge-ghost text-base-content/60">
-            {shots.length} 个镜头
+      <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1 flex-shrink-0">
+        <h2 className="text-sm font-bold text-base-content">{sectionTitle}</h2>
+        <div className="flex items-center gap-1.5">
+          {shots.length > 0 && (
+            <span className="badge badge-xs badge-ghost text-base-content/60">
+              {shots.length} 镜头
+            </span>
+          )}
+          <span className={`badge badge-xs ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+            {statusLabel}
           </span>
-        )}
+        </div>
       </div>
 
       {/* 分镜网格 — 固定像素高度 */}
@@ -319,7 +260,7 @@ function StoryboardSectionContent({
           const cellW = Math.floor((width - padX * 2 - gap * (cols - 1)) / cols);
           return (
             <div
-              style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${cellW}px)`, gap, padding: `0 ${padX}px 12px`, height: height - 52 - 12, overflowY: "auto", minWidth: 0 }}
+              style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${cellW}px)`, gap, padding: `0 ${padX}px 8px`, height: height - 32 - 8, overflowY: "auto", minWidth: 0 }}
             >
               {sortedShots.map((shot) => (
                 <div key={shot.id} style={{ minWidth: 0, overflow: "hidden", borderRadius: 8, clipPath: "inset(0 round 8px)" }}>

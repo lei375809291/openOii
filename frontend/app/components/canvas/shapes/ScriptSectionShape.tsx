@@ -7,7 +7,6 @@ import {
   type RecordProps,
 } from "tldraw";
 import { type ScriptSectionShape } from "./types";
-import { PencilSquareIcon } from "@heroicons/react/24/outline";
 import {
   getWorkspaceSectionPlaceholderText,
   getWorkspaceSectionStatusBadgeClass,
@@ -117,20 +116,15 @@ function ScriptSectionContent({
   return (
     <div style={{ display: "flex", flexDirection: "column", width, height, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
       {/* 标题栏 — 固定高度 */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
-            <PencilSquareIcon className="w-4 h-4 text-secondary" />
-          </div>
-          <h2 className="text-lg font-heading font-bold text-base-content">编剧</h2>
-        </div>
-        <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+      <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1 flex-shrink-0">
+        <h2 className="text-sm font-bold text-base-content">编剧</h2>
+        <span className={`badge badge-xs ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
           {statusLabel}
         </span>
       </div>
 
       {/* 内容 — 固定像素高度 */}
-      <div className="overflow-y-auto px-4 pb-3" style={{ height: height - 52 - 12 }}>
+      <div className="overflow-y-auto px-3 pb-2" style={{ height: height - 32 - 8 }}>
         {summary ? (
           <div className="bg-base-200 rounded-lg p-3 border-l-4 border-secondary">
             <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{summary}</p>

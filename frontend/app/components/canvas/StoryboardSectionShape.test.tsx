@@ -53,7 +53,8 @@ describe("StoryboardSectionShape", () => {
   it("shows shot approval state, duration badge, description, and controls", () => {
     render(shapeUtil.component(createShape()));
 
-    expect(screen.getByText("已批准")).toBeInTheDocument();
+    // approval shown as green dot (title="已批准"), not badge text
+    expect(screen.getByTitle("已批准")).toBeInTheDocument();
     expect(screen.getByText("7s")).toBeInTheDocument();
     expect(screen.getByText(/阿宁走进雨夜街道/)).toBeInTheDocument();
     expect(screen.getByTitle(/重新审核/)).toBeInTheDocument();
@@ -93,7 +94,8 @@ describe("StoryboardSectionShape", () => {
       )
     );
 
-    expect(screen.getByText("已失效")).toBeInTheDocument();
+    // superseded shots show neutral dot (title="待审核"), not "已失效" badge
+    expect(screen.getByTitle("待审核")).toBeInTheDocument();
     expect(screen.queryByText(/approval_version/i)).not.toBeInTheDocument();
   });
 });

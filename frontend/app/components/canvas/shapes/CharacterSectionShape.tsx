@@ -8,9 +8,6 @@ import {
 } from "tldraw";
 import { type CharacterSectionShape } from "./types";
 import {
-  SparklesIcon,
-  PencilIcon,
-  ArrowPathIcon,
   TrashIcon,
   UserIcon,
   CheckBadgeIcon,
@@ -23,24 +20,6 @@ import {
   getWorkspaceSectionStatusBadgeClass,
   getWorkspaceSectionStatusLabel,
 } from "~/utils/workspaceStatus";
-
-function getReviewStateMeta(state: Character["approval_state"]) {
-  if (state === "approved") {
-    return { label: "已批准", badge: "badge-success" };
-  }
-
-  if (state === "superseded") {
-    return { label: "已失效", badge: "badge-error" };
-  }
-
-  return { label: "待审核", badge: "badge-ghost" };
-}
-
-function getApprovalActionLabel(state: Character["approval_state"]) {
-  const primary = state === "approved" ? "重新审核" : "批准角色";
-
-  return `${primary} / 批准角色 / 重新审核`;
-}
 
 export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> {
   static override type = "character-section" as const;
@@ -123,19 +102,10 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
 
 function CharacterCard({ character }: { character: Character }) {
   const imageUrl = getStaticUrl(character.image_url);
-  const reviewMeta = getReviewStateMeta(character.approval_state);
-  const approveLabel = getApprovalActionLabel(character.approval_state);
-
-  const handleEdit = () => {
-    canvasEvents.emit("edit-character", character);
-  };
+  const isApproved = character.approval_state === "approved";
 
   const handleApprove = () => {
     canvasEvents.emit("approve-character", { id: character.id });
-  };
-
-  const handleRegenerate = () => {
-    canvasEvents.emit("regenerate-character", character.id);
   };
 
   const handleDelete = () => {
@@ -150,43 +120,32 @@ function CharacterCard({ character }: { character: Character }) {
 
   return (
     <div className="group bg-base-200 rounded-lg overflow-hidden relative">
-      {/* 操作按钮 — hover 显示 */}
-      <div className="absolute top-1 right-1 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button type="button" className="btn btn-xs btn-circle btn-ghost bg-base-100/80 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); handleEdit(); }} onPointerDown={(e) => e.stopPropagation()} title="编辑">
-          <PencilIcon className="w-3 h-3" />
+      {/* 图片 */}
+      {imageUrl ? (
+        <button type="button" className="block w-full text-left" onClick={handlePreview} onPointerDown={(e) => e.stopPropagation()} aria-label={`预览 ${character.name}`}>
+          <img src={imageUrl} alt={character.name} className="w-full h-20 object-cover cursor-zoom-in hover:opacity-90 transition-opacity" />
         </button>
-        <button type="button" className="btn btn-xs btn-circle btn-secondary" onClick={(e) => { e.stopPropagation(); handleRegenerate(); }} onPointerDown={(e) => e.stopPropagation()} title="重新生成">
-          <ArrowPathIcon className="w-3 h-3" />
-        </button>
-        <button type="button" className="btn btn-xs btn-circle btn-success" onClick={(e) => { e.stopPropagation(); handleApprove(); }} onPointerDown={(e) => e.stopPropagation()} title={approveLabel} aria-label={approveLabel}>
+      ) : (
+        <div className="w-full h-20 bg-base-300 flex items-center justify-center">
+          <UserIcon className="w-6 h-6 text-base-content/20" />
+        </div>
+      )}
+
+      {/* 名称 + 状态圆点 */}
+      <div className="px-2 py-1 flex items-center gap-1">
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isApproved ? "bg-success" : "bg-base-content/30"}`} title={isApproved ? "已批准" : "待审核"} />
+        <h4 className="font-bold text-xs text-base-content truncate flex-1">{character.name}</h4>
+      </div>
+
+      {/* 操作栏 — hover 显示 */}
+      <div className="flex items-center justify-end gap-0.5 px-1 pb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" className="btn btn-xs btn-circle btn-success" onClick={(e) => { e.stopPropagation(); handleApprove(); }} onPointerDown={(e) => e.stopPropagation()} title={isApproved ? "重新审核" : "批准角色"}>
           <CheckBadgeIcon className="w-3 h-3" />
         </button>
         <button type="button" className="btn btn-xs btn-circle btn-error" onClick={(e) => { e.stopPropagation(); handleDelete(); }} onPointerDown={(e) => e.stopPropagation()} title="删除">
           <TrashIcon className="w-3 h-3" />
         </button>
       </div>
-
-      {/* 图片 */}
-      {imageUrl ? (
-        <button type="button" className="block w-full text-left" onClick={handlePreview} onPointerDown={(e) => e.stopPropagation()} aria-label={`预览 ${character.name}`}>
-          <img src={imageUrl} alt={character.name} className="w-full h-40 object-cover cursor-zoom-in hover:opacity-90 transition-opacity" />
-        </button>
-      ) : (
-        <div className="w-full h-40 bg-base-300 flex items-center justify-center">
-          <UserIcon className="w-10 h-10 text-base-content/20" />
-        </div>
-      )}
-
-      {/* 名称 + 状态 */}
-      <div className="px-2 pt-2 pb-1 flex items-center gap-1">
-        <h4 className="font-bold text-sm text-base-content truncate flex-1">{character.name}</h4>
-        <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
-      </div>
-
-      {/* 描述 */}
-      {character.description && (
-        <p className="px-2 pb-2 text-xs text-base-content/70 line-clamp-2">{character.description}</p>
-      )}
     </div>
   );
 }
@@ -211,14 +170,9 @@ function CharacterSectionContent({
   return (
     <div style={{ display: "flex", flexDirection: "column", width, height, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
       {/* 标题栏 — 固定高度 */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
-            <SparklesIcon className="w-4 h-4 text-warning" />
-          </div>
-          <h2 className="text-lg font-heading font-bold text-base-content">角色设计师</h2>
-        </div>
-        <span className={`badge badge-sm ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
+      <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1 flex-shrink-0">
+        <h2 className="text-sm font-bold text-base-content">角色设计师</h2>
+        <span className={`badge badge-xs ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
           {statusLabel}
         </span>
       </div>
@@ -227,7 +181,7 @@ function CharacterSectionContent({
       {characters.length > 0 ? (
         <div
           className="grid grid-cols-2 gap-3 overflow-y-auto px-4 pb-3"
-          style={{ height: height - 52 - 12 }}
+          style={{ height: height - 32 - 8 }}
         >
           {characters.map((char) => (
             <CharacterCard key={char.id} character={char} />
