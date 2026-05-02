@@ -36,12 +36,6 @@ function getReviewStateMeta(state: Shot["approval_state"]) {
   return { label: "待审核", badge: "badge-ghost" };
 }
 
-function getApprovalActionLabel(state: Shot["approval_state"]) {
-  const primary = state === "approved" ? "重新审核" : "批准分镜";
-
-  return `${primary} / 批准分镜 / 重新审核`;
-}
-
 export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape> {
   static override type = "storyboard-section" as const;
 
@@ -94,18 +88,27 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
   }
 
   component(shape: StoryboardSectionShape) {
-    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, sectionState } = shape.props;
+    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, sectionState, w, h } = shape.props;
 
     return (
       <HTMLContainer
         style={{
-          width: shape.props.w,
-          height: shape.props.h,
+          width: w,
+          height: h,
           pointerEvents: "all",
+          overflow: "hidden",
         }}
-        className="h-full"
       >
-        <StoryboardSectionContent shots={shots} sectionTitle={sectionTitle} placeholder={placeholder} placeholderText={placeholderText} statusLabel={statusLabel} sectionState={sectionState} />
+        <StoryboardSectionContent
+          shots={shots}
+          sectionTitle={sectionTitle}
+          placeholder={placeholder}
+          placeholderText={placeholderText}
+          statusLabel={statusLabel}
+          sectionState={sectionState}
+          width={w}
+          height={h}
+        />
       </HTMLContainer>
     );
   }
@@ -119,19 +122,6 @@ function ShotCard({ shot }: { shot: Shot }) {
   const imageUrl = getStaticUrl(shot.image_url);
   const videoUrl = getStaticUrl(shot.video_url);
   const reviewMeta = getReviewStateMeta(shot.approval_state);
-  const approveLabel = getApprovalActionLabel(shot.approval_state);
-  const boundCharacterIds =
-    shot.approval_state === "approved" && shot.approved_character_ids.length > 0
-      ? shot.approved_character_ids
-      : shot.character_ids;
-
-  const intentSummary = [
-    { label: "时长", value: shot.duration != null ? `${shot.duration} 秒` : null },
-    { label: "镜头", value: shot.camera },
-    { label: "动作", value: shot.motion_note },
-    { label: "提示词", value: shot.prompt },
-    { label: "图像提示词", value: shot.image_prompt },
-  ].filter((item) => Boolean(item.value));
 
   const handleApprove = () => {
     canvasEvents.emit("approve-shot", { id: shot.id });
@@ -165,103 +155,14 @@ function ShotCard({ shot }: { shot: Shot }) {
     }
   };
 
+  const duration = shot.duration != null ? `${shot.duration}s` : null;
+
   return (
     <div
-      className="group bg-base-200 rounded-lg p-2 relative"
+      className="group bg-base-200 rounded-lg overflow-hidden relative"
+      style={{ height: 250, maxHeight: 250, boxSizing: "border-box", clipPath: "inset(0 round 8px)" }}
     >
-      {/* 操作栏 */}
-      <div
-        className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-lg bg-base-100/90 p-0.5 backdrop-blur-sm"
-      >
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-ghost text-base-content"
-          onClick={(e) => { e.stopPropagation(); handleEdit(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="编辑"
-        >
-          <PencilIcon className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-secondary"
-          onClick={(e) => { e.stopPropagation(); handleRegenerateImage(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="重新生成图片"
-        >
-          <PhotoIcon className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-accent"
-          onClick={(e) => { e.stopPropagation(); handleRegenerateVideo(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="重新生成视频"
-        >
-          <VideoCameraIcon className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-success"
-          onClick={(e) => { e.stopPropagation(); handleApprove(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title={approveLabel}
-          aria-label={approveLabel}
-        >
-          <svg className="w-3 h-3" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-error"
-          onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="删除"
-        >
-          <TrashIcon className="w-3 h-3" />
-        </button>
-      </div>
-
-      {/* 镜头序号 */}
-      <div className="flex items-center gap-1 mb-1">
-        <span className="text-xs font-bold text-base-content">#{shot.order}</span>
-        <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
-        {videoUrl && (
-          <span className="badge badge-success badge-xs">视频</span>
-        )}
-      </div>
-
-      <div className="mb-2 space-y-2 text-[11px] text-base-content/70">
-        <div>
-          <p className="font-semibold text-base-content/60">绑定角色</p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {boundCharacterIds.length > 0 ? (
-              boundCharacterIds.map((characterId) => (
-                <span key={characterId} className="badge badge-outline badge-xs">
-                  角色 #{characterId}
-                </span>
-              ))
-            ) : (
-              <span className="text-base-content/40">未绑定角色</span>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <p className="font-semibold text-base-content/60">镜头意图</p>
-          <div className="mt-1 grid grid-cols-1 gap-0.5">
-            {intentSummary.map((item) => (
-              <div key={item.label} className="flex items-start gap-1">
-                <span className="w-16 shrink-0 text-base-content/50">{item.label}</span>
-                <span className="flex-1 text-base-content/80 line-clamp-2">{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 图片/视频 */}
+      {/* 图片预览 */}
       {imageUrl ? (
         <button
           type="button"
@@ -273,20 +174,20 @@ function ShotCard({ shot }: { shot: Shot }) {
           <img
             src={imageUrl}
             alt={`镜头 ${shot.order}`}
-            className="w-full h-24 object-cover rounded cursor-zoom-in hover:opacity-90 transition-opacity"
+            className="w-full h-[110px] object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
           />
         </button>
       ) : (
-        <div className="w-full h-24 bg-base-300 rounded flex items-center justify-center">
+        <div className="w-full h-[110px] bg-base-300 flex items-center justify-center">
           <RectangleStackIcon className="w-6 h-6 text-base-content/20" />
         </div>
       )}
 
-      {/* 视频预览按钮 */}
+      {/* 视频播放按钮 */}
       {videoUrl && (
         <button
           type="button"
-          className="absolute bottom-8 right-3 btn btn-xs btn-circle btn-primary"
+          className="absolute top-2 right-2 btn btn-xs btn-circle btn-primary shadow"
           onClick={handlePreviewVideo}
           onPointerDown={(e) => e.stopPropagation()}
           title="播放视频"
@@ -295,10 +196,75 @@ function ShotCard({ shot }: { shot: Shot }) {
         </button>
       )}
 
-      {/* 描述 */}
-      <p className="text-xs text-base-content/70 mt-1 line-clamp-2">
-        {shot.description}
-      </p>
+      {/* 内容区 - 固定 140px */}
+      <div className="px-2 py-1.5" style={{ height: 140, overflow: "hidden" }}>
+        {/* 标题行 */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-xs font-bold text-base-content">#{shot.order}</span>
+          <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
+          {duration && (
+            <span className="badge badge-xs badge-outline">{duration}</span>
+          )}
+        </div>
+
+        {/* 描述 - 2行截断 */}
+        <div style={{ height: 64, overflow: "hidden" }}>
+          <p className="text-xs text-base-content/80 leading-relaxed">
+            {shot.description}
+          </p>
+        </div>
+
+        {/* 操作按钮 - hover 显示 */}
+        <div className="flex items-center justify-end gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            className="btn btn-xs btn-circle btn-ghost text-base-content"
+            onClick={(e) => { e.stopPropagation(); handleEdit(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="编辑"
+          >
+            <PencilIcon className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-circle btn-secondary"
+            onClick={(e) => { e.stopPropagation(); handleRegenerateImage(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="重新生成图片"
+          >
+            <PhotoIcon className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-circle btn-accent"
+            onClick={(e) => { e.stopPropagation(); handleRegenerateVideo(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="重新生成视频"
+          >
+            <VideoCameraIcon className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-circle btn-success"
+            onClick={(e) => { e.stopPropagation(); handleApprove(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title={shot.approval_state === "approved" ? "重新审核" : "批准分镜"}
+          >
+            <svg className="w-3 h-3" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-circle btn-error"
+            onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="删除"
+          >
+            <TrashIcon className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -310,6 +276,8 @@ function StoryboardSectionContent({
   placeholderText,
   statusLabel,
   sectionState,
+  width,
+  height,
 }: {
   shots: Shot[];
   sectionTitle: string;
@@ -317,13 +285,15 @@ function StoryboardSectionContent({
   placeholderText: string;
   statusLabel: string;
   sectionState: StoryboardSectionShape["props"]["sectionState"];
+  width: number;
+  height: number;
 }) {
   const sortedShots = [...shots].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="card-doodle bg-base-100 p-5 h-full flex flex-col overflow-hidden">
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
+    <div style={{ display: "flex", flexDirection: "column", width, height, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
+      {/* 标题栏 — 固定高度 */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
             <FilmIcon className="w-4 h-4 text-accent" />
@@ -340,13 +310,25 @@ function StoryboardSectionContent({
         )}
       </div>
 
-      {/* 分镜网格 */}
+      {/* 分镜网格 — 固定像素高度 */}
       {sortedShots.length > 0 ? (
-        <div className="grid grid-cols-4 gap-3 overflow-y-auto flex-1 min-h-0 pr-1">
-          {sortedShots.map((shot) => (
-            <ShotCard key={shot.id} shot={shot} />
-          ))}
-        </div>
+        (() => {
+          const padX = 16;
+          const gap = 12;
+          const cols = 4;
+          const cellW = Math.floor((width - padX * 2 - gap * (cols - 1)) / cols);
+          return (
+            <div
+              style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${cellW}px)`, gap, padding: `0 ${padX}px 12px`, height: height - 52 - 12, overflowY: "auto", minWidth: 0 }}
+            >
+              {sortedShots.map((shot) => (
+                <div key={shot.id} style={{ minWidth: 0, overflow: "hidden", borderRadius: 8, clipPath: "inset(0 round 8px)" }}>
+                  <ShotCard shot={shot} />
+                </div>
+              ))}
+            </div>
+          );
+        })()
       ) : (
         <div className="text-center py-8 text-base-content/50">
           <RectangleStackIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />

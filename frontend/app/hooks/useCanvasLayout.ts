@@ -244,29 +244,21 @@ function buildFallbackSectionStatuses(input: {
   });
 }
 
-// 计算剧本区域高度
+// 计算剧本区域高度 - 只显示摘要（中文约 25 字/行）
 function calculateScriptHeight(
   summary: string | null,
-  characters: Character[],
-  shots: Shot[]
+  _characters: Character[],
+  _shots: Shot[]
 ): number {
-  let height = 60; // 标题栏
+  let height = 80; // 标题栏 + padding
 
   if (summary) {
-    const summaryLines = Math.ceil(summary.length / 40) + 1;
-    height += 32 + summaryLines * 20 + 16;
+    // 中英文混合取 30 字符/行，text-sm leading-relaxed ≈ 22px/行
+    const lines = Math.ceil(summary.length / 30);
+    height += 20 + lines * 22 + 32;
   }
 
-  if (characters.length > 0) {
-    const charRows = Math.ceil(characters.length / 2);
-    height += 28 + charRows * 80 + 16;
-  }
-
-  if (shots.length > 0) {
-    height += 28 + shots.length * 52 + 16;
-  }
-
-  return Math.max(height, 250);
+  return Math.max(height, 200);
 }
 
 // 计算角色区域高度
@@ -276,10 +268,9 @@ function calculateCharacterHeight(characters: Character[]): number {
   return 70 + rows * 360 + 16;
 }
 
-// 计算分镜区域高度
+// 计算分镜区域高度 - 固定行高 260px + gap 12px
 function calculateStoryboardHeight(shots: Shot[]): number {
   if (shots.length === 0) return 250;
   const rows = Math.ceil(shots.length / 4);
-  // 每行卡片约 280px (不含 96px 图片区域)
-  return 70 + rows * 280 + 16;
+  return 80 + rows * 272 + 16; // header + rows*(260+12) + padding
 }

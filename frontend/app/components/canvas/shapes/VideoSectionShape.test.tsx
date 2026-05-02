@@ -36,9 +36,6 @@ describe("VideoSectionShape", () => {
         placeholderText: "等待视频合成...",
         provenanceText: "来源：当前成片",
         blockingText: "",
-        previewLabel: "预览最终视频",
-        downloadLabel: "下载最终视频",
-        retryLabel: "重试合成",
         retryFeedback: "请基于现有镜头重新合成最终视频。",
         retryRunId: 42,
         retryThreadId: "thread_42",
@@ -50,16 +47,16 @@ describe("VideoSectionShape", () => {
     render(shapeUtil.component(createShape()));
 
     expect(screen.getByText("来源：当前成片")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "预览最终视频" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "下载最终视频" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "重试合成" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "预览" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下载" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
   });
 
   it("emits preview and retry events with the final-output recovery context", async () => {
     const { container } = render(shapeUtil.component(createShape()));
 
-    await screen.getByRole("button", { name: "预览最终视频" }).click();
-    await screen.getByRole("button", { name: "重试合成" }).click();
+    await screen.getByRole("button", { name: "预览" }).click();
+    await screen.getByRole("button", { name: "重试" }).click();
 
     expect(emit).toHaveBeenCalledWith("preview-video", {
       src: "/static/videos/final-current.mp4",
@@ -85,7 +82,7 @@ describe("VideoSectionShape", () => {
 
     render(shapeUtil.component(createShape()));
 
-    await user.click(screen.getByRole("button", { name: "下载最终视频" }));
+    await user.click(screen.getByRole("button", { name: "下载" }));
 
     expect(openMock).toHaveBeenCalledWith("/api/v1/projects/7/final-video", "_blank");
 

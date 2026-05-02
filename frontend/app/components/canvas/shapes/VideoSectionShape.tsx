@@ -93,9 +93,6 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       videoUrl,
       title,
       downloadUrl,
-      previewLabel,
-      downloadLabel,
-      retryLabel,
       provenanceText,
       blockingText,
       retryFeedback,
@@ -156,12 +153,12 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
           width: shape.props.w,
           height: shape.props.h,
           pointerEvents: "all",
+          overflow: "hidden",
         }}
-        className="h-full"
       >
-        <div className="card-doodle bg-base-100 p-5 h-full">
-          {/* 标题栏 */}
-          <div className="flex items-center justify-between gap-2 mb-4">
+        <div style={{ display: "flex", flexDirection: "column", width: shape.props.w, height: shape.props.h, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
+          {/* 标题栏 — 固定高度 */}
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-full bg-error/20 flex items-center justify-center">
                 <FireIcon className="w-4 h-4 text-error" />
@@ -173,9 +170,9 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
             </span>
           </div>
 
-          {/* 视频播放器 */}
+          {/* 内容 — flex 剩余空间 */}
           {videoUrl ? (
-            <div className="relative">
+            <div className="overflow-y-auto px-4 pb-3" style={{ height: shape.props.h - 52 - 12 }}>
               <video
                 className="w-full rounded-lg bg-black"
                 src={videoUrl}
@@ -192,38 +189,14 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
                     `WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`
                   )}`}
                 />
-                </video>
+              </video>
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-base-content/70">{provenanceText}</p>
                 {blockingText && <p className="text-xs text-warning-content">{blockingText}</p>}
                 <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={handlePreview}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="btn btn-outline btn-secondary gap-2"
-                    aria-label={previewLabel}
-                  >
-                    预览
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="btn btn-outline btn-primary gap-2"
-                    aria-label={downloadLabel}
-                  >
-                    下载
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRetry}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="btn btn-outline btn-warning gap-2"
-                    aria-label={retryLabel}
-                  >
-                    重试
-                  </button>
+                  <button type="button" onClick={handlePreview} onPointerDown={(e) => e.stopPropagation()} className="btn btn-sm btn-outline btn-secondary">预览</button>
+                  <button type="button" onClick={handleDownload} onPointerDown={(e) => e.stopPropagation()} className="btn btn-sm btn-outline btn-primary">下载</button>
+                  <button type="button" onClick={handleRetry} onPointerDown={(e) => e.stopPropagation()} className="btn btn-sm btn-outline btn-warning">重试</button>
                 </div>
               </div>
             </div>

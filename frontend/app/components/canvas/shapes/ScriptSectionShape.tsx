@@ -8,7 +8,6 @@ import {
 } from "tldraw";
 import { type ScriptSectionShape } from "./types";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
-import type { Character, Shot } from "~/types";
 import {
   getWorkspaceSectionPlaceholderText,
   getWorkspaceSectionStatusBadgeClass,
@@ -69,25 +68,25 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   }
 
   component(shape: ScriptSectionShape) {
-    const { summary, characters, shots, placeholder, placeholderText, statusLabel, sectionState } = shape.props;
+    const { summary, placeholder, placeholderText, statusLabel, sectionState, w, h } = shape.props;
 
     return (
       <HTMLContainer
         style={{
-          width: shape.props.w,
-          height: shape.props.h,
+          width: w,
+          height: h,
           pointerEvents: "all",
+          overflow: "hidden",
         }}
-        className="h-full"
       >
         <ScriptSectionContent
           summary={summary}
-          characters={characters}
-          shots={shots}
           placeholder={placeholder}
           placeholderText={placeholderText}
           statusLabel={statusLabel}
           sectionState={sectionState}
+          width={w}
+          height={h}
         />
       </HTMLContainer>
     );
@@ -100,25 +99,25 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
 
 function ScriptSectionContent({
   summary,
-  characters,
-  shots,
   placeholder,
   placeholderText,
   statusLabel,
   sectionState,
+  width,
+  height,
 }: {
   summary: string;
-  characters: Character[];
-  shots: Shot[];
   placeholder: boolean;
   placeholderText: string;
   statusLabel: string;
   sectionState: ScriptSectionShape["props"]["sectionState"];
+  width: number;
+  height: number;
 }) {
   return (
-    <div className="card-doodle bg-base-100 p-5 h-full flex flex-col overflow-hidden">
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
+    <div style={{ display: "flex", flexDirection: "column", width, height, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
+      {/* 标题栏 — 固定高度 */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
             <PencilSquareIcon className="w-4 h-4 text-secondary" />
@@ -130,69 +129,17 @@ function ScriptSectionContent({
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0 space-y-4 pr-1">
-        {/* 剧本摘要 */}
-        {summary && (
-          <div>
-            <h3 className="text-sm font-bold text-base-content mb-2">剧本摘要</h3>
-            <div className="bg-base-200 rounded-lg p-3 border-l-4 border-secondary">
-              <p className="text-sm text-base-content/80 whitespace-pre-wrap line-clamp-6">{summary}</p>
-            </div>
+      {/* 内容 — 固定像素高度 */}
+      <div className="overflow-y-auto px-4 pb-3" style={{ height: height - 52 - 12 }}>
+        {summary ? (
+          <div className="bg-base-200 rounded-lg p-3 border-l-4 border-secondary">
+            <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{summary}</p>
           </div>
-        )}
-
-        {/* 角色列表 */}
-        {characters.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-base-content mb-2">角色列表</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {characters.map((char) => (
-                <div
-                  key={char.id}
-                  className="bg-base-200 rounded-lg p-3"
-                >
-                  <h4 className="font-bold text-sm text-base-content">{char.name}</h4>
-                  {char.description && (
-                    <p className="text-xs text-base-content/70 mt-1 line-clamp-3">
-                      {char.description}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 分镜描述 */}
-        {shots.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-base-content mb-2">分镜描述</h3>
-            <div className="space-y-2">
-              {[...shots]
-                .sort((a, b) => a.order - b.order)
-                .map((shot) => (
-                  <div
-                    key={shot.id}
-                    className="flex gap-2 text-sm"
-                  >
-                    <span className="font-bold text-base-content shrink-0">
-                      镜头 {shot.order}
-                    </span>
-                    <span className="text-base-content/70 border-l-2 border-base-content/20 pl-2 line-clamp-2">
-                      {shot.description}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* 空状态 */}
-        {placeholder && !summary && characters.length === 0 && shots.length === 0 && (
+        ) : placeholder ? (
           <div className="text-center py-8 text-base-content/50">
             <p className="text-sm">{placeholderText}</p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -92,16 +92,16 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
   }
 
   component(shape: CharacterSectionShape) {
-    const { characters, placeholder, placeholderText, statusLabel, sectionState } = shape.props;
+    const { characters, placeholder, placeholderText, statusLabel, sectionState, w, h } = shape.props;
 
     return (
       <HTMLContainer
         style={{
-          width: shape.props.w,
-          height: shape.props.h,
+          width: w,
+          height: h,
           pointerEvents: "all",
+          overflow: "hidden",
         }}
-        className="h-full"
       >
         <CharacterSectionContent
           characters={characters}
@@ -109,6 +109,8 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
           placeholderText={placeholderText}
           statusLabel={statusLabel}
           sectionState={sectionState}
+          width={w}
+          height={h}
         />
       </HTMLContainer>
     );
@@ -147,82 +149,43 @@ function CharacterCard({ character }: { character: Character }) {
   };
 
   return (
-    <div
-      className="group bg-base-200 rounded-lg p-3 relative"
-    >
-      {/* 操作栏 */}
-      <div
-        className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg bg-base-100/90 p-1 backdrop-blur-sm"
-      >
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-ghost text-base-content"
-          onClick={(e) => { e.stopPropagation(); handleEdit(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="编辑"
-        >
-          <PencilIcon className="w-3.5 h-3.5" />
+    <div className="group bg-base-200 rounded-lg overflow-hidden relative">
+      {/* 操作按钮 — hover 显示 */}
+      <div className="absolute top-1 right-1 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" className="btn btn-xs btn-circle btn-ghost bg-base-100/80 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); handleEdit(); }} onPointerDown={(e) => e.stopPropagation()} title="编辑">
+          <PencilIcon className="w-3 h-3" />
         </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-secondary"
-          onClick={(e) => { e.stopPropagation(); handleRegenerate(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="重新生成"
-        >
-          <ArrowPathIcon className="w-3.5 h-3.5" />
+        <button type="button" className="btn btn-xs btn-circle btn-secondary" onClick={(e) => { e.stopPropagation(); handleRegenerate(); }} onPointerDown={(e) => e.stopPropagation()} title="重新生成">
+          <ArrowPathIcon className="w-3 h-3" />
         </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-success"
-          onClick={(e) => { e.stopPropagation(); handleApprove(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title={approveLabel}
-          aria-label={approveLabel}
-        >
-          <CheckBadgeIcon className="w-3.5 h-3.5" />
+        <button type="button" className="btn btn-xs btn-circle btn-success" onClick={(e) => { e.stopPropagation(); handleApprove(); }} onPointerDown={(e) => e.stopPropagation()} title={approveLabel} aria-label={approveLabel}>
+          <CheckBadgeIcon className="w-3 h-3" />
         </button>
-        <button
-          type="button"
-          className="btn btn-xs btn-circle btn-error"
-          onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="删除"
-        >
-          <TrashIcon className="w-3.5 h-3.5" />
+        <button type="button" className="btn btn-xs btn-circle btn-error" onClick={(e) => { e.stopPropagation(); handleDelete(); }} onPointerDown={(e) => e.stopPropagation()} title="删除">
+          <TrashIcon className="w-3 h-3" />
         </button>
       </div>
 
-      {/* 角色信息 */}
-      <div className="flex items-start gap-2 mb-2">
-        <h4 className="font-bold text-base-content flex-1">{character.name}</h4>
-        <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
-      </div>
-      {character.description && (
-        <p className="text-xs text-base-content/70 mb-3 line-clamp-2">
-          {character.description}
-        </p>
-      )}
-
-      {/* 角色图片 */}
+      {/* 图片 */}
       {imageUrl ? (
-        <button
-          type="button"
-          className="block w-full text-left"
-          onClick={handlePreview}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label={`预览 ${character.name}`}
-        >
-          <img
-            src={imageUrl}
-            alt={character.name}
-            className="w-full h-48 object-cover rounded-lg cursor-zoom-in hover:opacity-90 transition-opacity"
-          />
+        <button type="button" className="block w-full text-left" onClick={handlePreview} onPointerDown={(e) => e.stopPropagation()} aria-label={`预览 ${character.name}`}>
+          <img src={imageUrl} alt={character.name} className="w-full h-40 object-cover cursor-zoom-in hover:opacity-90 transition-opacity" />
         </button>
       ) : (
-        <div className="w-full h-48 bg-base-300 rounded-lg flex items-center justify-center">
-          <UserIcon className="w-12 h-12 text-base-content/20" />
+        <div className="w-full h-40 bg-base-300 flex items-center justify-center">
+          <UserIcon className="w-10 h-10 text-base-content/20" />
         </div>
+      )}
+
+      {/* 名称 + 状态 */}
+      <div className="px-2 pt-2 pb-1 flex items-center gap-1">
+        <h4 className="font-bold text-sm text-base-content truncate flex-1">{character.name}</h4>
+        <span className={`badge badge-xs ${reviewMeta.badge}`}>{reviewMeta.label}</span>
+      </div>
+
+      {/* 描述 */}
+      {character.description && (
+        <p className="px-2 pb-2 text-xs text-base-content/70 line-clamp-2">{character.description}</p>
       )}
     </div>
   );
@@ -234,17 +197,21 @@ function CharacterSectionContent({
   placeholderText,
   statusLabel,
   sectionState,
+  width,
+  height,
 }: {
   characters: Character[];
   placeholder: boolean;
   placeholderText: string;
   statusLabel: string;
   sectionState: CharacterSectionShape["props"]["sectionState"];
+  width: number;
+  height: number;
 }) {
   return (
-    <div className="card-doodle bg-base-100 p-5 h-full flex flex-col overflow-hidden">
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
+    <div style={{ display: "flex", flexDirection: "column", width, height, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
+      {/* 标题栏 — 固定高度 */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
             <SparklesIcon className="w-4 h-4 text-warning" />
@@ -256,9 +223,12 @@ function CharacterSectionContent({
         </span>
       </div>
 
-      {/* 角色网格 */}
+      {/* 角色网格 — 固定像素高度 */}
       {characters.length > 0 ? (
-        <div className="grid grid-cols-2 gap-4 overflow-y-auto flex-1 min-h-0 pr-1">
+        <div
+          className="grid grid-cols-2 gap-3 overflow-y-auto px-4 pb-3"
+          style={{ height: height - 52 - 12 }}
+        >
           {characters.map((char) => (
             <CharacterCard key={char.id} character={char} />
           ))}

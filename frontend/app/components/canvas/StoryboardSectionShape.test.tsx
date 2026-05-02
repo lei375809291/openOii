@@ -50,14 +50,13 @@ describe("StoryboardSectionShape", () => {
       },
     }) as StoryboardSectionShape;
 
-  it("shows shot approval state, bound cast, intent, and controls", () => {
+  it("shows shot approval state, duration badge, description, and controls", () => {
     render(shapeUtil.component(createShape()));
 
     expect(screen.getByText("已批准")).toBeInTheDocument();
-    expect(screen.getByText(/绑定角色/i)).toBeInTheDocument();
-    expect(screen.getByText(/镜头意图/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /批准分镜/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /重新审核/i })).toBeInTheDocument();
+    expect(screen.getByText("7s")).toBeInTheDocument();
+    expect(screen.getByText(/阿宁走进雨夜街道/)).toBeInTheDocument();
+    expect(screen.getByTitle(/重新审核/)).toBeInTheDocument();
   });
 
   it("keeps only the current approved state visible for superseded shots", () => {
