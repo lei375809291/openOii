@@ -408,12 +408,9 @@ describe('ProjectPage live hydration', () => {
 
 		render(<ProjectPage />);
 
-		expect(screen.getByText('本次运行冻结 Provider 快照')).toBeInTheDocument();
-		expect(screen.getAllByText('selected：openai')).toHaveLength(2);
-		expect(screen.getByText('selected：doubao')).toBeInTheDocument();
-		expect(screen.getAllByText('resolved：openai')[0]).toBeInTheDocument();
-		expect(screen.getAllByText('source：项目覆盖')).toHaveLength(2);
-		expect(screen.getByText('source：默认继承')).toBeInTheDocument();
+		// Snapshot card was removed — with all providers valid, no warning banner either
+		expect(screen.queryByText('本次运行冻结 Provider 快照')).not.toBeInTheDocument();
+		expect(screen.queryByText('Provider 需要关注')).not.toBeInTheDocument();
 	});
 
 	it('degrades provider warning when active run snapshot exists', () => {
@@ -492,14 +489,10 @@ describe('ProjectPage live hydration', () => {
 
 		render(<ProjectPage />);
 
-		expect(screen.getAllByText('selected：openai')).toHaveLength(2);
-		expect(screen.getByText('resolved：未解析')).toBeInTheDocument();
-		expect(screen.getByText('selected：doubao')).toBeInTheDocument();
-		expect(screen.getAllByText('source：项目覆盖')).toHaveLength(2);
-		expect(screen.queryByText('selected：anthropic')).not.toBeInTheDocument();
-		expect(screen.queryByText(/valid/i)).not.toBeInTheDocument();
-		expect(screen.queryByText(/invalid/i)).not.toBeInTheDocument();
-		expect(screen.queryByText('缺少图像凭据')).not.toBeInTheDocument();
+		// Snapshot card removed; project providers are all valid so no warning banner either
+		// (hasProviderIssue uses project settings, not run snapshot)
+		expect(screen.queryByText('Provider 需要关注')).not.toBeInTheDocument();
+		expect(screen.queryByText('本次运行冻结 Provider 快照')).not.toBeInTheDocument();
 	});
 
   it('shows degraded provider warning without disabling generate', () => {

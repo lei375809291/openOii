@@ -244,46 +244,42 @@ function buildFallbackSectionStatuses(input: {
   });
 }
 
-// 计算剧本区域高度 - 宽松估算确保内容完全显示
+// 计算剧本区域高度
 function calculateScriptHeight(
   summary: string | null,
   characters: Character[],
   shots: Shot[]
 ): number {
-  let height = 80; // 标题栏 + padding
+  let height = 60; // 标题栏
 
   if (summary) {
-    // 摘要：每80字符约一行，行高24px
-    const summaryLines = Math.ceil(summary.length / 60) + 1;
-    height += 40 + summaryLines * 24 + 24;
+    const summaryLines = Math.ceil(summary.length / 40) + 1;
+    height += 32 + summaryLines * 20 + 16;
   }
 
   if (characters.length > 0) {
     const charRows = Math.ceil(characters.length / 2);
-    // 脚本区角色卡包含完整描述（personality_traits/goals/fears等），每行约 160px
-    height += 36 + charRows * 160 + 24;
+    height += 28 + charRows * 80 + 16;
   }
 
   if (shots.length > 0) {
-    // 每条分镜描述约 50px（含多行文本）
-    height += 36 + shots.length * 50 + 24;
+    height += 28 + shots.length * 52 + 16;
   }
 
   return Math.max(height, 250);
 }
 
-// 计算角色区域高度 - 包含图片和描述
+// 计算角色区域高度
 function calculateCharacterHeight(characters: Character[]): number {
   if (characters.length === 0) return 250;
   const rows = Math.ceil(characters.length / 2);
-  // 每行: 描述文本 ~120px + 图片 192px + padding/gap = ~340px
-  return 90 + rows * 360 + 24;
+  return 70 + rows * 360 + 16;
 }
 
 // 计算分镜区域高度
 function calculateStoryboardHeight(shots: Shot[]): number {
   if (shots.length === 0) return 250;
   const rows = Math.ceil(shots.length / 4);
-  // 每行: 序号+图片(96px)+描述+padding = ~200px
-  return 90 + rows * 200 + 24;
+  // 每行卡片约 280px (不含 96px 图片区域)
+  return 70 + rows * 280 + 16;
 }

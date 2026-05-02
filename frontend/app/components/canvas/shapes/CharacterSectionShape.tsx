@@ -152,7 +152,7 @@ function CharacterCard({ character }: { character: Character }) {
     >
       {/* 操作栏 */}
       <div
-        className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg bg-base-100/90 p-1 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg bg-base-100/90 p-1 backdrop-blur-sm"
       >
         <button
           type="button"
@@ -242,9 +242,9 @@ function CharacterSectionContent({
   sectionState: CharacterSectionShape["props"]["sectionState"];
 }) {
   return (
-    <div className="card-doodle bg-base-100 p-5 h-full">
+    <div className="card-doodle bg-base-100 p-5 h-full flex flex-col overflow-hidden">
       {/* 标题栏 */}
-      <div className="flex items-center justify-between gap-2 mb-4">
+      <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
             <SparklesIcon className="w-4 h-4 text-warning" />
@@ -258,7 +258,7 @@ function CharacterSectionContent({
 
       {/* 角色网格 */}
       {characters.length > 0 ? (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 overflow-y-auto flex-1 min-h-0 pr-1">
           {characters.map((char) => (
             <CharacterCard key={char.id} character={char} />
           ))}

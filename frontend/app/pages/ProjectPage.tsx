@@ -202,9 +202,6 @@ export function ProjectPage() {
 		]
 		: [];
 	const hasRunProviderSnapshot = runProviderRows.length > 0;
-	const runVideoProviderInvalid = Boolean(
-		runProviderRows.find((row) => row.key === "video" && !row.entry.valid),
-	);
 
 	// 当项目数据加载完成后，更新到 store（依赖 projectId 确保切换时重新加载）
 	useEffect(() => {
@@ -747,44 +744,7 @@ export function ProjectPage() {
 						) : null}
 					</div>
 				) : null}
-				{runProviderRows.length > 0 ? (
-					<div className="px-2 sm:px-4 pt-2 sm:pt-4">
-						<Card className="border border-black/20 bg-base-100 shadow-[4px_4px_0_0_#000]">
-							<div className="flex flex-col gap-3 p-4 sm:p-5">
-								<p className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
-									本次运行冻结 Provider
-								</p>
-								<h2 className="text-lg font-heading font-bold text-base-content">
-									本次运行冻结 Provider 快照
-								</h2>
-								<p className="text-sm text-base-content/80">
-									{runVideoProviderInvalid
-										? "检测到本次运行视频 provider 无效，clip/merge 已自动跳过。可在完成运行后配置视频 provider 并重试。"
-										: "resume 会继续沿用本次运行冻结的 Provider 配置。"}
-								</p>
-								<div className="grid gap-3 sm:grid-cols-3 text-sm">
-									{runProviderRows.map((row) => (
-										<div
-											key={row.key}
-											className="rounded-xl border border-black/10 bg-base-100/70 p-3"
-										>
-											<div className="text-xs text-base-content/60">{row.label}</div>
-											<div className="mt-1 text-xs text-base-content/80">
-												selected：{row.entry.selected_key}
-											</div>
-											<div className="text-xs text-base-content/80">
-												resolved：{row.entry.resolved_key ?? "未解析"}
-											</div>
-											<div className="text-xs text-base-content/80">
-												source：{row.entry.source === "project" ? "项目覆盖" : "默认继承"}
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						</Card>
-					</div>
-				) : null}
+
 
 				{store.recoveryControl && (
 					<div className="px-2 sm:px-4 pt-2 sm:pt-4">
