@@ -203,9 +203,13 @@ describe("InfiniteCanvas approve wiring", () => {
 
     expect(useCanvasLayoutMock.mock.calls[0]?.[0].workspaceStatus?.sections.map((section: any) => section.key)).toEqual([
       "script",
+      "characters",
+      "storyboards",
     ]);
     expect(mockEditor.createShapes).toHaveBeenCalledWith([
       expect.objectContaining({ id: "shape:script" }),
+      expect.objectContaining({ id: "shape:characters" }),
+      expect.objectContaining({ id: "shape:storyboards" }),
     ]);
   });
 

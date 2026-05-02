@@ -275,7 +275,7 @@ export function toCreatorStageLabel(input: {
 export function buildWorkspaceStatus(input: WorkspaceProjectionInput): WorkspaceStatus {
   const effectiveUnlockRank = getEffectiveUnlockRank(input);
   const sections = CANONICAL_SECTIONS.filter((section) =>
-    isSectionVisible(effectiveUnlockRank, section.key)
+    isSectionVisible(effectiveUnlockRank, section.key, input)
   ).map((section) => {
     const state = resolveSectionState(input, section.key);
     const placeholder =
@@ -301,9 +301,32 @@ export function buildWorkspaceStatus(input: WorkspaceProjectionInput): Workspace
   };
 }
 
-function isSectionVisible(effectiveUnlockRank: number, key: WorkspaceSectionKey) {
+function isSectionVisible(
+  effectiveUnlockRank: number,
+  key: WorkspaceSectionKey,
+  input?: WorkspaceProjectionInput,
+) {
   if (key === "script") {
     return true;
+  }
+
+  if (input) {
+    if (key === "characters" && input.characters.length > 0) {
+      return true;
+    }
+
+    if (key === "storyboards" && input.shots.length > 0) {
+      return true;
+    }
+
+    if (key === "clips") {
+      // clips section hidden — video clips are visible within storyboard shot cards
+      return false;
+    }
+
+    if (key === "final-output" && input.project.video_url) {
+      return true;
+    }
   }
 
   return effectiveUnlockRank >= SECTION_STAGE_ORDER[key];

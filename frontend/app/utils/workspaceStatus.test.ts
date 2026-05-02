@@ -58,8 +58,8 @@ describe("buildWorkspaceStatus", () => {
     ["ideate", ["script"]],
     ["character", ["script", "characters"]],
     ["storyboard", ["script", "characters", "storyboards"]],
-    ["clip", ["script", "characters", "storyboards", "clips"]],
-    ["merge", ["script", "characters", "storyboards", "clips", "final-output"]],
+    ["clip", ["script", "characters", "storyboards"]],
+    ["merge", ["script", "characters", "storyboards", "final-output"]],
   ] as const)("reveals only sections available at %s", (currentStage, expectedKeys) => {
     const result = buildWorkspaceStatus({
       ...baseInput,
@@ -218,7 +218,6 @@ describe("buildWorkspaceStatus", () => {
       expect.arrayContaining([
         expect.objectContaining({ key: "characters", state: "complete" }),
         expect.objectContaining({ key: "storyboards", state: "complete" }),
-        expect.objectContaining({ key: "clips", state: "complete" }),
       ])
     );
   });

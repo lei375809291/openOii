@@ -126,12 +126,12 @@ function ShotCard({ shot }: { shot: Shot }) {
       : shot.character_ids;
 
   const intentSummary = [
-    { label: "时长", value: `${shot.duration} 秒` },
-    { label: "镜头", value: shot.camera || "未填写" },
-    { label: "动作", value: shot.motion_note || "未填写" },
-    { label: "提示词", value: shot.prompt || "未填写" },
-    { label: "图像提示词", value: shot.image_prompt || "未填写" },
-  ];
+    { label: "时长", value: shot.duration != null ? `${shot.duration} 秒` : null },
+    { label: "镜头", value: shot.camera },
+    { label: "动作", value: shot.motion_note },
+    { label: "提示词", value: shot.prompt },
+    { label: "图像提示词", value: shot.image_prompt },
+  ].filter((item) => Boolean(item.value));
 
   const handleApprove = () => {
     canvasEvents.emit("approve-shot", { id: shot.id });
@@ -171,7 +171,7 @@ function ShotCard({ shot }: { shot: Shot }) {
     >
       {/* 操作栏 */}
       <div
-        className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-lg bg-base-100/90 p-0.5 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-lg bg-base-100/90 p-0.5 backdrop-blur-sm"
       >
         <button
           type="button"
@@ -321,9 +321,9 @@ function StoryboardSectionContent({
   const sortedShots = [...shots].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="card-doodle bg-base-100 p-5 h-full">
+    <div className="card-doodle bg-base-100 p-5 h-full flex flex-col overflow-hidden">
       {/* 标题栏 */}
-      <div className="flex items-center justify-between gap-2 mb-4">
+      <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
             <FilmIcon className="w-4 h-4 text-accent" />
@@ -342,7 +342,7 @@ function StoryboardSectionContent({
 
       {/* 分镜网格 */}
       {sortedShots.length > 0 ? (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-3 overflow-y-auto flex-1 min-h-0 pr-1">
           {sortedShots.map((shot) => (
             <ShotCard key={shot.id} shot={shot} />
           ))}
