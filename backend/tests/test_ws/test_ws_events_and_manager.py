@@ -1,4 +1,4 @@
-"""Coverage for app.ws.events and app.ws.manager edge paths."""
+"""Coverage for app.ws.manager edge paths."""
 
 from __future__ import annotations
 
@@ -7,16 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from starlette.websockets import WebSocketState
 
-from app.ws import events as ws_events_module
 from app.ws.manager import ConnectionManager
-
-
-def test_events_module_reexports_wsevent() -> None:
-    """app.ws.events should re-export WsEvent for callers that import from there."""
-    from app.schemas.ws import WsEvent
-
-    assert ws_events_module.WsEvent is WsEvent
-    assert "WsEvent" in ws_events_module.__all__
 
 
 @pytest.mark.asyncio

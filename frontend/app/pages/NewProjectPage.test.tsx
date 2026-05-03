@@ -59,8 +59,8 @@ describe('NewProjectPage', () => {
     await user.click(screen.getByRole('button', { name: '下一步 →' }));
     await user.click(screen.getByRole('button', { name: '创建项目' }));
 
-    const [payload] = vi.mocked(projectsApi.create).mock.calls[0];
-    expect(payload).toEqual({
+    const firstCall = vi.mocked(projectsApi.create).mock.calls.at(0);
+    expect(firstCall?.[0]).toEqual({
       title: 'Bootstrap Story',
       story: 'A creator starts a new comic-drama.',
       style: 'cinematic',
@@ -70,5 +70,31 @@ describe('NewProjectPage', () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects'] });
     expect(mockNavigate).toHaveBeenCalledWith('/project/7?autoStart=true');
+  });
+
+  it('shows an error toast when project creation fails and keeps the form on the current step', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+    vi.spyOn(queryClient, 'invalidateQueries');
+
+    vi.mocked(projectsApi.create).mockRejectedValue(new Error('network down'));
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <NewProjectPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: '下一步 →' }));
+    expect(screen.getByText('讲述你的故事')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('项目标题'), 'Broken Story');
+    await user.click(screen.getByRole('button', { name: '下一步 →' }));
+    await user.click(screen.getByRole('button', { name: '下一步 →' }));
+    await user.click(screen.getByRole('button', { name: '创建项目' }));
+
+    expect(screen.getByText('创建项目失败，请重试。')).toBeInTheDocument();
   });
 });

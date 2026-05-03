@@ -1,28 +1,7 @@
-/**
- * 类型安全的画布事件系统
- * 替代 window.dispatchEvent/addEventListener 的全局事件
- */
-
-import type { Character, Shot } from "~/types";
-
-// 事件类型定义
+// 事件类型定义 — 只保留仍在使用的事件
 export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
-  "retry-final-output": {
-    projectId: number;
-    feedback: string;
-    runId: number | null;
-    threadId: string | null;
-  };
-  "edit-character": Character;
-  "approve-character": { id: number };
-  "regenerate-character": number;
-  "delete-character": Character;
-  "edit-shot": Shot;
-  "approve-shot": { id: number };
-  "regenerate-shot": { id: number; type: "image" | "video" };
-  "delete-shot": Shot;
 }
 
 type EventCallback<T> = (data: T) => void;

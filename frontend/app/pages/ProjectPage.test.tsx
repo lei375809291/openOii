@@ -277,23 +277,30 @@ vi.mock('~/components/chat/ChatPanel', () => ({
     generateDisabled,
     generateDisabledReason,
     isGenerating,
+    isPaused,
     onGenerate,
     onSendFeedback,
     onConfirm,
     onCancel,
+    onPause,
+    onResume,
   }: {
     generateDisabled?: boolean;
     generateDisabledReason?: string;
     isGenerating?: boolean;
+    isPaused?: boolean;
     onGenerate?: () => void;
     onSendFeedback?: (content: string) => void;
     onConfirm?: (content?: string) => void;
     onCancel?: () => void;
+    onPause?: () => void;
+    onResume?: () => void;
   }) => (
     <div data-testid="chat-panel">
       <span data-testid="chat-generating-state">
         {isGenerating ? 'generating' : 'idle'}
       </span>
+      <span data-testid="chat-paused-state">{isPaused ? 'paused' : 'running'}</span>
       <button type="button" disabled={generateDisabled} onClick={onGenerate}>
         开始生成
       </button>
@@ -305,6 +312,12 @@ vi.mock('~/components/chat/ChatPanel', () => ({
       </button>
       <button type="button" onClick={onCancel}>
         停止生成
+      </button>
+      <button type="button" onClick={onPause}>
+        暂停自动继续
+      </button>
+      <button type="button" onClick={onResume}>
+        恢复自动继续
       </button>
       {generateDisabledReason ? <span>{generateDisabledReason}</span> : null}
     </div>
@@ -725,6 +738,25 @@ describe('ProjectPage live hydration', () => {
     );
   });
 
+  it('pauses and resumes auto-continue gates through the chat panel controls', async () => {
+    const user = userEvent.setup();
+    storeState.currentRunId = 42;
+    storeState.awaitingConfirm = true;
+    storeState.awaitingAgent = 'scriptwriter';
+
+    render(<ProjectPage />);
+
+    expect(screen.getByTestId('chat-paused-state')).toHaveTextContent('running');
+    await user.click(screen.getByRole('button', { name: '暂停自动继续' }));
+    expect(screen.getByTestId('chat-paused-state')).toHaveTextContent('paused');
+    await user.click(screen.getByRole('button', { name: '恢复自动继续' }));
+
+    expect(sendMock).toHaveBeenCalledWith({
+      type: 'confirm',
+      data: { run_id: 42 },
+    });
+  });
+
   it('routes confirm feedback through websocket when an active run exists', async () => {
     const user = userEvent.setup();
     storeState.currentRunId = 42;
@@ -745,7 +777,6 @@ describe('ProjectPage live hydration', () => {
       })
     );
   });
-
   it('resumes recoverable runs and clears recovery state after success', async () => {
     const user = userEvent.setup();
     storeState.isGenerating = false;

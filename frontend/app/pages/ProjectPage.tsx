@@ -166,7 +166,7 @@ export function ProjectPage() {
 		}
 	};
 
-	const handleResume = () => {
+	const handleAutoContinueConfirm = () => {
 		setIsPaused(false);
 		const runId = store.currentRunId;
 		if (runId && store.awaitingConfirm) {
@@ -886,7 +886,7 @@ export function ProjectPage() {
 						generateDisabledReason={generateDisabledReason}
 						isPaused={isPaused}
 						onPause={handlePause}
-						onResume={handleResume}
+						onResume={handleAutoContinueConfirm}
 					/>
 					</div>
 

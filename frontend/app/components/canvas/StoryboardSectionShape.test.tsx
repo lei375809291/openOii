@@ -50,17 +50,16 @@ describe("StoryboardSectionShape", () => {
       },
     }) as StoryboardSectionShape;
 
-  it("shows shot approval state, duration badge, description, and controls", () => {
+  it("shows shot info, duration badge, and description", () => {
     render(shapeUtil.component(createShape()));
 
-    // approval shown as green dot (title="已批准"), not badge text
-    expect(screen.getByTitle("已批准")).toBeInTheDocument();
     expect(screen.getByText("7s")).toBeInTheDocument();
     expect(screen.getByText(/阿宁走进雨夜街道/)).toBeInTheDocument();
-    expect(screen.getByTitle(/重新审核/)).toBeInTheDocument();
+    expect(screen.getByText("镜头 1")).toBeInTheDocument();
+    expect(screen.getByText("wide")).toBeInTheDocument();
   });
 
-  it("keeps only the current approved state visible for superseded shots", () => {
+  it("shows superseded shots without version info", () => {
     render(
       shapeUtil.component(
         createShape({
@@ -94,8 +93,7 @@ describe("StoryboardSectionShape", () => {
       )
     );
 
-    // superseded shots show neutral dot (title="待审核"), not "已失效" badge
-    expect(screen.getByTitle("待审核")).toBeInTheDocument();
+    expect(screen.getByText("旧镜头")).toBeInTheDocument();
     expect(screen.queryByText(/approval_version/i)).not.toBeInTheDocument();
   });
 });

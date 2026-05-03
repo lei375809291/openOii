@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
-import asyncio
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -16,23 +18,8 @@ from app.config import get_settings
 from app.models import agent_run, artifact, config_item, message, project, run, stage  # noqa: F401
 from app.orchestration.persistence import ensure_postgres_checkpointer_setup
 
-
-def _patch_aiosqlite_event_loop() -> None:
-    # Python 3.14 tightened asyncio.get_event_loop() semantics; older aiosqlite versions
-    # may hang because they create futures on a non-running loop. Force it to use the
-    # running loop when available.
-    try:
-        import aiosqlite.core as _core  # type: ignore
-    except Exception:
-        return
-
-    try:
-        _core.asyncio.get_event_loop = asyncio.get_running_loop  # type: ignore[attr-defined]
-    except Exception:
-        return
-
-
-_patch_aiosqlite_event_loop()
+ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
+ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
 
 
 def _build_engine() -> AsyncEngine:
@@ -46,14 +33,25 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
 )
 
 
+def _run_alembic_upgrade() -> None:
+    settings = get_settings()
+    cfg = AlembicConfig(str(ALEMBIC_INI))
+    cfg.set_main_option("script_location", str(ALEMBIC_DIR))
+    cfg.set_main_option(
+        "sqlalchemy.url",
+        settings.database_url.replace("+asyncpg", "+psycopg2"),
+    )
+    alembic_command.upgrade(cfg, "head")
+
+
 async def init_db() -> None:
     """Initialize database tables and cleanup stale runs."""
     settings = get_settings()
     agent_run_table = SQLModel.metadata.tables["agentrun"]
     project_table = SQLModel.metadata.tables["project"]
 
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+    loop = __import__("asyncio").get_running_loop()
+    await loop.run_in_executor(None, _run_alembic_upgrade)
 
     async with async_session_maker() as session:
         from app.services.config_service import ConfigService
@@ -64,14 +62,12 @@ async def init_db() -> None:
         await config_service.ensure_initialized()
         await config_service.apply_settings_overrides()
 
-        # 清理服务重启前遗留的 running/queued 状态的 run（它们已经不会继续执行了）
         await session.execute(
             update(AgentRun)
             .where(agent_run_table.c.status.in_(["queued", "running"]))
             .values(status="cancelled", error="Service restarted")
         )
 
-        # 兼容旧数据：style 可能为 NULL/空字符串，统一回填为默认风格
         await session.execute(
             update(Project)
             .where((project_table.c.style.is_(None)) | (func.trim(project_table.c.style) == ""))

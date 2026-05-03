@@ -111,7 +111,16 @@ describe('ChatPanel', () => {
   it('shows awaiting confirm area and sends trimmed feedback to confirm', async () => {
     const user = userEvent.setup();
     storeState.awaitingConfirm = true;
-    storeState.awaitingAgent = 'scriptwriter';
+    storeState.awaitingAgent = 'director';
+    storeState.messages = [
+      {
+        id: '1',
+        agent: 'director',
+        role: 'assistant',
+        content: '完整内容',
+        summary: '导演摘要',
+      },
+    ] as never[];
 
     render(
       <ChatPanel
@@ -124,11 +133,34 @@ describe('ChatPanel', () => {
     );
 
     expect(screen.getByText('等待确认')).toBeInTheDocument();
+    expect(screen.getByText('导演摘要')).toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox'), '  修改剧情节奏  ');
     await user.click(screen.getByRole('button', { name: /继续/ }));
 
     expect(onConfirm).toHaveBeenLastCalledWith('修改剧情节奏');
+  });
+
+  it('shows pause button for auto-continue gates', async () => {
+    const user = userEvent.setup();
+    const onPause = vi.fn();
+    storeState.awaitingConfirm = true;
+    storeState.awaitingAgent = 'scriptwriter';
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating
+        isPaused={false}
+        onPause={onPause}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: '暂停自动继续' }));
+    expect(onPause).toHaveBeenCalledTimes(1);
   });
 
   it('sends feedback through onSendFeedback outside generating and confirm states', async () => {
@@ -148,5 +180,67 @@ describe('ChatPanel', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     expect(onSendFeedback).toHaveBeenLastCalledWith('  这里有建议  ');
+  });
+  it('shows character stage icon when currentStage is character', () => {
+    storeState.currentStage = 'character';
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating={false}
+      />
+    );
+
+    expect(screen.getByText('角色阶段')).toBeInTheDocument();
+  });
+
+  it('shows storyboard stage icon when currentStage is storyboard', () => {
+    storeState.currentStage = 'storyboard';
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating={false}
+      />
+    );
+
+    expect(screen.getByText('分镜阶段')).toBeInTheDocument();
+  });
+  it('shows merge stage icon when currentStage is merge', () => {
+    storeState.currentStage = 'merge';
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating={false}
+      />
+    );
+
+    expect(screen.getByText('合成阶段')).toBeInTheDocument();
+  });
+
+  it('shows clip stage icon when currentStage is clip', () => {
+    storeState.currentStage = 'clip';
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating={false}
+      />
+    );
+
+    expect(screen.getByText('片段阶段')).toBeInTheDocument();
   });
 });

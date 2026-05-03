@@ -20,34 +20,16 @@ export class ConnectorShapeUtil extends ShapeUtil<ConnectorShape> {
   };
 
   getDefaultProps(): ConnectorShape["props"] {
-    return {
-      fromId: "",
-      toId: "",
-    };
+    return { fromId: "", toId: "" };
   }
 
-  override canEdit() {
-    return false;
-  }
-
-  override canResize() {
-    return false;
-  }
-
-  override canBind() {
-    return false;
-  }
-
-  override hideSelectionBoundsFg() {
-    return true;
-  }
-
-  override hideSelectionBoundsBg() {
-    return true;
-  }
+  override canEdit() { return false; }
+  override canResize() { return false; }
+  override canBind() { return false; }
+  override hideSelectionBoundsFg() { return true; }
+  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: ConnectorShape): Geometry2d {
-    // 获取连接的 shapes
     const fromShape = this.editor.getShape(shape.props.fromId as TLShapeId);
     const toShape = this.editor.getShape(shape.props.toId as TLShapeId);
 
@@ -58,104 +40,50 @@ export class ConnectorShapeUtil extends ShapeUtil<ConnectorShape> {
     const fromBounds = this.editor.getShapeGeometry(fromShape).bounds;
     const toBounds = this.editor.getShapeGeometry(toShape).bounds;
 
-    const startX = fromShape.x + fromBounds.w / 2;
-    const startY = fromShape.y + fromBounds.h;
-    const endX = toShape.x + toBounds.w / 2;
-    const endY = toShape.y;
-
     return new Polyline2d({
-      points: [new Vec(startX, startY), new Vec(endX, endY)],
+      points: [
+        new Vec(fromShape.x + fromBounds.w / 2, fromShape.y + fromBounds.h),
+        new Vec(toShape.x + toBounds.w / 2, toShape.y),
+      ],
     });
   }
 
   component(shape: ConnectorShape) {
-    return <ConnectorComponent shape={shape} />;
+    return <ConnectorLine shape={shape} />;
   }
 
-  indicator() {
-    return null;
-  }
+  indicator() { return null; }
 }
 
-// 独立组件以使用 React hooks
-function ConnectorComponent({ shape }: { shape: ConnectorShape }) {
+function ConnectorLine({ shape }: { shape: ConnectorShape }) {
   const editor = useEditor();
 
-  // 响应式获取连接的 shapes
-  const fromShape = useValue(
-    "fromShape",
-    () => editor.getShape(shape.props.fromId as TLShapeId),
-    [shape.props.fromId]
-  );
+  const fromShape = useValue("fromShape", () => editor.getShape(shape.props.fromId as TLShapeId), [shape.props.fromId]);
+  const toShape = useValue("toShape", () => editor.getShape(shape.props.toId as TLShapeId), [shape.props.toId]);
 
-  const toShape = useValue(
-    "toShape",
-    () => editor.getShape(shape.props.toId as TLShapeId),
-    [shape.props.toId]
-  );
+  if (!fromShape || !toShape) return null;
 
-  if (!fromShape || !toShape) {
-    return null;
-  }
-
-  // 获取 bounds
   const fromBounds = editor.getShapeGeometry(fromShape).bounds;
   const toBounds = editor.getShapeGeometry(toShape).bounds;
 
-  // 计算连接点：from 的底部中心 -> to 的顶部中心
-  const start = {
-    x: fromShape.x + fromBounds.w / 2,
-    y: fromShape.y + fromBounds.h,
-  };
-  const end = {
-    x: toShape.x + toBounds.w / 2,
-    y: toShape.y,
-  };
-
-  // 计算贝塞尔曲线控制点 - 更明显的 S 形曲线
-  const gapY = end.y - start.y;
-  const curveOffset = Math.min(60, gapY * 0.4); // 水平偏移量
-  const controlPoint1 = { x: start.x - curveOffset, y: start.y + gapY * 0.3 };
-  const controlPoint2 = { x: end.x + curveOffset, y: end.y - gapY * 0.3 };
-
-  const pathD = `M ${start.x} ${start.y} C ${controlPoint1.x} ${controlPoint1.y}, ${controlPoint2.x} ${controlPoint2.y}, ${end.x} ${end.y}`;
+  const x1 = fromShape.x + fromBounds.w / 2;
+  const y1 = fromShape.y + fromBounds.h;
+  const x2 = toShape.x + toBounds.w / 2;
+  const y2 = toShape.y;
 
   return (
-    <svg
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        overflow: "visible",
-        pointerEvents: "none",
-      }}
-    >
-      {/* 连接线 */}
-      <path
-        d={pathD}
-        fill="none"
-        stroke="oklch(var(--bc) / 0.3)"
+    <svg style={{ position: "absolute", top: 0, left: 0, overflow: "visible", pointerEvents: "none" }}>
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="oklch(var(--bc) / 0.15)"
         strokeWidth={2}
         strokeDasharray="6 4"
       />
-      {/* 起点圆点 */}
-      <circle
-        cx={start.x}
-        cy={start.y}
-        r={4}
-        fill="oklch(var(--b1))"
-        stroke="oklch(var(--bc) / 0.3)"
-        strokeWidth={2}
-      />
-      {/* 终点圆点 */}
-      <circle
-        cx={end.x}
-        cy={end.y}
-        r={4}
-        fill="oklch(var(--b1))"
-        stroke="oklch(var(--bc) / 0.3)"
-        strokeWidth={2}
-      />
+      <circle cx={x1} cy={y1} r={3} fill="oklch(var(--p) / 0.5)" />
+      <circle cx={x2} cy={y2} r={3} fill="oklch(var(--s) / 0.5)" />
     </svg>
   );
 }

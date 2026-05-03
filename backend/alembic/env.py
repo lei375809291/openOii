@@ -28,8 +28,8 @@ def _database_url() -> str:
     if env_url:
         return env_url
     configured_url = config.get_main_option("sqlalchemy.url")
-    if configured_url is None:
-        raise RuntimeError("Alembic database URL is not configured")
+    if not configured_url:
+        raise RuntimeError("Alembic database URL is not configured (set DATABASE_URL or sqlalchemy.url)")
     return configured_url
 
 

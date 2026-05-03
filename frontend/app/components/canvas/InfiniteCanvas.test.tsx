@@ -2,12 +2,7 @@ import { render, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { canvasEvents } from "./canvasEvents";
 import { InfiniteCanvas } from "./InfiniteCanvas";
-import { charactersApi, shotsApi } from "~/services/api";
-
-const updateCharacter = vi.fn();
-const updateShot = vi.fn();
 
 const useCanvasLayoutMock = vi.hoisted(() =>
   vi.fn((args: any) =>
@@ -28,11 +23,10 @@ const mockEditor = vi.hoisted(() => {
     createShapes: vi.fn((nextShapes: Array<{ id: string }>) => {
       shapes = nextShapes.map((shape) => ({ ...shape }));
     }),
-    createShape: vi.fn((shape: { id: string }) => {
-      shapes = [...shapes, { ...shape }];
-    }),
-    updateShape: vi.fn((shape: { id: string }) => {
-      shapes = shapes.map((current) => (current.id === shape.id ? { ...current, ...shape } : current));
+    updateShapes: vi.fn((nextShapes: Array<{ id: string }>) => {
+      for (const shape of nextShapes) {
+        shapes = shapes.map((current) => (current.id === shape.id ? { ...current, ...shape } : current));
+      }
     }),
     deleteShapes: vi.fn((ids: string[]) => {
       shapes = shapes.filter((shape) => !ids.includes(shape.id));
@@ -42,8 +36,7 @@ const mockEditor = vi.hoisted(() => {
     reset() {
       shapes = [];
       editor.createShapes.mockClear();
-      editor.createShape.mockClear();
-      editor.updateShape.mockClear();
+      editor.updateShapes.mockClear();
       editor.deleteShapes.mockClear();
       editor.getCurrentPageShapes.mockClear();
       editor.zoomToFit.mockClear();
@@ -58,42 +51,15 @@ vi.mock("@tanstack/react-query", () => ({
     data: {
       id: 1,
       title: "测试项目",
-      story: null,
+      story: "一个侦探在雨夜的城市中寻找真相",
       style: null,
-      summary: "故事摘要",
+      summary: "创作了3个角色和8个镜头的剧本",
       video_url: null,
       status: "active",
       created_at: "2026-04-11T00:00:00Z",
       updated_at: "2026-04-11T00:00:00Z",
     },
   }),
-  useMutation: (config: any) => {
-    const mutate = vi.fn((variables: any, callbacks?: any) => {
-      const result = config?.mutationFn?.(variables);
-
-      if (result && typeof result.then === "function") {
-        return result.then((value: any) => {
-          config?.onSuccess?.(value, variables, undefined);
-          callbacks?.onSuccess?.(value);
-          return value;
-        });
-      }
-
-      config?.onSuccess?.(result, variables, undefined);
-      callbacks?.onSuccess?.(result);
-      return result;
-    });
-
-    return {
-      mutate,
-      mutateAsync: async (variables: any) => {
-        const value = await config?.mutationFn?.(variables);
-        config?.onSuccess?.(value, variables, undefined);
-        return value;
-      },
-      isPending: false,
-    };
-  },
 }));
 
 vi.mock("tldraw", () => ({
@@ -167,10 +133,6 @@ vi.mock("~/stores/editorStore", () => ({
       },
     ],
     projectVideoUrl: null,
-    updateCharacter,
-    updateShot,
-    removeCharacter: vi.fn(),
-    removeShot: vi.fn(),
   }),
 }));
 
@@ -178,22 +140,10 @@ vi.mock("~/services/api", () => ({
   projectsApi: {
     get: () => Promise.resolve({}),
   },
-  charactersApi: {
-    approve: vi.fn().mockResolvedValue({ id: 1 }),
-    update: vi.fn(),
-    regenerate: vi.fn(),
-    delete: vi.fn(),
-  },
-  shotsApi: {
-    approve: vi.fn().mockResolvedValue({ id: 11 }),
-    update: vi.fn(),
-    regenerate: vi.fn(),
-    delete: vi.fn(),
-  },
   getStaticUrl: (path: string | null | undefined) => path,
 }));
 
-describe("InfiniteCanvas approve wiring", () => {
+describe("InfiniteCanvas", () => {
   it("only mounts sections that are revealed for the current stage", async () => {
     render(<InfiniteCanvas projectId={1} />);
 
@@ -213,16 +163,15 @@ describe("InfiniteCanvas approve wiring", () => {
     ]);
   });
 
-  it("routes approve-character and approve-shot events to backend mutations", async () => {
+  it("passes story and summary to canvas layout", async () => {
     render(<InfiniteCanvas projectId={1} />);
 
-    canvasEvents.emit("approve-character", { id: 1 });
-    canvasEvents.emit("approve-shot", { id: 11 });
-
     await waitFor(() => {
-      expect(charactersApi.approve).toHaveBeenCalledWith(1);
-      expect(shotsApi.approve).toHaveBeenCalledWith(11);
+      expect(useCanvasLayoutMock).toHaveBeenCalled();
     });
+
+    expect(useCanvasLayoutMock.mock.calls[0]?.[0].story).toBe("一个侦探在雨夜的城市中寻找真相");
+    expect(useCanvasLayoutMock.mock.calls[0]?.[0].summary).toBe("创作了3个角色和8个镜头的剧本");
   });
 
   it("does not rewrite the projected canvas when backend data is unchanged", async () => {
@@ -233,15 +182,13 @@ describe("InfiniteCanvas approve wiring", () => {
     });
 
     mockEditor.createShapes.mockClear();
-    mockEditor.createShape.mockClear();
-    mockEditor.updateShape.mockClear();
+    mockEditor.updateShapes.mockClear();
     mockEditor.deleteShapes.mockClear();
 
     rerender(<InfiniteCanvas projectId={1} />);
 
     expect(mockEditor.createShapes).not.toHaveBeenCalled();
-    expect(mockEditor.createShape).not.toHaveBeenCalled();
-    expect(mockEditor.updateShape).not.toHaveBeenCalled();
+    expect(mockEditor.updateShapes).not.toHaveBeenCalled();
     expect(mockEditor.deleteShapes).not.toHaveBeenCalled();
   });
 });

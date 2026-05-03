@@ -104,21 +104,6 @@
     content: "";
    @apply absolute -inset-2 border-2 border-dashed border-secondary rounded-full opacity-50;
   }
-
- /* 文本截断工具类 */
- .line-clamp-2 {
-   display: -webkit-box;
-   -webkit-line-clamp: 2;
-   -webkit-box-orient: vertical;
-   overflow: hidden;
-  }
-
- .line-clamp-3 {
-   display: -webkit-box;
-   -webkit-line-clamp: 3;
-   -webkit-box-orient: vertical;
-   overflow: hidden;
-  }
 }
 
 @layer utilities {
@@ -331,9 +316,10 @@
   pointer-events: none !important;
 }
 
-/* Shape 容器样式 */
-.infinite-canvas-container .tl-shape-container {
-  /* 确保 Tailwind 类在 Shape 内生效 */
+/* Shape 容器样式 - 允许内容溢出显示 */
+.infinite-canvas-container .tl-shape-container,
+.infinite-canvas-container .tl-shape {
+  overflow: visible !important;
 }
 
 /* 隐藏选中状态指示器（自定义 shapes 已通过 hideSelectionBoundsFg/Bg 禁用） */

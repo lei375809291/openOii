@@ -296,19 +296,25 @@ class ScriptwriterAgent(BaseAgent):
                 await self.send_shot_event(ctx, shot, "shot_updated")
 
             # 生成摘要
+            total_shots = len(final_shots)
             summary = f"增量更新完成：{len(final_chars)}个角色、{total_shots}个分镜"
+
+            # 写入项目摘要
+            ctx.project.summary = summary
+            ctx.project.updated_at = utcnow()
+            ctx.session.add(ctx.project)
 
             # 显示更新摘要
             char_names = [c.name for c in final_chars]
             await self.send_message(ctx, f"👥 角色设定：{', '.join(char_names)}")
 
-            total_shots = len(final_shots)
             await self.send_message(
                 ctx,
                 f"✅ 增量更新完成：{len(final_chars)} 个角色、{total_shots} 个分镜，接下来将进行角色设计。",
                 summary=summary,
                 progress=1.0
             )
+            return
             return
 
         # 全量模式：原有逻辑
@@ -388,5 +394,10 @@ class ScriptwriterAgent(BaseAgent):
         # 生成摘要
         char_count = len(raw_characters) if isinstance(raw_characters, list) else 0
         summary = f"创作了{char_count}个角色和{len(new_shots)}个镜头的剧本"
+
+        # 写入项目摘要
+        ctx.project.summary = summary
+        ctx.project.updated_at = utcnow()
+        ctx.session.add(ctx.project)
 
         await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_shots)} 个镜头，接下来将进行角色设计。", summary=summary, progress=1.0)

@@ -28,6 +28,7 @@ const DEFAULT_CONFIG: LayoutConfig = {
 
 interface UseCanvasLayoutProps {
   projectId: number;
+  story: string | null;
   summary: string | null;
   characters: Character[];
   shots: Shot[];
@@ -40,6 +41,7 @@ interface UseCanvasLayoutProps {
 
 export function useCanvasLayout({
   projectId,
+  story,
   summary,
   characters,
   shots,
@@ -54,16 +56,17 @@ export function useCanvasLayout({
     [customConfig]
   );
 
-  const sectionStatuses = useMemo(
+    const sectionStatuses = useMemo(
     () =>
       workspaceStatus?.sections ??
       buildFallbackSectionStatuses({
+        story,
         summary,
         characters,
         shots,
         videoUrl,
       }),
-    [workspaceStatus, summary, characters, shots, videoUrl]
+    [workspaceStatus, story, summary, characters, shots, videoUrl]
   );
 
   const shapes = useMemo(() => {
@@ -71,7 +74,7 @@ export function useCanvasLayout({
     let currentY = config.startY;
 
     // 计算各区域高度
-    const scriptHeight = calculateScriptHeight(summary, characters, shots);
+    const scriptHeight = calculateScriptHeight(story, summary, characters, shots);
     const characterHeight = calculateCharacterHeight(characters);
     const storyboardHeight = calculateStoryboardHeight(shots);
     const videoHeight = 450;
@@ -94,6 +97,7 @@ export function useCanvasLayout({
 
     const contentBySection: Record<WorkspaceSectionKey, Record<string, unknown>> = {
       script: {
+        story: story || "",
         summary: summary || "",
         characters,
         shots,
@@ -192,13 +196,14 @@ export function useCanvasLayout({
 }
 
 function buildFallbackSectionStatuses(input: {
+  story: string | null;
   summary: string | null;
   characters: Character[];
   shots: Shot[];
   videoUrl: string | null;
 }): Array<{ key: WorkspaceSectionKey; state: WorkspaceSectionState; placeholder: boolean }> {
-  const { summary, characters, shots, videoUrl } = input;
-  const hasSummary = Boolean(summary);
+  const { story, summary, characters, shots, videoUrl } = input;
+  const hasContent = Boolean(story) || Boolean(summary);
   const hasApprovedCharacter = characters.some((character) => character.approval_state === "approved");
   const hasStoryboardImage = shots.some((shot) => Boolean(shot.image_url));
   const hasClip = shots.some((shot) => Boolean(shot.video_url));
@@ -207,8 +212,8 @@ function buildFallbackSectionStatuses(input: {
     if (section.key === "script") {
       return {
         key: section.key,
-        state: hasSummary || characters.length > 0 || shots.length > 0 ? "generating" : "draft",
-        placeholder: !hasSummary && characters.length === 0 && shots.length === 0,
+        state: hasContent || characters.length > 0 || shots.length > 0 ? "generating" : "draft",
+        placeholder: !hasContent && characters.length === 0 && shots.length === 0,
       };
     }
 
@@ -244,17 +249,19 @@ function buildFallbackSectionStatuses(input: {
   });
 }
 
-// 计算剧本区域高度 - 只显示摘要（中文约 25 字/行）
+// 计算剧本区域高度 - 显示故事原文 + 摘要
 function calculateScriptHeight(
+  story: string | null,
   summary: string | null,
   _characters: Character[],
   _shots: Shot[]
 ): number {
   let height = 80; // 标题栏 + padding
 
-  if (summary) {
+  const text = story || summary || "";
+  if (text) {
     // 中英文混合取 30 字符/行，text-sm leading-relaxed ≈ 22px/行
-    const lines = Math.ceil(summary.length / 30);
+    const lines = Math.ceil(text.length / 30);
     height += 20 + lines * 22 + 32;
   }
 

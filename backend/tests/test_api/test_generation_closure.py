@@ -79,13 +79,12 @@ class _StubOrchestrator:
         self.run_from_agent_calls: list[dict[str, Any]] = []
         type(self).instances.append(self)
 
-    async def run(self, *, project_id, run_id, request) -> None:
-        self.run_calls.append({"project_id": project_id, "run_id": run_id, "request": request})
+    async def run(self, *, project_id, run_id, request, auto_mode=False) -> None:
+        self.run_calls.append({"project_id": project_id, "run_id": run_id, "request": request, "auto_mode": auto_mode})
         exc = type(self).next_run_exception
         type(self).next_run_exception = None
         if exc is not None:
             raise exc
-
     async def resume_from_recovery(self, *, project_id, run_id) -> None:
         self.resume_calls.append({"project_id": project_id, "run_id": run_id})
         exc = type(self).next_resume_exception

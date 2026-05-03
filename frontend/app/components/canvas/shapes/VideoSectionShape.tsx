@@ -7,14 +7,17 @@ import {
   type RecordProps,
 } from "tldraw";
 import type { VideoSectionShape } from "./types";
-import { VideoCameraIcon } from "@heroicons/react/24/outline";
-import { canvasEvents } from "../canvasEvents";
-import { getStaticUrl } from "~/services/api";
+import { SectionShell } from "./SectionShell";
 import {
   getWorkspaceSectionPlaceholderText,
-  getWorkspaceSectionStatusBadgeClass,
   getWorkspaceSectionStatusLabel,
 } from "~/utils/workspaceStatus";
+
+const PLACEHOLDER_ICON = (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 opacity-40">
+    <path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-9a3 3 0 0 0-3-3H4.5ZM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06Z" />
+  </svg>
+);
 
 export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
   static override type = "video-section" as const;
@@ -63,21 +66,10 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
     };
   }
 
-  override canEdit() {
-    return false;
-  }
-
-  override canResize() {
-    return false;
-  }
-
-  override hideSelectionBoundsFg() {
-    return true;
-  }
-
-  override hideSelectionBoundsBg() {
-    return true;
-  }
+  override canEdit() { return false; }
+  override canResize() { return false; }
+  override hideSelectionBoundsFg() { return true; }
+  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: VideoSectionShape): Geometry2d {
     return new Rectangle2d({
@@ -89,76 +81,22 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
 
   component(shape: VideoSectionShape) {
     const {
-      projectId,
-      videoUrl,
-      title,
-      downloadUrl,
-      blockingText,
-      retryFeedback,
-      retryRunId,
-      retryThreadId,
-      placeholder,
-      placeholderText,
-      statusLabel,
-      sectionState,
+      videoUrl, title, blockingText,
+      placeholder, placeholderText, statusLabel,
+      w, h,
     } = shape.props;
 
-    const handleDownload = async (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-		const resolvedDownloadUrl = getStaticUrl(downloadUrl) || downloadUrl || videoUrl;
-		try {
-			const response = await fetch(resolvedDownloadUrl);
-			if (!response.ok) {
-				throw new Error(`download failed: ${response.status}`);
-			}
-			const blob = await response.blob();
-			const url = window.URL.createObjectURL(blob);
-			const a = document.createElement("a");
-        a.href = url;
-        a.download = `${title || "video"}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-			setTimeout(() => window.URL.revokeObjectURL(url), 0);
-        document.body.removeChild(a);
-      } catch (err) {
-        console.error("下载失败:", err);
-			window.open(resolvedDownloadUrl, "_blank");
-      }
-    };
-
-    const handleRetry = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      canvasEvents.emit("retry-final-output", {
-        projectId,
-        feedback: retryFeedback,
-        runId: retryRunId ?? null,
-        threadId: retryThreadId ?? null,
-      });
-    };
-
     return (
-      <HTMLContainer
-        style={{
-          width: shape.props.w,
-          height: shape.props.h,
-          pointerEvents: "all",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", width: shape.props.w, height: shape.props.h, overflow: "hidden", borderRadius: 12, background: "var(--fallback-b1,oklch(var(--b1)))", clipPath: "inset(0 round 12px)" }}>
-          {/* 标题栏 — 固定高度 */}
-          <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1 flex-shrink-0">
-            <h2 className="text-sm font-bold text-base-content">艺术总监</h2>
-            <span className={`badge badge-xs ${getWorkspaceSectionStatusBadgeClass(sectionState)}`}>
-              {statusLabel}
-            </span>
-          </div>
-
-          {/* 内容 — flex 剩余空间 */}
+      <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
+        <SectionShell
+          sectionTitle="最终输出"
+          statusLabel={statusLabel}
+          placeholder={!videoUrl && placeholder}
+          placeholderText={placeholderText}
+          placeholderIcon={PLACEHOLDER_ICON}
+        >
           {videoUrl ? (
-            <div className="overflow-y-auto px-3 pb-2" style={{ height: shape.props.h - 32 - 8 }}>
+            <div className="space-y-2">
               <video
                 className="w-full rounded-lg bg-black"
                 src={videoUrl}
@@ -166,34 +104,17 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={title}
               >
-                <track
-                  kind="captions"
-                  label="中文"
-                  srcLang="zh"
-                  default
-                  src={`data:text/vtt;charset=utf-8,${encodeURIComponent(
-                    `WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`
-                  )}`}
+                <track kind="captions" label="中文" srcLang="zh" default
+                  src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`)}`}
                 />
               </video>
-              {blockingText && <p className="mt-2 text-xs text-warning">{blockingText}</p>}
-              <div className="flex gap-2 mt-2">
-                <button type="button" onClick={handleDownload} onPointerDown={(e) => e.stopPropagation()} className="btn btn-xs btn-primary flex-1">下载</button>
-                <button type="button" onClick={handleRetry} onPointerDown={(e) => e.stopPropagation()} className="btn btn-xs btn-ghost">重试</button>
-              </div>
+              {blockingText && <p className="text-xs text-warning">{blockingText}</p>}
             </div>
-          ) : (
-            <div className="text-center py-12 text-base-content/50">
-              <VideoCameraIcon className="w-16 h-16 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">{placeholder ? placeholderText : "等待视频合成..."}</p>
-            </div>
-          )}
-        </div>
+          ) : null}
+        </SectionShell>
       </HTMLContainer>
     );
   }
 
-  indicator() {
-    return null;
-  }
+  indicator() { return null; }
 }

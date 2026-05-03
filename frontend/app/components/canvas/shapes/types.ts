@@ -43,12 +43,13 @@ export const SHAPE_TYPES = {
   CONNECTOR: "connector",
 } as const;
 
-// 剧本区域 Shape (包含摘要、角色列表文字版、分镜描述)
+// 剧本区域 Shape (包含故事原文、摘要、角色列表文字版、分镜描述)
 export type ScriptSectionShape = TLBaseShape<
   typeof SHAPE_TYPES.SCRIPT_SECTION,
   {
     w: number;
     h: number;
+    story: string;
     summary: string;
     characters: ReviewedCharacter[];
     shots: ReviewedShot[];

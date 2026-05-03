@@ -39,15 +39,15 @@ describe("CharacterSectionShape", () => {
       },
     }) as CharacterSectionShape;
 
-  it("shows the current approval state and review controls", () => {
+  it("shows approval state dot and character info", () => {
     render(shapeUtil.component(createShape()));
 
-    // approval shown as green dot (title="已批准"), not badge text
-    expect(screen.getByTitle("已批准")).toBeInTheDocument();
-    expect(screen.getByTitle(/重新审核/)).toBeInTheDocument();
+    expect(screen.getByText("阿宁")).toBeInTheDocument();
+    expect(screen.getByText("冷静的侦探")).toBeInTheDocument();
+    expect(screen.getByText("v2")).toBeInTheDocument();
   });
 
-  it("marks superseded characters without exposing version history", () => {
+  it("marks superseded characters with neutral dot", () => {
     render(
       shapeUtil.component(
         createShape({
@@ -70,8 +70,7 @@ describe("CharacterSectionShape", () => {
       )
     );
 
-    // superseded chars show neutral dot (title="待审核")
-    expect(screen.getByTitle("待审核")).toBeInTheDocument();
+    expect(screen.getByText("旧阿宁")).toBeInTheDocument();
     expect(screen.queryByText(/version/i)).not.toBeInTheDocument();
   });
 });

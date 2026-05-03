@@ -82,6 +82,9 @@ class DirectorAgent(BaseAgent):
 
         summary = "，".join(summary_parts) if summary_parts else "导演规划完成"
 
+        # 写入项目摘要（画布编剧卡片读取此字段）
+        ctx.project.summary = summary
+
         # 发送规划结果
         if lines:
             await self.send_message(ctx, "\n".join(lines), summary=summary)
