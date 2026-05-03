@@ -69,9 +69,22 @@ class DirectorAgent(BaseAgent):
                     if title:
                         lines.append(f"   {i+1}. {title}")
 
+        # 生成摘要
+        summary_parts = []
+        if ctx.project.style:
+            summary_parts.append(f"视觉风格：{ctx.project.style}")
+        vision = (data.get("director_notes") or {}).get("vision")
+        if vision:
+            summary_parts.append(f"创作愿景：{vision}")
+        scene_count = len(data.get("scene_outline") or [])
+        if scene_count:
+            summary_parts.append(f"剧情大纲：{scene_count}个段落")
+
+        summary = "，".join(summary_parts) if summary_parts else "导演规划完成"
+
         # 发送规划结果
         if lines:
-            await self.send_message(ctx, "\n".join(lines))
+            await self.send_message(ctx, "\n".join(lines), summary=summary)
 
         ctx.project.updated_at = utcnow()
         ctx.session.add(ctx.project)

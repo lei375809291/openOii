@@ -24,7 +24,14 @@ interface ChatPanelProps {
   isGenerating: boolean;
   generateDisabled?: boolean;
   generateDisabledReason?: string;
+  isPaused?: boolean;
+  onPause?: () => void;
+  onResume?: () => void;
 }
+
+// 自动继续的确认点
+const AUTO_CONTINUE_AGENTS = new Set(["scriptwriter", "video_generator"]);
+
 // ... (imports and interface definition remain the same) ...
 
 function getStageIcon(stage: WorkflowStage) {
@@ -73,6 +80,9 @@ export function ChatPanel({
   isGenerating,
   generateDisabled = false,
   generateDisabledReason,
+  isPaused = false,
+  onPause,
+  onResume,
 }: ChatPanelProps) {
   const generateDisabledReasonId = generateDisabledReason ? "generate-disabled-reason" : undefined;
   const {
@@ -117,6 +127,11 @@ export function ChatPanel({
   const currentAgentDisplayName = currentAgent ? agentNameMap[currentAgent] || currentAgent : "";
   const runState = awaitingConfirm ? "awaiting_confirm" : isGenerating ? "running" : currentRunId ? "blocked" : "completed";
   const statusLabel = runStateLabelMap[toCreatorStageLabel({ runState })] ?? "待生成";
+
+  // 获取等待确认的 agent 的最新摘要
+  const awaitingSummary = awaitingAgent
+    ? [...messages].reverse().find((m) => m.agent === awaitingAgent && m.summary)?.summary
+    : undefined;
 
   return (
     <div className="flex flex-col h-full bg-base-200 rounded-box shadow-lg">
@@ -220,9 +235,13 @@ export function ChatPanel({
               <span className="badge badge-warning badge-sm text-warning-content">等待确认</span>
               <span className="font-medium text-xs sm:text-sm">{agentDisplayName} 已完成</span>
             </div>
-            <p className="text-xs sm:text-sm text-base-content/80 mb-2">
-              请在右侧查看生成结果。满意的话点击下方按钮继续
-            </p>
+            {awaitingSummary ? (
+              <p className="text-xs sm:text-sm text-base-content/80 mb-2">{awaitingSummary}</p>
+            ) : (
+              <p className="text-xs sm:text-sm text-base-content/80 mb-2">
+                请在右侧查看生成结果。满意的话点击下方按钮继续
+              </p>
+            )}
             <p className="text-xs text-base-content/60">
               <span className="inline-flex items-center gap-1">
                 <LightBulbIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
@@ -231,21 +250,34 @@ export function ChatPanel({
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="primary"
-              onClick={() => {
-                const feedback = input.trim();
-                onConfirm(feedback || undefined);
-                setInput("");
-              }}
-              className="flex-1 touch-target"
-            >
-              <span className="inline-flex items-center gap-2">
-                <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-                <span className="hidden sm:inline">满意，继续下一步</span>
-                <span className="sm:hidden">继续</span>
-              </span>
-            </Button>
+            {awaitingAgent && AUTO_CONTINUE_AGENTS.has(awaitingAgent) && !isPaused ? (
+              <Button
+                variant="ghost"
+                onClick={onPause}
+                className="flex-1 touch-target"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <PauseIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+                  <span>暂停自动继续</span>
+                </span>
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const feedback = input.trim();
+                  onConfirm(feedback || undefined);
+                  setInput("");
+                }}
+                className="flex-1 touch-target"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+                  <span className="hidden sm:inline">满意，继续下一步</span>
+                  <span className="sm:hidden">继续</span>
+                </span>
+              </Button>
+            )}
           </div>
         </div>
       )}

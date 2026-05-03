@@ -17,6 +17,7 @@ class Message(SQLModel, table=True):
     agent: str  # agent 名称
     role: str  # assistant, user, system, error, handoff, separator, info
     content: str  # 消息内容
+    summary: Optional[str] = None  # 摘要（用于确认环节显示）
     progress: Optional[float] = None  # 进度值（0-1）
     is_loading: bool = Field(default=False)  # 是否显示加载动画
     created_at: datetime = Field(default_factory=utcnow)

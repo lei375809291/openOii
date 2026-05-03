@@ -154,6 +154,7 @@ class ReviewAgent(BaseAgent):
         await self.send_message(
             ctx,
             f"{msg_summary}。将从 @{start_agent} 开始{mode_desc}{target_info}。{msg_reason}".strip(),
+            summary=msg_summary,
         )
 
         return {

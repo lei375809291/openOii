@@ -113,9 +113,11 @@ class VideoMergerAgent(BaseAgent):
             )
 
             # 发送完成消息
+            summary = f"将{len(video_urls)}个分镜拼接为完整视频"
             await self.send_message(
                 ctx,
                 f"🎉 漫剧制作完成！已将 {len(video_urls)} 个分镜拼接为完整视频。",
+                summary=summary,
                 progress=1.0,
                 is_loading=False,
             )

@@ -295,7 +295,8 @@ class ScriptwriterAgent(BaseAgent):
             for shot in final_shots:
                 await self.send_shot_event(ctx, shot, "shot_updated")
 
-            await ctx.session.commit()
+            # 生成摘要
+            summary = f"增量更新完成：{len(final_chars)}个角色、{total_shots}个分镜"
 
             # 显示更新摘要
             char_names = [c.name for c in final_chars]
@@ -305,6 +306,7 @@ class ScriptwriterAgent(BaseAgent):
             await self.send_message(
                 ctx,
                 f"✅ 增量更新完成：{len(final_chars)} 个角色、{total_shots} 个分镜，接下来将进行角色设计。",
+                summary=summary,
                 progress=1.0
             )
             return
@@ -382,4 +384,9 @@ class ScriptwriterAgent(BaseAgent):
         for shot in new_shots:
             await self.send_shot_event(ctx, shot, "shot_created")
         await ctx.session.commit()
-        await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_shots)} 个镜头，接下来将进行角色设计。", progress=1.0)
+
+        # 生成摘要
+        char_count = len(raw_characters) if isinstance(raw_characters, list) else 0
+        summary = f"创作了{char_count}个角色和{len(new_shots)}个镜头的剧本"
+
+        await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_shots)} 个镜头，接下来将进行角色设计。", summary=summary, progress=1.0)

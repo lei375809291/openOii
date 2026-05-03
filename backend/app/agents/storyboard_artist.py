@@ -141,16 +141,20 @@ class StoryboardArtistAgent(BaseAgent):
 
         await ctx.session.commit()
 
+        # 生成摘要
+        summary = f"为{updated_count}个分镜生成了首帧图片" if updated_count > 0 else "分镜图片生成失败"
+
         # 完成消息
         if updated_count > 0:
             msg = f"✅ 已为 {updated_count} 个分镜生成首帧图片，接下来将生成视频。"
             if failed_count > 0:
                 msg += f"（{failed_count} 个失败）"
-            await self.send_message(ctx, msg, progress=1.0, is_loading=False)
+            await self.send_message(ctx, msg, summary=summary, progress=1.0, is_loading=False)
         elif failed_count > 0:
             await self.send_message(
                 ctx,
                 f"❌ 所有 {failed_count} 个分镜首帧图片生成均失败。",
+                summary=summary,
                 progress=1.0,
                 is_loading=False,
             )

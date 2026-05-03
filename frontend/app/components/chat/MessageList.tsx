@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect } from "react";
 import type { AgentMessage } from "~/types";
 import { TypewriterText } from "~/components/ui/TypewriterText";
+import { CollapsibleMessage } from "./CollapsibleMessage";
 import {
   CameraIcon,
   ChatBubbleLeftIcon,
@@ -156,11 +157,12 @@ export function MessageList({ messages }: MessageListProps) {
 
         // 普通消息
         const AgentIcon = agentIcons[msg.agent] || CpuChipIcon;
-        return (
-          <div
-            key={key}
-            className={`chat ${isUserMessage ? "chat-end" : "chat-start"} ${slideAnimation}`}
-          >
+
+        // 判断是否应该折叠（有摘要且不是最后一条消息）
+        const shouldCollapse = msg.summary && !isLastMessage && !isUserMessage;
+
+        const messageContent = (
+          <>
             <div className="chat-header flex items-center gap-2 mb-1">
               <span className={`badge badge-sm flex items-center gap-1 ${agentColors[msg.agent] || "badge-ghost"} text-base-content`}>
                 <AgentIcon className="w-5 h-5" aria-hidden="true" />
@@ -181,7 +183,6 @@ export function MessageList({ messages }: MessageListProps) {
                   : "bg-base-300 text-base-content"
               }`}
             >
-              {/* 消息内容 - 使用打字机效果或直接显示 */}
               <div className="flex items-start gap-2">
                 {msg.icon && (
                   <msg.icon className="w-5 h-5 mt-0.5 flex-shrink-0" aria-hidden="true" />
@@ -200,7 +201,6 @@ export function MessageList({ messages }: MessageListProps) {
                 </div>
               </div>
 
-              {/* 加载动画 */}
               {msg.isLoading && (
                 <div className="flex items-center gap-2 mt-2 text-base-content/60">
                   <span className="loading loading-dots loading-xs" />
@@ -208,6 +208,21 @@ export function MessageList({ messages }: MessageListProps) {
                 </div>
               )}
             </div>
+          </>
+        );
+
+        return (
+          <div
+            key={key}
+            className={`chat ${isUserMessage ? "chat-end" : "chat-start"} ${slideAnimation}`}
+          >
+            {shouldCollapse ? (
+              <CollapsibleMessage summary={msg.summary!}>
+                {messageContent}
+              </CollapsibleMessage>
+            ) : (
+              messageContent
+            )}
           </div>
         );
       })}

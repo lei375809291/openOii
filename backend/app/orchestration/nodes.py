@@ -224,8 +224,6 @@ async def script_approval_node(
         message="剧本和角色设定已生成，请确认是否继续进入角色设计阶段。",
         next_stage="character",
     )
-
-
 async def character_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:

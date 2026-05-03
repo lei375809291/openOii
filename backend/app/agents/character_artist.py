@@ -92,7 +92,8 @@ class CharacterArtistAgent(BaseAgent):
 
         await ctx.session.commit()
         if updated_count > 0:
-            await self.send_message(ctx, f"✅ 已为 {updated_count} 个角色生成形象图，接下来将绘制分镜。", progress=1.0)
+            summary = f"为{updated_count}个角色生成了形象图"
+            await self.send_message(ctx, f"✅ 已为 {updated_count} 个角色生成形象图，接下来将绘制分镜。", summary=summary, progress=1.0)
 
 
 class SingleCharacterArtistAgent(CharacterArtistAgent):

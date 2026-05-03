@@ -218,6 +218,7 @@ export interface AgentMessage {
   agent: string;
   role: string;
   content: string;
+  summary?: string; // 摘要（用于确认环节显示）
   icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   timestamp?: string;
   progress?: number; // 0-1 之间的进度值
@@ -231,6 +232,7 @@ export interface Message {
   agent: string;
   role: string;
   content: string;
+  summary: string | null; // 摘要
   progress: number | null;
   is_loading: boolean;
   created_at: string;

@@ -3,6 +3,7 @@ import {
 	Bars3Icon,
 	ExclamationTriangleIcon,
 	FaceFrownIcon,
+	PauseIcon,
 	PencilIcon,
 	StopIcon,
 } from "@heroicons/react/24/outline";
@@ -38,6 +39,9 @@ const PROVIDER_LABELS = {
 
 const GENERATE_BLOCKING_PROVIDER_KEYS = new Set(["text", "image"]);
 
+// 自动继续的确认点（不需要用户手动确认）
+const AUTO_CONTINUE_GATES = new Set(["scriptwriter", "video_generator"]);
+const AUTO_CONTINUE_DELAY_MS = 2000; // 2秒后自动继续
 function deriveProviderOverridesFromProject(
 	project: Pick<Project, "provider_settings">,
 ): ProjectProviderOverridesPayload {
@@ -77,6 +81,8 @@ export function ProjectPage() {
 
 	const { send } = useProjectWebSocket(projectId);
 	const hasActiveRun = store.isGenerating || Boolean(store.currentRunId);
+	const [isPaused, setIsPaused] = useState(false);
+	const autoContinueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const syncStoreWithActiveRun = (run: {
 		id: number;
@@ -126,6 +132,47 @@ export function ProjectPage() {
 		}
 	}, [projectError, projectId, queryClient]);
 
+	// 自动继续逻辑
+	useEffect(() => {
+		// 清除之前的定时器
+		if (autoContinueTimerRef.current) {
+			clearTimeout(autoContinueTimerRef.current);
+			autoContinueTimerRef.current = null;
+		}
+
+		// 如果正在等待确认，且是自动继续的 gate，且没有暂停
+		if (store.awaitingConfirm && store.awaitingAgent && AUTO_CONTINUE_GATES.has(store.awaitingAgent) && !isPaused) {
+			autoContinueTimerRef.current = setTimeout(() => {
+				const runId = store.currentRunId;
+				if (runId && store.awaitingConfirm) {
+					send({ type: "confirm", data: { run_id: runId } });
+					setIsPaused(false);
+				}
+			}, AUTO_CONTINUE_DELAY_MS);
+		}
+
+		return () => {
+			if (autoContinueTimerRef.current) {
+				clearTimeout(autoContinueTimerRef.current);
+			}
+		};
+	}, [store.awaitingConfirm, store.awaitingAgent, store.currentRunId, isPaused, send]);
+
+	const handlePause = () => {
+		setIsPaused(true);
+		if (autoContinueTimerRef.current) {
+			clearTimeout(autoContinueTimerRef.current);
+			autoContinueTimerRef.current = null;
+		}
+	};
+
+	const handleResume = () => {
+		setIsPaused(false);
+		const runId = store.currentRunId;
+		if (runId && store.awaitingConfirm) {
+			send({ type: "confirm", data: { run_id: runId } });
+		}
+	};
 	const { data: characters } = useQuery({
 		queryKey: ["characters", projectId],
 		queryFn: () => projectsApi.getCharacters(projectId),
@@ -481,6 +528,7 @@ export function ProjectPage() {
 		if (runId) {
 			// 有活跃的 run，通过 WebSocket 发送
 			send({ type: "confirm", data: { run_id: runId, feedback } });
+			setIsPaused(false);
 			if (feedback) {
 				store.addMessage({
 					agent: "user",
@@ -828,15 +876,18 @@ export function ProjectPage() {
 
 				<main className="flex-1 flex flex-col md:flex-row overflow-hidden p-2 sm:p-4 gap-2 sm:gap-4">
 					<div className="w-full md:w-2/5 lg:w-1/3 md:min-w-[320px] md:max-w-[480px] h-64 md:h-full flex flex-col">
-						<ChatPanel
-							onSendFeedback={handleFeedback}
-							onConfirm={handleConfirm}
-							onGenerate={handleGenerate}
-							onCancel={handleCancel}
-							isGenerating={hasActiveRun}
-							generateDisabled={generateDisabled}
-							generateDisabledReason={generateDisabledReason}
-						/>
+					<ChatPanel
+						onSendFeedback={handleFeedback}
+						onConfirm={handleConfirm}
+						onGenerate={handleGenerate}
+						onCancel={handleCancel}
+						isGenerating={hasActiveRun}
+						generateDisabled={generateDisabled}
+						generateDisabledReason={generateDisabledReason}
+						isPaused={isPaused}
+						onPause={handlePause}
+						onResume={handleResume}
+					/>
 					</div>
 
 					<div className="flex-1 overflow-hidden min-h-0">

@@ -49,12 +49,13 @@ class AgentContext:
 class BaseAgent:
     name: str = "base"
 
-    async def send_message(self, ctx: AgentContext, content: str, progress: float | None = None, is_loading: bool = False) -> None:
+    async def send_message(self, ctx: AgentContext, content: str, summary: str | None = None, progress: float | None = None, is_loading: bool = False) -> None:
         """发送消息
 
         Args:
             ctx: Agent 上下文
             content: 消息内容
+            summary: 摘要（用于确认环节显示）
             progress: 进度值（0-1 之间）
             is_loading: 是否显示加载动画
         """
@@ -63,6 +64,8 @@ class BaseAgent:
             "role": "assistant",
             "content": content,
         }
+        if summary is not None:
+            data["summary"] = summary
         if progress is not None:
             data["progress"] = progress
         if is_loading:
@@ -75,6 +78,7 @@ class BaseAgent:
             agent=self.name,
             role="assistant",
             content=content,
+            summary=summary,
             progress=progress,
             is_loading=is_loading,
         )

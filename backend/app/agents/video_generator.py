@@ -175,15 +175,20 @@ class VideoGeneratorAgent(BaseAgent):
                 await self.send_message(ctx, f"镜头 {shot.order} 视频生成失败: {e}")
 
         await ctx.session.commit()
+
+        # 生成摘要
+        summary = f"为{updated_count}个分镜生成了视频" if updated_count > 0 else "视频生成失败"
+
         # 完成消息
         if updated_count > 0:
             await self.send_message(
                 ctx,
                 f"✅ 已为 {updated_count} 个分镜生成视频，接下来将合成完整视频。",
+                summary=summary,
                 progress=1.0,
                 is_loading=False,
             )
         else:
             await self.send_message(
-                ctx, "❌ 所有分镜视频生成均失败。", progress=1.0, is_loading=False
+                ctx, "❌ 所有分镜视频生成均失败。", summary=summary, progress=1.0, is_loading=False
             )
