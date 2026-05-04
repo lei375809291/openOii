@@ -27,6 +27,8 @@ const buildProject = (id: number): Project => ({
   summary: null,
   video_url: null,
   status: 'active',
+  target_shot_count: null,
+  character_hints: [],
   created_at: '2026-04-11T00:00:00Z',
   updated_at: '2026-04-11T00:00:00Z',
   provider_settings: {

@@ -26,8 +26,6 @@ export class ConnectorShapeUtil extends ShapeUtil<ConnectorShape> {
   override canEdit() { return false; }
   override canResize() { return false; }
   override canBind() { return false; }
-  override hideSelectionBoundsFg() { return true; }
-  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: ConnectorShape): Geometry2d {
     const fromShape = this.editor.getShape(shape.props.fromId as TLShapeId);

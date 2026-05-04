@@ -30,6 +30,8 @@ export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
   title: string;
   story?: string;
   style?: string;
+  target_shot_count?: number;
+  character_hints?: string[];
 }
 
 export type UpdateProjectPayload = Partial<
@@ -45,6 +47,8 @@ export interface Project {
   summary: string | null;   // 剧情摘要
   video_url: string | null; // 最终拼接视频
   status: string;
+  target_shot_count: number | null;
+  character_hints: string[];
   created_at: string;
   updated_at: string;
   provider_settings: ProjectProviderSettings;

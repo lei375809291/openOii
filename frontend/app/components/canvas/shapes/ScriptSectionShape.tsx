@@ -40,10 +40,8 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
     };
   }
 
-  override canEdit() { return false; }
+  override canEdit() { return true; }
   override canResize() { return false; }
-  override hideSelectionBoundsFg() { return true; }
-  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: ScriptSectionShape): Geometry2d {
     return new Rectangle2d({

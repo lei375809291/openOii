@@ -65,6 +65,8 @@ async def create_project(
         story=payload.story,
         style=style,
         status=payload.status or "draft",
+        target_shot_count=payload.target_shot_count,
+        character_hints=payload.character_hints or [],
         text_provider_override=payload.text_provider_override,
         image_provider_override=payload.image_provider_override,
         video_provider_override=payload.video_provider_override,

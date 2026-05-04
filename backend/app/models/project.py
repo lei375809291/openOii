@@ -21,6 +21,8 @@ class Project(SQLModel, table=True):
     text_provider_override: Optional[str] = None
     image_provider_override: Optional[str] = None
     video_provider_override: Optional[str] = None
+    target_shot_count: Optional[int] = None
+    character_hints: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

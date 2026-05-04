@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.agents.character_artist import SingleCharacterArtistAgent
+from app.agents.render import RenderAgent
 from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
 from app.config import Settings
 from app.models.agent_run import AgentRun
@@ -176,7 +176,7 @@ async def regenerate_character(
         },
     )
 
-    agent_plan: list[Any] = [SingleCharacterArtistAgent(character_id)]
+    agent_plan: list[Any] = [RenderAgent()]
     run = AgentRun(
         project_id=project_id,
         status="running",

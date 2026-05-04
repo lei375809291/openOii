@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.base import TargetIds
-from app.agents.storyboard_artist import StoryboardArtistAgent
-from app.agents.video_merger import VideoMergerAgent
+from app.agents.render import RenderAgent
+from app.agents.compose import ComposeAgent
 from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
 from app.config import Settings
 from app.models.agent_run import AgentRun
@@ -254,7 +254,7 @@ async def regenerate_shot(
             },
         )
 
-        agent_plan = [StoryboardArtistAgent()]
+        agent_plan = [RenderAgent()]
     else:
         await invalidate_shot_clip_output(session, project)
         await session.commit()
@@ -276,7 +276,7 @@ async def regenerate_shot(
             },
         )
 
-        agent_plan = [VideoMergerAgent()]
+        agent_plan = [ComposeAgent()]
 
     run = AgentRun(
         project_id=project_id,

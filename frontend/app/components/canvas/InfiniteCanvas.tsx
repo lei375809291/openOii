@@ -16,6 +16,7 @@ import { canvasEvents } from "./canvasEvents";
 import { ImagePreviewModal, VideoPreviewModal } from "./PreviewModals";
 import { customShapeUtils } from "./shapes";
 import { getPipelineStageIndex } from "~/utils/pipeline";
+import { ShapeContextMenu } from "./ShapeContextMenu";
 
 interface InfiniteCanvasProps {
 	projectId: number;
@@ -26,7 +27,7 @@ const components: TLComponents = {
 	MainMenu: null,
 	Toolbar: null,
 	StylePanel: null,
-	NavigationPanel: null,
+	NavigationPanel: undefined,
 	HelpMenu: null,
 	DebugPanel: null,
 	DebugMenu: null,
@@ -118,15 +119,25 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	shapesRef.current = shapes;
 	shapesSignatureRef.current = shapesSignature;
 
+	const handleShapeAction = useCallback((data: { action: string; feedbackType: string }) => {
+		const feedbackMap: Record<string, string> = {
+			regenerate: `请重新生成`,
+			edit: `请修改内容`,
+		};
+		const content = feedbackMap[data.action] || "请修改";
+		projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType);
+	}, [projectId, currentRunId]);
+
 	useEffect(() => {
 		const unsubscribers = [
 			canvasEvents.on("preview-image", setPreviewImage),
 			canvasEvents.on("preview-video", setPreviewVideo),
+			canvasEvents.on("shape-action", handleShapeAction),
 		];
 		return () => {
 			unsubscribers.forEach((unsub) => unsub());
 		};
-	}, []);
+	}, [handleShapeAction]);
 
 	const handleMount = useCallback((editor: Editor) => {
 		editorRef.current = editor;
@@ -168,6 +179,21 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			}
 		});
 
+		const newlyCreated = shapes.filter((s) => !currentIds.has(s.id));
+		if (newlyCreated.length > 0 && isGenerating) {
+			const lastShape = newlyCreated[newlyCreated.length - 1];
+			if (lastShape.id) {
+				const shapeOnPage = editor.getShape(lastShape.id as any);
+				if (shapeOnPage) {
+					const bounds = editor.getShapeGeometry(shapeOnPage).bounds;
+					editor.zoomToBounds(
+						{ x: shapeOnPage.x + bounds.x, y: shapeOnPage.y + bounds.y, w: bounds.w, h: bounds.h },
+						{ animation: { duration: 400 }, targetZoom: editor.getZoomLevel() }
+					);
+				}
+			}
+		}
+
 		lastAppliedShapesSignatureRef.current = shapesSignature;
 	}, [shapes, shapesSignature, isInitialized]);
 
@@ -178,9 +204,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					hideUi
 				>
 					<CanvasToolbar />
+					<ShapeContextMenu />
 				</Tldraw>
 			</div>
 

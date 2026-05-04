@@ -39,10 +39,8 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
     };
   }
 
-  override canEdit() { return false; }
+  override canEdit() { return true; }
   override canResize() { return false; }
-  override hideSelectionBoundsFg() { return true; }
-  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: CharacterSectionShape): Geometry2d {
     return new Rectangle2d({

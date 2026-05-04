@@ -182,10 +182,10 @@ export const projectsApi = {
       body: JSON.stringify({ run_id: runId }),
     }),
 
-  feedback: (id: number, content: string, runId?: number) =>
+  feedback: (id: number, content: string, runId?: number, feedbackType?: string) =>
     fetchApi<{ status: string }>(`/api/v1/projects/${id}/feedback`, {
       method: "POST",
-      body: JSON.stringify({ content, run_id: runId }),
+      body: JSON.stringify({ content, run_id: runId, feedback_type: feedbackType }),
     }),
 };
 

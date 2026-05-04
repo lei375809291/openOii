@@ -119,8 +119,8 @@ describe("CharacterSectionShape", () => {
     expect(CharacterSectionShapeUtil.type).toBe("character-section");
   });
 
-  it("cannot edit or resize", () => {
-    expect(shapeUtil.canEdit()).toBe(false);
+  it("can select but cannot resize", () => {
+    expect(shapeUtil.canEdit()).toBe(true);
     expect(shapeUtil.canResize()).toBe(false);
   });
 });

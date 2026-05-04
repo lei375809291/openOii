@@ -57,6 +57,8 @@ class ProjectCreate(BaseModel):
     story: str | None = None
     style: str | None = None
     status: str | None = None
+    target_shot_count: int | None = None
+    character_hints: list[str] | None = None
     text_provider_override: TextProviderKey | None = None
     image_provider_override: ImageProviderKey | None = None
     video_provider_override: VideoProviderKey | None = None
@@ -86,6 +88,8 @@ class ProjectRead(BaseModel):
     summary: str | None
     video_url: str | None
     status: str
+    target_shot_count: int | None = None
+    character_hints: list[str] = Field(default_factory=list)
     provider_settings: ProjectProviderSettingsRead
     created_at: datetime
     updated_at: datetime

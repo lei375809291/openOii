@@ -76,6 +76,10 @@ vi.mock("./CanvasToolbar", () => ({
   CanvasToolbar: () => <div data-testid="canvas-toolbar" />,
 }));
 
+vi.mock("./ShapeContextMenu", () => ({
+  ShapeContextMenu: () => <div data-testid="shape-context-menu" />,
+}));
+
 vi.mock("./shapes", () => ({
   customShapeUtils: [],
 }));

@@ -66,10 +66,8 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
     };
   }
 
-  override canEdit() { return false; }
+  override canEdit() { return true; }
   override canResize() { return false; }
-  override hideSelectionBoundsFg() { return true; }
-  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: VideoSectionShape): Geometry2d {
     return new Rectangle2d({

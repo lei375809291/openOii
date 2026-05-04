@@ -41,10 +41,8 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
     };
   }
 
-  override canEdit() { return false; }
+  override canEdit() { return true; }
   override canResize() { return false; }
-  override hideSelectionBoundsFg() { return true; }
-  override hideSelectionBoundsBg() { return true; }
 
   getGeometry(shape: StoryboardSectionShape): Geometry2d {
     return new Rectangle2d({

@@ -90,14 +90,9 @@ describe("VideoSectionShape", () => {
     expect(VideoSectionShapeUtil.type).toBe("video-section");
   });
 
-  it("cannot edit or resize", () => {
-    expect(shapeUtil.canEdit()).toBe(false);
+  it("can select but cannot resize", () => {
+    expect(shapeUtil.canEdit()).toBe(true);
     expect(shapeUtil.canResize()).toBe(false);
-  });
-
-  it("hides selection bounds", () => {
-    expect(shapeUtil.hideSelectionBoundsFg()).toBe(true);
-    expect(shapeUtil.hideSelectionBoundsBg()).toBe(true);
   });
 
   it("includes video track element for captions", () => {
