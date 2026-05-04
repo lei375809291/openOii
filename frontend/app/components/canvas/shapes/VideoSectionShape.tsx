@@ -62,7 +62,7 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("final-output"),
+      placeholderText: getWorkspaceSectionPlaceholderText("compose"),
     };
   }
 

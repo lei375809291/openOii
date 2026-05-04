@@ -40,7 +40,7 @@ const components: TLComponents = {
 	ZoomMenu: null,
 };
 
-const SECTION_ORDER: SectionKey[] = ["script", "characters", "storyboards", "clips", "final-output"];
+const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
 
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const editorRef = useRef<Editor | null>(null);
@@ -83,12 +83,6 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	);
 
 	const visibleSections = useMemo((): SectionKey[] => {
-		const hasChars = characters.length > 0;
-		const hasShots = shots.length > 0;
-		const hasImages = shots.some((s) => Boolean(s.image_url));
-		const hasClips = shots.some((s) => Boolean(s.video_url));
-		const hasVideo = Boolean(finalVideoUrl);
-
 		const sectionIndex = Math.max(
 			currentStageIndex >= 0 ? currentStageIndex : 0,
 			recoverySummary?.preserved_stages?.reduce(
@@ -98,14 +92,12 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		);
 
 		return SECTION_ORDER.filter((section) => {
-			if (section === "script") return true;
-			if (section === "characters") return hasChars || sectionIndex >= 2;
-			if (section === "storyboards") return (hasShots && hasImages) || sectionIndex >= 3;
-			if (section === "clips") return (hasShots && hasClips) || sectionIndex >= 4;
-			if (section === "final-output") return hasVideo || sectionIndex >= 5;
-			return false;
-		});
-	}, [project, characters, shots, finalVideoUrl, currentStageIndex, recoverySummary]);
+		if (section === "plan") return true;
+		if (section === "render") return characters.length > 0 || shots.length > 0 || sectionIndex >= 1;
+		if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 2;
+		return false;
+	});
+	}, [characters, shots, finalVideoUrl, currentStageIndex, recoverySummary]);
 
 	const shapes = useCanvasLayout({
 		projectId,

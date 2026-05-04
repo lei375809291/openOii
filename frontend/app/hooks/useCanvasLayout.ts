@@ -3,7 +3,7 @@ import type { TLShapePartial } from "tldraw";
 import { SHAPE_TYPES } from "~/components/canvas/shapes";
 import type { Character, Shot, WorkflowStage } from "~/types";
 
-type SectionKey = "script" | "characters" | "storyboards" | "clips" | "final-output";
+type SectionKey = "plan" | "render" | "compose";
 type SectionState = "draft" | "generating" | "blocked" | "complete";
 
 interface LayoutConfig {
@@ -26,36 +26,24 @@ const DEFAULT_CONFIG: LayoutConfig = {
   shotCardGap: 16,
 };
 
-const SECTION_ORDER: SectionKey[] = [
-  "script",
-  "characters",
-  "storyboards",
-  "clips",
-  "final-output",
-];
+const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
 
 const SECTION_LABELS: Record<SectionKey, string> = {
-  script: "剧本",
-  characters: "角色",
-  storyboards: "分镜",
-  clips: "片段",
-  "final-output": "最终输出",
+  plan: "规划",
+  render: "渲染",
+  compose: "合成",
 };
 
 const SECTION_PLACEHOLDER_TEXT: Record<SectionKey, string> = {
-  script: "等待剧本生成...",
-  characters: "等待角色图生成...",
-  storyboards: "等待分镜图生成...",
-  clips: "等待片段生成...",
-  "final-output": "等待最终输出...",
+  plan: "等待规划生成...",
+  render: "等待角色与分镜生成...",
+  compose: "等待视频合成...",
 };
 
 const SECTION_SHAPE_TYPES: Record<SectionKey, string> = {
-  script: SHAPE_TYPES.SCRIPT_SECTION,
-  characters: SHAPE_TYPES.CHARACTER_SECTION,
-  storyboards: SHAPE_TYPES.STORYBOARD_SECTION,
-  clips: SHAPE_TYPES.STORYBOARD_SECTION,
-  "final-output": SHAPE_TYPES.VIDEO_SECTION,
+  plan: SHAPE_TYPES.SCRIPT_SECTION,
+  render: SHAPE_TYPES.STORYBOARD_SECTION,
+  compose: SHAPE_TYPES.VIDEO_SECTION,
 };
 
 const SECTION_STATUS_LABELS: Record<SectionState, string> = {
@@ -98,37 +86,20 @@ function deriveSectionState(
   const hasContent = Boolean(data.story) || Boolean(data.summary);
   const hasApprovedChar = data.characters.some((c) => c.approval_state === "approved");
   const hasStoryboardImg = data.shots.some((s) => Boolean(s.image_url));
-  const hasClip = data.shots.some((s) => Boolean(s.video_url));
 
   switch (key) {
-    case "script":
+    case "plan":
       return isActive && !hasContent ? "generating" : hasContent ? "complete" : "draft";
-    case "characters":
+    case "render":
       return data.characters.length === 0
         ? "blocked"
-        : hasApprovedChar
+        : hasApprovedChar && hasStoryboardImg
           ? "complete"
           : isActive
             ? "generating"
             : "draft";
-    case "storyboards":
-      return data.shots.length === 0
-        ? "blocked"
-        : hasStoryboardImg
-          ? "complete"
-          : isActive
-            ? "generating"
-            : "draft";
-    case "clips":
-      return data.shots.length === 0
-        ? "blocked"
-        : hasClip
-          ? "complete"
-          : isActive
-            ? "generating"
-            : "draft";
-    case "final-output":
-      return data.videoUrl ? "complete" : "blocked";
+    case "compose":
+      return data.videoUrl ? "complete" : data.shots.length === 0 ? "blocked" : isActive ? "generating" : "draft";
   }
 }
 
@@ -140,20 +111,16 @@ function isPlaceholder(key: SectionKey, data: {
   videoUrl: string | null;
 }): boolean {
   switch (key) {
-    case "script":
+    case "plan":
       return !data.story && !data.summary;
-    case "characters":
-      return data.characters.length === 0;
-    case "storyboards":
-      return data.shots.length === 0 || !data.shots.some((s) => Boolean(s.image_url));
-    case "clips":
-      return data.shots.length === 0 || !data.shots.some((s) => Boolean(s.video_url));
-    case "final-output":
+    case "render":
+      return data.characters.length === 0 || !data.shots.some((s) => Boolean(s.image_url));
+    case "compose":
       return !data.videoUrl;
   }
 }
 
-function calculateScriptHeight(story: string | null, summary: string | null, shotCount: number): number {
+function calculatePlanHeight(story: string | null, summary: string | null, shotCount: number): number {
   let height = 80;
   const text = story || summary || "";
   if (text) {
@@ -166,17 +133,19 @@ function calculateScriptHeight(story: string | null, summary: string | null, sho
   return Math.max(height, 200);
 }
 
-function calculateCharacterHeight(characters: Character[]): number {
-  if (characters.length === 0) return 250;
-  const rows = Math.ceil(characters.length / 2);
-  return 70 + rows * 360 + 16;
+function calculateRenderHeight(characters: Character[], shots: Shot[], config: LayoutConfig): number {
+  const charRows = characters.length > 0 ? Math.ceil(characters.length / 2) : 0;
+  const shotRows = shots.length > 0 ? Math.ceil(shots.length / 4) : 0;
+  const charHeight = charRows > 0 ? 70 + charRows * 360 + 16 : 0;
+  const shotHeight = shotRows > 0 ? 80 + shotRows * (config.shotCardHeight + config.shotCardGap) + 16 : 0;
+  const gap = (charHeight > 0 && shotHeight > 0) ? 32 : 0;
+  return Math.max(charHeight + gap + shotHeight, 250);
 }
 
-function calculateStoryboardHeight(shots: Shot[], config: LayoutConfig): number {
+function calculateComposeHeight(shots: Shot[], config: LayoutConfig): number {
   if (shots.length === 0) return 250;
-  const cols = 4;
-  const rows = Math.ceil(shots.length / cols);
-  return 80 + rows * (config.shotCardHeight + config.shotCardGap) + 16;
+  const rows = Math.ceil(shots.length / 4);
+  return 80 + rows * (config.shotCardHeight + config.shotCardGap) + 200 + 16;
 }
 
 export function useCanvasLayout({
@@ -209,32 +178,26 @@ export function useCanvasLayout({
     let currentY = config.startY;
 
     const heights: Record<SectionKey, number> = {
-      script: calculateScriptHeight(story, summary, shots.length),
-      characters: calculateCharacterHeight(characters),
-      storyboards: calculateStoryboardHeight(shots, config),
-      clips: calculateStoryboardHeight(shots, config),
-      "final-output": 450,
+      plan: calculatePlanHeight(story, summary, shots.length),
+      render: calculateRenderHeight(characters, shots, config),
+      compose: calculateComposeHeight(shots, config),
     };
 
     const widths: Record<SectionKey, number> = {
-      script: config.sectionWidth,
-      characters: config.sectionWidth,
-      storyboards: config.sectionWidth,
-      clips: config.sectionWidth,
-      "final-output": 600,
+      plan: config.sectionWidth,
+      render: config.sectionWidth,
+      compose: config.sectionWidth,
     };
 
     const contentBySection: Record<SectionKey, Record<string, unknown>> = {
-      script: {
+      plan: {
         story: story || "",
         summary: summary || "",
         characters,
         shots,
       },
-      characters: { characters },
-      storyboards: { shots, sectionTitle: "分镜图" },
-      clips: { shots, sectionTitle: "片段" },
-      "final-output": {
+      render: { shots, sectionTitle: "角色与分镜" },
+      compose: {
         projectId,
         videoUrl: videoUrl || "",
         title: videoTitle,
@@ -260,15 +223,11 @@ export function useCanvasLayout({
       const placeholder = isPlaceholder(section, sectionData);
       const width = widths[section];
       const height = heights[section];
-      const x =
-        section === "final-output"
-          ? config.startX + (config.sectionWidth - width) / 2
-          : config.startX;
 
       result.push({
         id: `shape:${section}` as any,
         type: SECTION_SHAPE_TYPES[section] as (typeof SHAPE_TYPES)[keyof typeof SHAPE_TYPES],
-        x,
+        x: config.startX,
         y: currentY,
         props: {
           w: width,
@@ -293,39 +252,6 @@ export function useCanvasLayout({
             toId: `shape:${section}`,
           },
         });
-      }
-
-      if ((section === "storyboards" || section === "clips") && shots.length > 1) {
-        const cols = 4;
-
-        for (let i = 0; i < shots.length - 1; i++) {
-          const row = Math.floor(i / cols);
-          const nextRow = Math.floor((i + 1) / cols);
-
-          if (nextRow > row) {
-            result.push({
-              id: `shape:${section}-shot-arrow-${i}` as any,
-              type: SHAPE_TYPES.CONNECTOR,
-              x: 0,
-              y: 0,
-              props: {
-                fromId: `shape:${section}-shot-${i}`,
-                toId: `shape:${section}-shot-${i + 1}`,
-              },
-            });
-          } else {
-            result.push({
-              id: `shape:${section}-shot-arrow-${i}` as any,
-              type: SHAPE_TYPES.CONNECTOR,
-              x: 0,
-              y: 0,
-              props: {
-                fromId: `shape:${section}-shot-${i}`,
-                toId: `shape:${section}-shot-${i + 1}`,
-              },
-            });
-          }
-        }
       }
 
       currentY += height + config.sectionGap;

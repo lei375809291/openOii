@@ -26,7 +26,7 @@ function generateMessageId(): string {
 
 const globalConnections = new Map<number, WebSocket>();
 
-const YOLO_AUTO_AGENTS = new Set(["scriptwriter", "video_generator"]);
+const YOLO_AUTO_AGENTS = new Set(["plan", "render", "compose"]);
 
 function shouldAutoConfirm(agent: string | null, runMode: RunMode): boolean {
   if (runMode === "yolo") return true;
@@ -340,7 +340,7 @@ export function applyWsEvent(
       if (completedStage && isWorkflowStage(completedStage)) {
         store.setCurrentStage(completedStage);
       } else {
-        store.setCurrentStage("merge");
+        store.setCurrentStage("compose");
       }
       if (typeof event.data?.message === "string" && event.data.message.trim()) {
         store.addMessage({

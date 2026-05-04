@@ -82,7 +82,7 @@ const initialState = {
   selectedShotId: null,
   selectedCharacterId: null,
   highlightedMessageIndex: null,
-  currentStage: "ideate" as WorkflowStage,
+  currentStage: "plan" as WorkflowStage,
   runMode: "manual" as RunMode,
   messages: [],
   characters: [],

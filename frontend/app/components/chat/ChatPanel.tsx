@@ -6,7 +6,6 @@ import { Button } from "~/components/ui/Button";
 import type { WorkflowStage } from "~/types";
 import {
   CheckIcon,
-  FilmIcon,
   LightBulbIcon,
   PaintBrushIcon,
   RocketLaunchIcon,
@@ -30,21 +29,17 @@ interface ChatPanelProps {
 }
 
 function getStageIcon(stage: WorkflowStage) {
-  if (stage === "merge") return RocketLaunchIcon;
-  if (stage === "clip" || stage === "clip_approval") return FilmIcon;
-  if (stage === "character" || stage === "character_approval") return PaintBrushIcon;
-  if (stage === "storyboard" || stage === "storyboard_approval") return FilmIcon;
+  if (stage === "compose") return RocketLaunchIcon;
+  if (stage === "render" || stage === "render_approval") return PaintBrushIcon;
+  if (stage === "plan" || stage === "plan_approval") return LightBulbIcon;
   return LightBulbIcon;
 }
 
 const agentNameMap: Record<string, string> = {
-  onboarding: "项目初始化",
-  director: "导演",
-  scriptwriter: "编剧",
-  character_artist: "角色设计师",
-  storyboard_artist: "分镜画师",
-  video_generator: "视频生成器",
-  video_merger: "视频合成器",
+  plan: "规划",
+  render: "渲染",
+  compose: "合成",
+  review: "审查",
 };
 
 export function ChatPanel({

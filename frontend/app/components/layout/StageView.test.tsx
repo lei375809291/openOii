@@ -5,7 +5,7 @@ import { StageView } from "./StageView";
 
 vi.mock("~/stores/editorStore", () => ({
   useEditorStore: () => ({
-    currentStage: "ideate",
+    currentStage: "plan",
     shots: [],
     characters: [],
   }),

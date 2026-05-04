@@ -129,7 +129,7 @@ export function ProjectPage() {
 
 		editorStore.clearMessages();
 		editorStore.resetRunState();
-		editorStore.setCurrentStage("ideate");
+		editorStore.setCurrentStage("plan");
 		editorStore.setSelectedShot(null);
 		editorStore.setSelectedCharacter(null);
 		editorStore.setHighlightedMessage(null);
@@ -279,7 +279,7 @@ export function ProjectPage() {
 		const requestToken = generateRequestTokenRef.current + 1;
 		generateRequestTokenRef.current = requestToken;
 		store.clearMessages();
-		store.setCurrentStage("ideate");
+		store.setCurrentStage("plan");
 		generateMutation.mutate({ requestToken });
 	};
 
@@ -353,7 +353,7 @@ export function ProjectPage() {
 			const requestToken = generateRequestTokenRef.current + 1;
 			generateRequestTokenRef.current = requestToken;
 			editorStore.clearMessages();
-			editorStore.setCurrentStage("ideate");
+			editorStore.setCurrentStage("plan");
 			generateMutation.mutate({ requestToken });
 		}
 	}, [project, searchParams, setSearchParams, generateMutation]);

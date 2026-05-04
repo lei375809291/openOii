@@ -37,7 +37,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("storyboards"),
+      placeholderText: getWorkspaceSectionPlaceholderText("render"),
     };
   }
 

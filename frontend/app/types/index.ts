@@ -278,17 +278,11 @@ export interface Message {
 
 // 工作流阶段类型（与后端 Phase2 graph 对齐）
 export type WorkflowStage =
-  | "ideate"
-  | "ideate_approval"
-  | "script"
-  | "script_approval"
-  | "character"
-  | "character_approval"
-  | "storyboard"
-  | "storyboard_approval"
-  | "clip"
-  | "clip_approval"
-  | "merge"
+  | "plan"
+  | "plan_approval"
+  | "render"
+  | "render_approval"
+  | "compose"
   | "review";
 
 // Config types

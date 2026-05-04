@@ -105,10 +105,10 @@ describe('useEditorStore review contract', () => {
   it('resetRunState clears run fields without touching data', () => {
     const store = useEditorStore.getState();
     store.setGenerating(true);
-    store.setCurrentAgent('director');
+    store.setCurrentAgent('plan');
     store.setProgress(0.5);
     store.setCurrentRunId(42);
-    store.setAwaitingConfirm(true, 'director', 42);
+    store.setAwaitingConfirm(true, 'plan', 42);
     store.setCharacters([{ id: 1, project_id: 9, name: 'A', description: '', image_url: '', approval_state: 'draft', approval_version: 0, approved_at: null, approved_name: null, approved_description: null, approved_image_url: null }]);
 
     store.resetRunState();
@@ -121,6 +121,6 @@ describe('useEditorStore review contract', () => {
     expect(s.awaitingConfirm).toBe(false);
     expect(s.awaitingAgent).toBeNull();
     expect(s.characters).toHaveLength(1);
-    expect(s.currentStage).toBe('ideate');
+    expect(s.currentStage).toBe('plan');
   });
 });

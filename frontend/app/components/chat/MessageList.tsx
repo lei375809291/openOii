@@ -3,16 +3,12 @@ import type { AgentMessage } from "~/types";
 import { TypewriterText } from "~/components/ui/TypewriterText";
 import { CollapsibleMessage } from "./CollapsibleMessage";
 import {
-  CameraIcon,
   ChatBubbleLeftIcon,
   CogIcon,
   CpuChipIcon,
-  FilmIcon,
   HandRaisedIcon,
+  LightBulbIcon,
   PaintBrushIcon,
-  PencilSquareIcon,
-  RectangleStackIcon,
-  SparklesIcon,
   UserIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
@@ -22,13 +18,10 @@ interface MessageListProps {
 }
 
 const agentColors: Record<string, string> = {
-  onboarding: "badge-primary",
-  director: "badge-secondary",
-  scriptwriter: "badge-accent",
-  character_artist: "badge-info",
-  storyboard_artist: "badge-success",
-  video_generator: "badge-warning",
-  video_merger: "badge-error",
+  plan: "badge-primary",
+  render: "badge-info",
+  compose: "badge-warning",
+  review: "badge-accent",
   system: "badge-neutral",
   user: "badge-ghost",
 };
@@ -37,13 +30,10 @@ const agentIcons: Record<
   string,
   React.ComponentType<React.SVGProps<SVGSVGElement>>
 > = {
-  onboarding: FilmIcon,
-  director: SparklesIcon,
-  scriptwriter: PencilSquareIcon,
-  character_artist: PaintBrushIcon,
-  storyboard_artist: CameraIcon,
-  video_generator: VideoCameraIcon,
-  video_merger: RectangleStackIcon,
+  plan: LightBulbIcon,
+  render: PaintBrushIcon,
+  compose: VideoCameraIcon,
+  review: CogIcon,
   system: CogIcon,
   user: UserIcon,
 };

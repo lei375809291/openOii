@@ -135,7 +135,7 @@ const storeState: {
 } = {
   isGenerating: false,
   progress: 0,
-  currentStage: 'ideate',
+  currentStage: 'plan',
   currentAgent: null,
   awaitingConfirm: false,
   awaitingAgent: null,
@@ -362,7 +362,7 @@ describe('ProjectPage live hydration', () => {
       id: 55,
       project_id: 9,
       status: 'processing',
-      current_agent: 'director',
+      current_agent: 'plan',
       progress: 0.61,
       error: null,
       resource_type: null,
@@ -398,7 +398,7 @@ describe('ProjectPage live hydration', () => {
 				id: 77,
 				project_id: 9,
 				status: 'running',
-				current_agent: 'director',
+				current_agent: 'plan',
 				progress: 0.5,
 				error: null,
 				resource_type: null,
@@ -411,7 +411,7 @@ describe('ProjectPage live hydration', () => {
 				project_id: 9,
 				run_id: 77,
 				thread_id: 'thread-proof',
-				current_stage: 'ideate',
+				current_stage: 'plan',
 				next_stage: null,
 				preserved_stages: [],
 				stage_history: [],
@@ -707,7 +707,7 @@ describe('ProjectPage live hydration', () => {
         id: 17,
         project_id: 9,
         status: 'blocked',
-        current_agent: 'director',
+        current_agent: 'plan',
         progress: 0.45,
         error: null,
         resource_type: null,
@@ -720,8 +720,8 @@ describe('ProjectPage live hydration', () => {
         run_id: 17,
         thread_id: 'thread-9',
         current_stage: 'storyboard',
-        next_stage: 'clip',
-        preserved_stages: ['ideate'],
+        next_stage: 'compose',
+        preserved_stages: ['plan'],
         stage_history: [],
         resumable: true,
       },
@@ -736,9 +736,9 @@ describe('ProjectPage live hydration', () => {
     });
     expect(storeState.setGenerating).toHaveBeenCalledWith(true);
     expect(storeState.setCurrentRunId).toHaveBeenCalledWith(55);
-    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('director');
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('plan');
     expect(storeState.setProgress).toHaveBeenCalledWith(0.61);
-    expect(storeState.setCurrentStage).toHaveBeenCalledWith('clip');
+    expect(storeState.setCurrentStage).toHaveBeenCalledWith('compose');
     expect(storeState.setRecoveryControl).toHaveBeenCalledWith(null);
     expect(storeState.setRecoverySummary).toHaveBeenCalledWith(null);
     expect(storeState.setRecoveryGate).toHaveBeenCalledWith(null);
@@ -755,7 +755,7 @@ describe('ProjectPage live hydration', () => {
         id: 18,
         project_id: 9,
         status: 'processing',
-        current_agent: 'director',
+        current_agent: 'plan',
         progress: 0.5,
         error: null,
         resource_type: null,
@@ -767,9 +767,9 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 18,
         thread_id: 'thread-10',
-        current_stage: 'clip',
+        current_stage: 'compose',
         next_stage: 'merge',
-        preserved_stages: ['ideate', 'script', 'character', 'storyboard'],
+        preserved_stages: ['plan', 'render'],
         stage_history: [],
         resumable: true,
       },
@@ -854,7 +854,7 @@ describe('ProjectPage live hydration', () => {
       expect(projectsApi.generate).toHaveBeenCalledWith(9, { auto_mode: false });
     });
     expect(storeState.clearMessages).toHaveBeenCalled();
-    expect(storeState.setCurrentStage).toHaveBeenCalledWith('ideate');
+    expect(storeState.setCurrentStage).toHaveBeenCalledWith('plan');
     expect(storeState.setGenerating).toHaveBeenCalledWith(true);
     expect(storeState.setCurrentRunId).toHaveBeenCalledWith(77);
     expect(storeState.setCurrentAgent).toHaveBeenCalledWith('orchestrator');
@@ -964,7 +964,7 @@ describe('ProjectPage live hydration', () => {
         id: 101,
         project_id: 9,
         status: 'processing',
-        current_agent: 'director',
+        current_agent: 'plan',
         progress: 0.22,
         error: null,
         resource_type: null,
@@ -976,7 +976,7 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 101,
         thread_id: 'thread-rollback',
-        current_stage: 'ideate',
+        current_stage: 'plan',
         next_stage: 'storyboard',
         preserved_stages: [],
         stage_history: [],
@@ -1005,7 +1005,7 @@ describe('ProjectPage live hydration', () => {
     expect(storeState.setRecoverySummary).toHaveBeenCalledWith(control.recovery_summary);
     expect(storeState.setCurrentRunId).toHaveBeenCalledWith(101);
     expect(storeState.setGenerating).toHaveBeenCalledWith(true);
-    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('director');
+    expect(storeState.setCurrentAgent).toHaveBeenCalledWith('plan');
     expect(storeState.setProgress).toHaveBeenCalledWith(0.22);
   });
 
@@ -1084,7 +1084,7 @@ describe('ProjectPage live hydration', () => {
         id: 18,
         project_id: 9,
         status: 'processing',
-        current_agent: 'director',
+        current_agent: 'plan',
         progress: 0.5,
         error: null,
         resource_type: null,
@@ -1096,9 +1096,9 @@ describe('ProjectPage live hydration', () => {
         project_id: 9,
         run_id: 18,
         thread_id: 'thread-10',
-        current_stage: 'clip',
+        current_stage: 'compose',
         next_stage: 'merge',
-        preserved_stages: ['ideate', 'script', 'character', 'storyboard'],
+        preserved_stages: ['plan', 'render'],
         stage_history: [],
         resumable: true,
       },
@@ -1131,7 +1131,7 @@ describe('ProjectPage live hydration', () => {
         id: 55,
         project_id: 9,
         status: 'blocked',
-        current_agent: 'director',
+        current_agent: 'plan',
         progress: 0.33,
         error: null,
         resource_type: null,
@@ -1144,8 +1144,8 @@ describe('ProjectPage live hydration', () => {
         run_id: 55,
         thread_id: 'thread-11',
         current_stage: 'storyboard',
-        next_stage: 'clip',
-        preserved_stages: ['ideate'],
+        next_stage: 'compose',
+        preserved_stages: ['plan'],
         stage_history: [],
         resumable: true,
       },

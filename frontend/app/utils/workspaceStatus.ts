@@ -2,11 +2,9 @@ import type { Character, Project, RecoverySummaryRead, Shot } from "~/types";
 import { getWorkflowStageUnlockRank } from "~/utils/workflowStage";
 
 export type WorkspaceSectionKey =
-  | "script"
-  | "characters"
-  | "storyboards"
-  | "clips"
-  | "final-output";
+  | "plan"
+  | "render"
+  | "compose";
 
 export type WorkspaceSectionState =
   | "draft"
@@ -85,11 +83,9 @@ export interface WorkspaceFinalOutputMeta {
 }
 
 export const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
-  { key: "script", title: "剧本" },
-  { key: "characters", title: "角色" },
-  { key: "storyboards", title: "分镜" },
-  { key: "clips", title: "片段" },
-  { key: "final-output", title: "最终输出" },
+  { key: "plan", title: "规划" },
+  { key: "render", title: "渲染" },
+  { key: "compose", title: "合成" },
 ];
 
 const SECTION_STATUS_LABELS: Record<WorkspaceSectionState, string> = {
@@ -103,19 +99,15 @@ const SECTION_STATUS_LABELS: Record<WorkspaceSectionState, string> = {
 };
 
 const SECTION_PLACEHOLDERS: Record<WorkspaceSectionKey, string> = {
-  script: "等待剧本生成...",
-  characters: "等待角色图生成...",
-  storyboards: "等待分镜图生成...",
-  clips: "等待片段生成...",
-  "final-output": "等待最终输出...",
+  plan: "等待规划生成...",
+  render: "等待角色与分镜生成...",
+  compose: "等待视频合成...",
 };
 
 const SECTION_STAGE_ORDER: Record<WorkspaceSectionKey, number> = {
-  script: 0,
-  characters: 2,
-  storyboards: 3,
-  clips: 4,
-  "final-output": 5,
+  plan: 0,
+  render: 1,
+  compose: 2,
 };
 
 function getPreservedUnlockRank(recoverySummary?: RecoverySummaryRead | null) {
@@ -135,7 +127,7 @@ function getEffectiveUnlockRank(input: Pick<WorkspaceProjectionInput, "currentSt
   );
 }
 
-function isAtOrPastStage(input: WorkspaceProjectionInput, targetStage: number) {
+function isAtOrPastStage(input: Pick<WorkspaceProjectionInput, "currentStage" | "recoverySummary">, targetStage: number) {
   return getEffectiveUnlockRank(input) >= targetStage;
 }
 
@@ -145,10 +137,6 @@ function hasApprovedContent(characters: Character[]) {
 
 function hasStoryboardContent(shots: Shot[]) {
   return shots.some((shot) => Boolean(shot.image_url));
-}
-
-function hasClipContent(shots: Shot[]) {
-  return shots.some((shot) => Boolean(shot.video_url));
 }
 
 function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSectionKey): WorkspaceSectionState {
@@ -166,7 +154,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
 		return "blocked";
 	}
 
-	if (key === "script") {
+	if (key === "plan") {
 		if (!project.summary) {
 			return "draft";
 		}
@@ -174,37 +162,13 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
     return isAtOrPastStage(input, SECTION_STAGE_ORDER[key]) ? "generating" : "draft";
   }
 
-  if (key === "characters") {
+  if (key === "render") {
     if (characters.length === 0) {
       return "blocked";
     }
 
     if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
-      return hasApprovedContent(characters) ? "complete" : "draft";
-    }
-
-    return "draft";
-  }
-
-  if (key === "storyboards") {
-    if (shots.length === 0) {
-      return "blocked";
-    }
-
-    if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
-      return hasStoryboardContent(shots) ? "complete" : "generating";
-    }
-
-    return "draft";
-  }
-
-  if (key === "clips") {
-    if (shots.length === 0) {
-      return "blocked";
-    }
-
-    if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
-      return hasClipContent(shots) ? "complete" : "generating";
+      return hasApprovedContent(characters) && hasStoryboardContent(shots) ? "complete" : "generating";
     }
 
     return "draft";
@@ -214,7 +178,7 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
 		return "superseded";
 	}
 
-	if (key === "final-output") {
+	if (key === "compose") {
 		if (project.video_url) {
 			return "complete";
 		}
@@ -279,11 +243,9 @@ export function buildWorkspaceStatus(input: WorkspaceProjectionInput): Workspace
   ).map((section) => {
     const state = resolveSectionState(input, section.key);
     const placeholder =
-      (section.key === "script" && !input.project.summary) ||
-      (section.key === "characters" && input.characters.length === 0) ||
-      (section.key === "storyboards" && !hasStoryboardContent(input.shots)) ||
-      (section.key === "clips" && !hasClipContent(input.shots)) ||
-      (section.key === "final-output" && !input.project.video_url);
+      (section.key === "plan" && !input.project.summary) ||
+      (section.key === "render" && (input.characters.length === 0 || !hasStoryboardContent(input.shots))) ||
+      (section.key === "compose" && !input.project.video_url);
 
     return {
       ...section,
@@ -306,25 +268,16 @@ function isSectionVisible(
   key: WorkspaceSectionKey,
   input?: WorkspaceProjectionInput,
 ) {
-  if (key === "script") {
+  if (key === "plan") {
     return true;
   }
 
   if (input) {
-    if (key === "characters" && input.characters.length > 0) {
+    if (key === "render" && (input.characters.length > 0 || input.shots.length > 0)) {
       return true;
     }
 
-    if (key === "storyboards" && input.shots.length > 0) {
-      return true;
-    }
-
-    if (key === "clips") {
-      // clips section hidden — video clips are visible within storyboard shot cards
-      return false;
-    }
-
-    if (key === "final-output" && input.project.video_url) {
+    if (key === "compose" && input.project.video_url) {
       return true;
     }
   }
@@ -367,7 +320,7 @@ export function getProjectFinalVideoDownloadUrl(projectId: number) {
 export function getWorkspaceFinalOutputMeta(
   input: WorkspaceProjectionInput
 ): WorkspaceFinalOutputMeta {
-  const sectionState = resolveSectionState(input, "final-output");
+  const sectionState = resolveSectionState(input, "compose");
   const runId = input.recoverySummary?.run_id ?? null;
   const threadId = input.recoverySummary?.thread_id ?? null;
   const videoProviderValid = input.videoProviderValid ?? null;
@@ -413,14 +366,14 @@ function getFinalOutputProvenanceText(
   }
 
   if (state === "blocked" && videoProviderValid === false) {
-    return "来源：本次运行视频 provider 无效，clip 与 merge 已自动跳过";
+    return "来源：本次运行视频 provider 无效，合成已自动跳过";
   }
 
   if (state === "blocked") {
-    return "来源：等待分镜片段完成后生成最终视频";
+    return "来源：等待渲染完成后生成最终视频";
   }
 
-  return "来源：等待分镜片段完成后生成最终视频";
+  return "来源：等待渲染完成后生成最终视频";
 }
 
 function getFinalOutputBlockingText(input: {
@@ -431,10 +384,10 @@ function getFinalOutputBlockingText(input: {
 
   if (sectionState === "blocked") {
     if (videoProviderValid === false) {
-      return "本次运行的视频 provider 无效，已跳过 clip 与 merge 阶段。请先配置可用视频 provider 后重试。";
+      return "本次运行的视频 provider 无效，已跳过合成阶段。请先配置可用视频 provider 后重试。";
     }
 
-    return "当前仍在等待分镜片段完成，完成后会自动生成最终视频。";
+    return "当前仍在等待渲染完成，完成后会自动生成最终视频。";
   }
 
   if (sectionState === "superseded") {
@@ -454,11 +407,11 @@ function buildFinalOutputRetryFeedback(input: {
   const { sectionState, runId, threadId, currentStage, videoProviderValid } = input;
 
   if (sectionState === "blocked" && videoProviderValid === false) {
-    return `视频 provider 无效，当前运行已自动跳过 clip/merge。请先在项目中修复视频 provider 后重试。`;
+    return `视频 provider 无效，当前运行已自动跳过合成。请先在项目中修复视频 provider 后重试。`;
   }
 
   if (sectionState === "blocked") {
-    return `最终视频仍在等待分镜片段完成，请在 ${currentStage} 之后继续合成。`;
+    return `最终视频仍在等待渲染完成，请在 ${currentStage} 之后继续合成。`;
   }
 
   const contextParts = [

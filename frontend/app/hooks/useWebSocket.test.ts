@@ -226,8 +226,8 @@ describe("useProjectWebSocket", () => {
     initialStore.reset();
     initialStore.setMessages([
       {
-        id: "m-loading-director",
-        agent: "director",
+        id: "m-loading-plan",
+        agent: "plan",
         role: "assistant",
         content: "waiting",
         isLoading: true,
@@ -241,7 +241,7 @@ describe("useProjectWebSocket", () => {
       },
       {
         id: "m-idle",
-        agent: "director",
+        agent: "plan",
         role: "assistant",
         content: "already done",
         isLoading: false,
@@ -255,9 +255,9 @@ describe("useProjectWebSocket", () => {
       {
         type: "run_message",
         data: {
-          agent: "director",
+          agent: "plan",
           role: "assistant",
-          content: "director new message",
+          content: "plan new message",
         },
       } as never,
       store,
@@ -269,7 +269,7 @@ describe("useProjectWebSocket", () => {
     const latestMessages = useEditorStore.getState().messages;
 
     expect(updatedMessages.at(0)).toMatchObject({
-      id: "m-loading-director",
+      id: "m-loading-plan",
       isLoading: false,
     });
     expect(updatedMessages.at(1)).toMatchObject({
@@ -282,8 +282,8 @@ describe("useProjectWebSocket", () => {
     });
     expect(latestMessages.at(-1)).toMatchObject({
       role: "assistant",
-      content: "director new message",
-      agent: "director",
+      content: "plan new message",
+      agent: "plan",
     });
   });
 
@@ -300,7 +300,7 @@ describe("useProjectWebSocket", () => {
       type: "run_started",
       data: {
         run_id: 101,
-        stage: "ideate",
+        stage: "plan",
         recovery_summary: { test: "summary" } as never,
       },
     };
@@ -308,16 +308,16 @@ describe("useProjectWebSocket", () => {
     const runProgress: WsEvent = {
       type: "run_progress",
       data: {
-        current_agent: "director",
+        current_agent: "plan",
         progress: 0.42,
-        stage: "storyboard",
+        stage: "render",
       },
     };
 
     const runMessage: WsEvent = {
       type: "run_message",
       data: {
-        agent: "director",
+        agent: "plan",
         role: "assistant",
         content: "分镜生成中",
         progress: 0.5,
@@ -406,10 +406,10 @@ describe("useProjectWebSocket", () => {
       {
         type: "run_awaiting_confirm",
         data: {
-          agent: "director",
+          agent: "plan",
           run_id: 202,
           message: "请确认",
-          stage: "storyboard",
+          stage: "render",
           recovery_summary: { test: true } as never,
         },
       } as never,
@@ -419,13 +419,13 @@ describe("useProjectWebSocket", () => {
 
     expect(useEditorStore.getState()).toMatchObject({
       awaitingConfirm: true,
-      awaitingAgent: "director",
+      awaitingAgent: "plan",
       currentRunId: 202,
       recoveryGate: {
-        agent: "director",
+        agent: "plan",
         run_id: 202,
       },
-      currentStage: "storyboard",
+      currentStage: "render",
     });
 
     expect(useEditorStore.getState().recoverySummary).toMatchObject({ test: true });
@@ -439,9 +439,9 @@ describe("useProjectWebSocket", () => {
       {
         type: "run_confirmed",
         data: {
-          agent: "director",
+          agent: "plan",
           run_id: 202,
-          stage: "clip",
+          stage: "compose",
           recovery_summary: { updated: true } as never,
         },
       } as never,
@@ -451,7 +451,7 @@ describe("useProjectWebSocket", () => {
 
     expect(useEditorStore.getState().awaitingConfirm).toBe(false);
     expect(useEditorStore.getState().recoveryGate).toBeNull();
-    expect(useEditorStore.getState().currentStage).toBe("clip");
+    expect(useEditorStore.getState().currentStage).toBe("compose");
     expect(useEditorStore.getState().recoverySummary).toEqual({ updated: true });
     expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
       role: "info",
@@ -465,7 +465,7 @@ describe("useProjectWebSocket", () => {
     store.reset();
     store.setGenerating(true);
     store.setProgress(0.2);
-    store.setCurrentAgent("director");
+    store.setCurrentAgent("plan");
     store.setCurrentRunId(111);
     store.setCurrentRunProviderSnapshot({
       text: { selected_key: "openai", source: "project", resolved_key: "openai", valid: true },
@@ -477,14 +477,14 @@ describe("useProjectWebSocket", () => {
     const addMessageSpy = vi.spyOn(store, "addMessage");
     store.setRecoveryGate({
       run_id: 111,
-      agent: "director",
+      agent: "plan",
       recovery_summary: {} as never,
       preserved_stages: [],
     } as never);
     store.setMessages([
       {
         id: "m1",
-        agent: "director",
+        agent: "plan",
         role: "assistant",
         content: "running",
         isLoading: true,
@@ -511,7 +511,7 @@ describe("useProjectWebSocket", () => {
       recoveryControl: null,
       recoverySummary: null,
       recoveryGate: null,
-      currentStage: "merge",
+      currentStage: "compose",
     });
     expect(useEditorStore.getState().currentRunProviderSnapshot).toBeNull();
     expect(addMessageSpy).toHaveBeenCalledWith(
@@ -551,15 +551,15 @@ describe("useProjectWebSocket", () => {
     store.reset();
     store.setGenerating(true);
     store.setProgress(0.48);
-    store.setCurrentAgent("director");
+    store.setCurrentAgent("plan");
     store.setCurrentRunId(303);
     store.setRecoveryControl({ type: "retry" } as never);
     store.setRecoverySummary({ from: "before-cancel" } as never);
-    store.setRecoveryGate({ run_id: 303, agent: "director" } as never);
+    store.setRecoveryGate({ run_id: 303, agent: "plan" } as never);
     store.setMessages([
       {
-        id: "loading-director",
-        agent: "director",
+        id: "loading-plan",
+        agent: "plan",
         role: "assistant",
         content: "still loading",
         isLoading: true,
@@ -592,7 +592,7 @@ describe("useProjectWebSocket", () => {
       content: "生成已停止",
     });
     expect(useEditorStore.getState().messages[0]).toMatchObject({
-      id: "loading-director",
+      id: "loading-plan",
       isLoading: false,
     });
   });
@@ -789,7 +789,7 @@ describe("useProjectWebSocket", () => {
       {
         type: "run_progress",
         data: {
-          current_agent: "director",
+          current_agent: "plan",
           progress: 0.9,
           current_stage: "invalid_stage",
           recovery_summary: { step: "resume" },
@@ -799,7 +799,7 @@ describe("useProjectWebSocket", () => {
       noopAutoConfirm
     );
 
-    expect(useEditorStore.getState().currentAgent).toBe("director");
+    expect(useEditorStore.getState().currentAgent).toBe("plan");
     expect(useEditorStore.getState().progress).toBe(0.9);
     expect(useEditorStore.getState().recoverySummary).toMatchObject({ step: "resume" });
   });
@@ -813,15 +813,15 @@ describe("useProjectWebSocket", () => {
         type: "run_started",
         data: {
           run_id: 500,
-          current_agent: "scriptwriter",
-          stage: "script",
+          current_agent: "plan",
+          stage: "plan",
         },
       } as never,
       store,
       noopAutoConfirm
     );
 
-    expect(useEditorStore.getState().currentAgent).toBe("scriptwriter");
+    expect(useEditorStore.getState().currentAgent).toBe("plan");
     expect(useEditorStore.getState().currentRunId).toBe(500);
   });
 
@@ -836,9 +836,9 @@ describe("useProjectWebSocket", () => {
         type: "run_progress",
         data: {
           run_id: 600,
-          current_agent: "director",
+          current_agent: "plan",
           progress: 0.5,
-          stage: "storyboard",
+          stage: "render",
         },
       } as never,
       store,
@@ -847,7 +847,7 @@ describe("useProjectWebSocket", () => {
 
     expect(useEditorStore.getState().isGenerating).toBe(true);
     expect(useEditorStore.getState().currentRunId).toBe(600);
-    expect(useEditorStore.getState().currentAgent).toBe("director");
+    expect(useEditorStore.getState().currentAgent).toBe("plan");
   });
 
   it("recovers generating state from run_awaiting_confirm when not generating", () => {
@@ -861,9 +861,9 @@ describe("useProjectWebSocket", () => {
         type: "run_awaiting_confirm",
         data: {
           run_id: 700,
-          agent: "director",
+          agent: "plan",
           message: "请确认",
-          stage: "storyboard",
+          stage: "render",
           recovery_summary: {},
         },
       } as never,
@@ -967,7 +967,7 @@ describe("useProjectWebSocket", () => {
         type: "run_completed",
         data: {
           run_id: 888,
-          current_stage: "clip",
+          current_stage: "compose",
           message: "完成片段阶段",
         },
       } as never,
@@ -976,7 +976,7 @@ describe("useProjectWebSocket", () => {
     );
 
     expect(useEditorStore.getState().isGenerating).toBe(false);
-    expect(useEditorStore.getState().currentStage).toBe("clip");
+    expect(useEditorStore.getState().currentStage).toBe("compose");
   });
 
   it("reads summary from run_message event", () => {
@@ -987,7 +987,7 @@ describe("useProjectWebSocket", () => {
       {
         type: "run_message",
         data: {
-          agent: "scriptwriter",
+          agent: "plan",
           role: "assistant",
           content: "full content here",
           summary: "brief summary",
@@ -999,7 +999,7 @@ describe("useProjectWebSocket", () => {
 
     const lastMsg = useEditorStore.getState().messages.at(-1);
     expect(lastMsg).toMatchObject({
-      agent: "scriptwriter",
+      agent: "plan",
       content: "full content here",
       summary: "brief summary",
     });
@@ -1013,9 +1013,9 @@ describe("useProjectWebSocket", () => {
       {
         type: "agent_handoff",
         data: {
-          from_agent: "scriptwriter",
-          to_agent: "director",
-          message: "@scriptwriter 邀请 @director 加入了群聊",
+          from_agent: "plan",
+          to_agent: "plan",
+          message: "@plan 邀请 @render 加入了群聊",
         },
       } as never,
       store,
@@ -1026,7 +1026,7 @@ describe("useProjectWebSocket", () => {
     expect(lastMsg).toMatchObject({
       role: "handoff",
       agent: "system",
-      content: "@scriptwriter 邀请 @director 加入了群聊",
+      content: "@plan 邀请 @render 加入了群聊",
     });
   });
 
@@ -1058,7 +1058,7 @@ describe("useProjectWebSocket", () => {
     applyWsEvent(
       {
         type: "data_cleared",
-        data: { cleared_types: ["characters"], start_agent: "scriptwriter", mode: "full" },
+        data: { cleared_types: ["characters"], start_agent: "plan", mode: "full" },
       } as never,
       store,
       noopAutoConfirm
@@ -1078,8 +1078,8 @@ describe("useProjectWebSocket", () => {
         data: {
           run_id: 999,
           current_agent: "animator",
-          current_stage: "clip",
-          stage: "clip",
+          current_stage: "compose",
+          stage: "compose",
           progress: 0.75,
         },
       } as never,
@@ -1104,16 +1104,16 @@ describe("useProjectWebSocket", () => {
         type: "run_started",
         data: {
           run_id: 501,
-          current_agent: "scriptwriter",
-          current_stage: "script",
-          stage: "script",
-          next_stage: "character",
+          current_agent: "plan",
+          current_stage: "plan",
+          stage: "plan",
+          next_stage: "render",
         },
       } as never,
       store,
       noopAutoConfirm
     );
 
-    expect(useEditorStore.getState().currentStage).toBe("script");
+    expect(useEditorStore.getState().currentStage).toBe("plan");
   });
 });

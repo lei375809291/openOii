@@ -94,6 +94,30 @@ Each has an `approved_` counterpart set during the approval gate.
 
 ---
 
+## Frontend Stage Sync (M7)
+
+Frontend references 3 pipeline stages matching backend `Phase2Stage`:
+
+| Frontend Constant | Backend Stage | Purpose |
+|-------------------|---------------|---------|
+| `"plan"` | `plan` | Story → characters + shots |
+| `"render"` | `render` | Character images + shot keyframes |
+| `"compose"` | `compose` | I2V + video merge |
+
+**Updated files** (M7 migration from 6 → 3 visible stages):
+- `app/utils/pipeline.ts` — `PIPELINE_STAGES`, `STAGE_INFO_MAP`, `getWorkflowStageInfo`
+- `app/stores/editorStore.ts` — `currentStage` default, `preserved_stages` values
+- `app/stores/workspaceStatus.ts` — `SECTION_LABELS`, `GROUP_MAP`, `statusEntries()`
+- `app/hooks/useCanvasLayout.ts` — 3 layout zones (plan/render/compose)
+- `app/components/canvas/InfiniteCanvas.tsx` — `visibleSections` from 3 stages
+- `app/components/chat/ChatPanel.tsx` — `agentNameMap`, `stageIconMap`
+- `app/components/project/StagePipeline.tsx` — pipeline step labels
+- `app/pages/ProjectPage.tsx` — stage-driven chat panel state
+
+**Approval stages** (`plan_approval`, `render_approval`) are backend-internal; frontend shows them as pending states within their parent stage.
+
+---
+
 ## Test Assertion Points
 
 1. **Graph topology**: `test_phase2_graph.py` — route helpers return correct next stages

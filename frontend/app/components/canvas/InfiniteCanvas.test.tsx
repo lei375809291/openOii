@@ -136,7 +136,7 @@ vi.mock("~/stores/editorStore", () => ({
       },
     ],
     projectVideoUrl: null,
-    currentStage: "storyboard",
+    currentStage: "render",
     recoverySummary: null,
   }),
 }));
@@ -157,14 +157,12 @@ describe("InfiniteCanvas", () => {
     });
 
     expect(useCanvasLayoutMock.mock.calls[0]?.[0].visibleSections).toEqual([
-      "script",
-      "characters",
-      "storyboards",
+      "plan",
+      "render",
     ]);
     expect(mockEditor.createShapes).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "shape:script" }),
-      expect.objectContaining({ id: "shape:characters" }),
-      expect.objectContaining({ id: "shape:storyboards" }),
+      expect.objectContaining({ id: "shape:plan" }),
+      expect.objectContaining({ id: "shape:render" }),
     ]);
   });
 

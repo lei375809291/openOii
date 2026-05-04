@@ -28,7 +28,7 @@ const storeState: ChatPanelStoreState = {
   currentAgent: null,
   awaitingConfirm: false,
   awaitingAgent: null,
-  currentStage: 'ideate',
+  currentStage: 'plan',
   currentRunId: null as number | null,
   runMode: 'manual',
   setRunMode,
@@ -59,7 +59,7 @@ describe('ChatPanel', () => {
     storeState.currentAgent = null;
     storeState.awaitingConfirm = false;
     storeState.awaitingAgent = null;
-    storeState.currentStage = 'ideate';
+    storeState.currentStage = 'plan';
     storeState.currentRunId = null;
     storeState.runMode = 'manual';
   });
@@ -99,7 +99,7 @@ describe('ChatPanel', () => {
   });
 
   it('shows processing state and stop button while generating', () => {
-    storeState.currentAgent = 'director';
+    storeState.currentAgent = 'plan';
 
     render(
       <ChatPanel
@@ -111,21 +111,21 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('导演...')).toBeInTheDocument();
+    expect(screen.getByText('规划...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '停止生成' })).toBeInTheDocument();
   });
 
   it('shows awaiting confirm area and sends trimmed feedback to confirm', async () => {
     const user = userEvent.setup();
     storeState.awaitingConfirm = true;
-    storeState.awaitingAgent = 'director';
+    storeState.awaitingAgent = 'plan';
     storeState.messages = [
       {
         id: '1',
-        agent: 'director',
+        agent: 'plan',
         role: 'assistant',
         content: '完整内容',
-        summary: '导演摘要',
+        summary: '规划摘要',
       },
     ] as never[];
 
@@ -140,7 +140,7 @@ describe('ChatPanel', () => {
     );
 
     expect(screen.getByText('等待确认')).toBeInTheDocument();
-    expect(screen.getByText('导演摘要')).toBeInTheDocument();
+    expect(screen.getByText('规划摘要')).toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox'), '  修改剧情节奏  ');
     await user.click(screen.getByRole('button', { name: /继续/ }));
@@ -169,7 +169,7 @@ describe('ChatPanel', () => {
 
   it('hides manual confirm bar in YOLO mode', () => {
     storeState.awaitingConfirm = true;
-    storeState.awaitingAgent = 'director';
+    storeState.awaitingAgent = 'plan';
     storeState.runMode = 'yolo';
 
     render(
@@ -205,7 +205,7 @@ describe('ChatPanel', () => {
   });
 
   it('shows character stage icon when currentStage is character', () => {
-    storeState.currentStage = 'character';
+    storeState.currentStage = 'render';
 
     render(
       <ChatPanel
@@ -217,11 +217,11 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('角色阶段')).toBeInTheDocument();
+    expect(screen.getByText('渲染阶段')).toBeInTheDocument();
   });
 
   it('shows storyboard stage icon when currentStage is storyboard', () => {
-    storeState.currentStage = 'storyboard';
+    storeState.currentStage = 'render';
 
     render(
       <ChatPanel
@@ -233,11 +233,11 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('分镜阶段')).toBeInTheDocument();
+    expect(screen.getByText('渲染阶段')).toBeInTheDocument();
   });
 
   it('shows merge stage icon when currentStage is merge', () => {
-    storeState.currentStage = 'merge';
+    storeState.currentStage = 'compose';
 
     render(
       <ChatPanel
@@ -253,7 +253,7 @@ describe('ChatPanel', () => {
   });
 
   it('shows clip stage icon when currentStage is clip', () => {
-    storeState.currentStage = 'clip';
+    storeState.currentStage = 'compose';
 
     render(
       <ChatPanel
@@ -265,6 +265,6 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('片段阶段')).toBeInTheDocument();
+    expect(screen.getByText('合成阶段')).toBeInTheDocument();
   });
 });

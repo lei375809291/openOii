@@ -15,7 +15,7 @@ vi.mock("./CollapsibleMessage", () => ({
 const baseMsg = {
   id: "m1",
   project_id: 1,
-  agent: "director",
+  agent: "plan",
   role: "assistant" as const,
   content: "Hello world this is a very long message that should trigger typewriter effect because it exceeds fifty chars minimum",
   isLoading: false,
@@ -59,6 +59,6 @@ describe("MessageList", () => {
 
   it("renders agent badge with correct text", () => {
     render(<MessageList messages={[baseMsg]} />);
-    expect(screen.getByText("director")).toBeInTheDocument();
+    expect(screen.getByText("plan")).toBeInTheDocument();
   });
 });

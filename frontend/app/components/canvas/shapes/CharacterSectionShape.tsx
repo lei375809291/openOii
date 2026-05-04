@@ -35,7 +35,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("characters"),
+      placeholderText: getWorkspaceSectionPlaceholderText("render"),
     };
   }
 

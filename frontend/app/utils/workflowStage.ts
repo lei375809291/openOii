@@ -1,34 +1,22 @@
 import type { WorkflowStage } from "~/types";
 
 export const WORKFLOW_STAGE_SEQUENCE: WorkflowStage[] = [
-  "ideate",
-  "ideate_approval",
-  "script",
-  "script_approval",
-  "character",
-  "character_approval",
-  "storyboard",
-  "storyboard_approval",
-  "clip",
-  "clip_approval",
-  "merge",
+  "plan",
+  "plan_approval",
+  "render",
+  "render_approval",
+  "compose",
   "review",
 ];
 
 const WORKFLOW_STAGE_SET = new Set<WorkflowStage>(WORKFLOW_STAGE_SEQUENCE);
 
 const WORKFLOW_STAGE_UNLOCK_RANK: Record<WorkflowStage, number> = {
-  ideate: 0,
-  ideate_approval: 0,
-  script: 1,
-  script_approval: 1,
-  character: 2,
-  character_approval: 2,
-  storyboard: 3,
-  storyboard_approval: 3,
-  clip: 4,
-  clip_approval: 4,
-  merge: 5,
+  plan: 0,
+  plan_approval: 0,
+  render: 1,
+  render_approval: 1,
+  compose: 2,
   review: -1,
 };
 
@@ -49,40 +37,22 @@ export function getWorkflowStageInfo(stage: WorkflowStage): {
   description: string;
 } {
   switch (stage) {
-    case "ideate":
-    case "ideate_approval":
+    case "plan":
+    case "plan_approval":
       return {
-        title: "构思阶段",
-        description: "正在整理故事方向与创作设定",
+        title: "规划阶段",
+        description: "正在生成剧本、角色与镜头规划",
       };
-    case "script":
-    case "script_approval":
+    case "render":
+    case "render_approval":
       return {
-        title: "剧本阶段",
-        description: "正在撰写剧本、角色设定与镜头描述",
+        title: "渲染阶段",
+        description: "正在生成角色图与分镜画面",
       };
-    case "character":
-    case "character_approval":
-      return {
-        title: "角色阶段",
-        description: "正在生成角色形象并等待确认",
-      };
-    case "storyboard":
-    case "storyboard_approval":
-      return {
-        title: "分镜阶段",
-        description: "正在绘制分镜画面并等待确认",
-      };
-    case "clip":
-    case "clip_approval":
-      return {
-        title: "片段阶段",
-        description: "正在生成视频片段并等待确认",
-      };
-    case "merge":
+    case "compose":
       return {
         title: "合成阶段",
-        description: "正在拼接最终视频",
+        description: "正在生成视频片段并合成最终视频",
       };
     case "review":
       return {

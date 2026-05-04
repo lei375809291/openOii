@@ -47,7 +47,7 @@ const baseInput: WorkspaceProjectionInput = {
       },
     },
   },
-  currentStage: "ideate",
+  currentStage: "plan",
   runState: "idle",
   characters: [],
   shots: [],
@@ -55,11 +55,9 @@ const baseInput: WorkspaceProjectionInput = {
 
 describe("buildWorkspaceStatus", () => {
   it.each([
-    ["ideate", ["script"]],
-    ["character", ["script", "characters"]],
-    ["storyboard", ["script", "characters", "storyboards"]],
-    ["clip", ["script", "characters", "storyboards"]],
-    ["merge", ["script", "characters", "storyboards", "final-output"]],
+    ["plan", ["plan"]],
+    ["render", ["plan", "render"]],
+    ["compose", ["plan", "render", "compose"]],
   ] as const)("reveals only sections available at %s", (currentStage, expectedKeys) => {
     const result = buildWorkspaceStatus({
       ...baseInput,
@@ -75,7 +73,7 @@ describe("buildWorkspaceStatus", () => {
     expect(result.sections).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          key: "script",
+          key: "plan",
           placeholder: true,
           state: "draft",
         }),
@@ -86,7 +84,7 @@ describe("buildWorkspaceStatus", () => {
   it("keeps visible sections' status semantics intact after reveal", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
-      currentStage: "storyboard",
+      currentStage: "render",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",
@@ -96,17 +94,12 @@ describe("buildWorkspaceStatus", () => {
     expect(result.sections).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          key: "script",
+          key: "plan",
           placeholder: false,
           state: "generating",
         }),
         expect.objectContaining({
-          key: "characters",
-          placeholder: true,
-          state: "blocked",
-        }),
-        expect.objectContaining({
-          key: "storyboards",
+          key: "render",
           placeholder: true,
           state: "blocked",
         }),
@@ -114,10 +107,10 @@ describe("buildWorkspaceStatus", () => {
     );
   });
 
-  it("marks partially generated sections without hiding the missing ones once storyboard generation has started", () => {
+  it("marks partially generated sections without hiding the missing ones once render generation has started", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
-      currentStage: "storyboard",
+      currentStage: "render",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",
@@ -142,19 +135,14 @@ describe("buildWorkspaceStatus", () => {
     expect(result.sections).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          key: "script",
+          key: "plan",
           placeholder: false,
           state: "generating",
         }),
         expect.objectContaining({
-          key: "characters",
-          placeholder: false,
-          state: "draft",
-        }),
-        expect.objectContaining({
-          key: "storyboards",
+          key: "render",
           placeholder: true,
-          state: "blocked",
+          state: "generating",
         }),
       ])
     );
@@ -168,7 +156,7 @@ describe("buildWorkspaceStatus", () => {
         status: "superseded",
         summary: "一个已经被新版本替代的项目",
       },
-      currentStage: "merge",
+      currentStage: "compose",
       runState: "completed",
       characters: [
         {
@@ -219,8 +207,7 @@ describe("buildWorkspaceStatus", () => {
     expect(result.stageLabel).toBe("superseded");
     expect(result.sections).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: "characters", state: "complete" }),
-        expect.objectContaining({ key: "storyboards", state: "complete" }),
+        expect.objectContaining({ key: "render", state: "complete" }),
       ])
     );
   });
@@ -317,18 +304,18 @@ describe("buildWorkspaceStatus", () => {
     expect(staleMeta.provenanceText).toContain("已被新版本替代");
   });
 
-  it("surfaces blocking copy when the final output is still waiting on clips", () => {
+  it("surfaces blocking copy when the final output is still waiting on render", () => {
     const meta = getWorkspaceFinalOutputMeta(baseInput);
 
     expect(meta.sectionState).toBe("blocked");
-    expect(meta.blockingText).toContain("分镜");
+    expect(meta.blockingText).toContain("渲染");
     expect(meta.downloadUrl).toBe("/api/v1/projects/1/final-video");
   });
 
   it("shows explicit skip copy when video provider is invalid at final output", () => {
     const meta = getWorkspaceFinalOutputMeta({
       ...baseInput,
-      currentStage: "merge",
+      currentStage: "compose",
       runState: "completed",
       videoProviderValid: false,
       project: {
