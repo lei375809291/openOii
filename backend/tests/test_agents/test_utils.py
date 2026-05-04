@@ -5,11 +5,11 @@ import pytest
 from app.agents.utils import (
     build_character_context,
     extract_json,
-    utcnow,
     _extract_first_complete_json,
     _fix_common_json_errors,
     _try_fix_incomplete_json,
 )
+from app.db.utils import utcnow
 from types import SimpleNamespace
 
 

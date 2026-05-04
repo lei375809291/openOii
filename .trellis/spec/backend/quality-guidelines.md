@@ -97,6 +97,7 @@ Use `SettingsDep` (from `app.api.deps`) inside routes. Inside `get_settings()`-a
 | Top-level side effects in modules | Modules should only declare; effects belong in `lifespan` / explicit init. |
 | Catching exception and re-raising as `HTTPException` from a service | Use `AppException` subclasses; let routes / global handler do HTTP. |
 | Hardcoded magic strings repeated in 3+ places | Lift to a constant or enum. |
+| Defining local `utcnow()` in any module | Use `from app.db.utils import utcnow` — single canonical source. |
 
 ---
 
@@ -227,7 +228,7 @@ If you spot dead code, leave a `# TODO(<name>): unused, candidate for removal` r
 ## Common Mistakes
 
 1. **Forgetting `# noqa: F401` after adding a new SQLModel** — breaks `init_db()` because the model isn't registered before `create_all`.
-2. **Comparing tz-aware vs tz-naive datetimes** in queries. Use the `utcnow()` helper that strips tz.
+2. **Comparing tz-aware vs tz-naive datetimes** in queries. Use `from app.db.utils import utcnow` — never define a local `utcnow()`.
 3. **Reading `.env` from a test by instantiating `Settings()`**. The `Settings` class is configured _not_ to auto-read `.env`; only `get_settings()` does. Tests should pass values explicitly.
 4. **Importing models inside `app/db/session.py:init_db` lazily and not adding the top-level `noqa` import** — schema misses tables.
 5. **Calling `await session.commit()` inside a service that the caller already commits**. Pick one layer to own the transaction; for routes the caller (route) owns it; for `delete_project_by_id` the service owns it because it does multi-step cascade.

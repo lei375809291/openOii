@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from app.api.deps import get_app_settings, get_ws_manager
+from app.models.agent_run import AgentRun
 
 
-@pytest.mark.asyncio
-async def test_get_app_settings():
-    settings = await get_app_settings()
-    assert settings is not None
-    assert hasattr(settings, "database_url")
+def test_require_run_id_returns_id():
+    from app.api.deps import require_run_id
+
+    run = AgentRun(project_id=1, id=42)
+    assert require_run_id(run) == 42
 
 
-@pytest.mark.asyncio
-async def test_get_ws_manager():
-    mgr = await get_ws_manager()
-    assert mgr is not None
+def test_require_run_id_raises_on_none():
+    from app.api.deps import require_run_id
+
+    run = AgentRun(project_id=1)
+    run.id = None
+    with pytest.raises(RuntimeError, match="missing an id"):
+        require_run_id(run)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import cast
 
 from fastapi import APIRouter, HTTPException, status
@@ -11,6 +11,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from app.api.deps import SessionDep, SettingsDep
 from app.config import Settings
+from app.db.utils import utcnow
 from app.models.message import Message
 from app.models.project import Character, Project, Shot
 from app.schemas.project import (
@@ -29,10 +30,6 @@ from app.services.project_deletion import delete_project_by_id, delete_projects_
 from app.services.provider_resolution import resolve_project_provider_settings_async
 
 router = APIRouter()
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def _project_provider_settings(project: Project, settings: Settings) -> ProjectProviderSettingsRead:

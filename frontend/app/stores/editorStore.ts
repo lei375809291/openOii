@@ -32,6 +32,7 @@ interface EditorState {
   characters: Character[];
   shots: Shot[];
   projectVideoUrl: string | null;
+  projectStatus: string | null;
   projectUpdatedAt: number | null;
 
   setSelectedShot: (id: number | null) => void;
@@ -50,6 +51,7 @@ interface EditorState {
   setCharacters: (characters: Character[]) => void;
   setShots: (shots: Shot[]) => void;
   setProjectVideoUrl: (url: string | null) => void;
+  setProjectStatus: (status: string | null) => void;
   setProjectUpdatedAt: (timestamp: number) => void;
   setAwaitingConfirm: (awaiting: boolean, agent?: string | null, runId?: number | null) => void;
   setCurrentRunId: (runId: number | null) => void;
@@ -86,6 +88,7 @@ const initialState = {
   characters: [],
   shots: [],
   projectVideoUrl: null,
+  projectStatus: null,
   projectUpdatedAt: null,
   ...initialRunState,
 };
@@ -110,6 +113,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setCharacters: (characters) => set({ characters }),
   setShots: (shots) => set({ shots }),
   setProjectVideoUrl: (url) => set({ projectVideoUrl: url }),
+  setProjectStatus: (status) => set({ projectStatus: status }),
   setProjectUpdatedAt: (timestamp) => set({ projectUpdatedAt: timestamp }),
   setAwaitingConfirm: (awaiting, agent = null, runId) =>
     set((state) => ({

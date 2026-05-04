@@ -30,7 +30,7 @@ backend/app/
 ├── exceptions.py            # AppException hierarchy (mapped in main.py)
 │
 ├── api/
-│   ├── deps.py              # Shared deps: SessionDep, SettingsDep, AdminDep, WsManagerDep
+│   ├── deps.py              # Shared deps: SessionDep, SettingsDep, AdminDep, WsManagerDep, require_run_id
 │   └── v1/
 │       ├── router.py        # Aggregates all routers under /api/v1
 │       └── routes/          # One file per resource: projects, characters, shots, generation, text, config
@@ -39,7 +39,7 @@ backend/app/
 │
 ├── models/                  # SQLModel tables (project, agent_run, message, run, stage, artifact, config_item)
 │
-├── services/                # Business logic (provider_resolution, generation_entry, run_recovery, ...)
+├── services/                # Business logic (provider_resolution, generation_entry, run_recovery, agent_runner, ...)
 │
 ├── orchestration/           # LangGraph: state.py, graph.py, nodes.py, runtime.py, persistence.py
 │
@@ -49,7 +49,7 @@ backend/app/
 │
 ├── ws/                      # WebSocket manager
 │
-├── db/                      # session.py (engine, async_session_maker, init_db, get_session)
+├── db/                      # session.py (engine, async_session_maker, init_db, get_session), utils.py (utcnow)
 │
 └── static/                  # Generated media output (videos/, images/), mounted at /static
 ```

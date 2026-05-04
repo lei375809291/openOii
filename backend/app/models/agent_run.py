@@ -1,12 +1,10 @@
-from datetime import datetime, UTC
+from datetime import datetime
 from typing import Optional, List
 
 from sqlalchemy import Column, JSON, Text
 from sqlmodel import Field, Relationship, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+from app.db.utils import utcnow
 
 
 class AgentRun(SQLModel, table=True):

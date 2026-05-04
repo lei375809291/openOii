@@ -1,11 +1,9 @@
-from datetime import datetime, UTC
+from datetime import datetime
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+from app.db.utils import utcnow
 
 
 class Message(SQLModel, table=True):

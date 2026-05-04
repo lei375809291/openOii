@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, UTC
 from typing import Any, cast
 
 import redis.asyncio as redis
@@ -10,6 +9,7 @@ from langgraph.types import Command
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.utils import utcnow
 from app.agents.base import AgentContext
 from app.agents.character_artist import CharacterArtistAgent
 from app.agents.director import DirectorAgent
@@ -127,10 +127,6 @@ AGENT_COMPLETION_INFO = {
         "question": "最终视频效果满意吗？",
     },
 }
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 _redis_client: redis.Redis | None = None

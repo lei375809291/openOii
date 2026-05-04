@@ -7,7 +7,8 @@ from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.scriptwriter import SYSTEM_PROMPT
-from app.agents.utils import extract_json, utcnow
+from app.agents.utils import extract_json
+from app.db.utils import utcnow
 from app.models.project import Character, Shot
 
 

@@ -4,7 +4,8 @@ import json
 
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.director import SYSTEM_PROMPT
-from app.agents.utils import extract_json, utcnow
+from app.agents.utils import extract_json
+from app.db.utils import utcnow
 
 
 class DirectorAgent(BaseAgent):

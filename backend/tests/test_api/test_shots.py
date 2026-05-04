@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from app.api.v1.routes import shots as shots_routes
+from app.services import agent_runner as agent_runner_mod
 from app.models.agent_run import AgentRun
 
 from tests.factories import create_character, create_project, create_shot
@@ -102,7 +102,7 @@ async def test_update_shot_not_found(async_client):
 
 @pytest.mark.asyncio
 async def test_regenerate_shot(async_client, test_session, monkeypatch):
-    monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(agent_runner_mod.asyncio, "create_task", _immediate_task)
 
     project = await create_project(test_session)
     project.video_url = "http://test.com/project-final.mp4"
@@ -229,7 +229,7 @@ async def test_approve_shot_rejects_missing_character(async_client, test_session
 
 @pytest.mark.asyncio
 async def test_regenerate_shot_happy_path(async_client, test_session, monkeypatch):
-    monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(agent_runner_mod.asyncio, "create_task", _immediate_task)
 
     project = await create_project(test_session)
     shot = await create_shot(test_session, project_id=project.id, order=1)
@@ -244,7 +244,7 @@ async def test_regenerate_shot_happy_path(async_client, test_session, monkeypatc
 
 @pytest.mark.asyncio
 async def test_regenerate_shot_defaults_to_video(async_client, test_session, monkeypatch):
-    monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
+    monkeypatch.setattr(agent_runner_mod.asyncio, "create_task", _immediate_task)
 
     project = await create_project(test_session)
     shot = await create_shot(test_session, project_id=project.id, order=1)
@@ -318,10 +318,10 @@ async def test_run_agent_plan_emits_progress_and_completes(test_session, test_se
     async def fake_async_session_maker():
         yield _SessionProxy(test_session)
 
-    monkeypatch.setattr(shots_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(shots_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
-    await shots_routes._run_agent_plan(
+    await agent_runner_mod.run_agent_plan(
         project_id=project.id,
         run_id=run.id,
         agent_plan=[_FakeAgent()],
@@ -436,10 +436,10 @@ async def test_run_agent_plan_handles_exception(test_session, test_settings, mon
     async def fake_async_session_maker():
         yield _SessionProxy(test_session)
 
-    monkeypatch.setattr(shots_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(shots_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
-    await shots_routes._run_agent_plan(
+    await agent_runner_mod.run_agent_plan(
         project_id=project.id,
         run_id=run.id,
         agent_plan=[_FailingAgent()],
@@ -478,11 +478,11 @@ async def test_run_agent_plan_cancelled(test_session, test_settings, monkeypatch
     async def fake_async_session_maker():
         yield _SessionProxy(test_session)
 
-    monkeypatch.setattr(shots_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(shots_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
     task = asyncio.create_task(
-        shots_routes._run_agent_plan(
+        agent_runner_mod.run_agent_plan(
             project_id=project.id,
             run_id=run.id,
             agent_plan=[_SlowAgent()],

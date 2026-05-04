@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, UTC
 import json
 import os
 from pathlib import Path
@@ -12,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, apply_settings_overrides as apply_settings_overrides_to_runtime
+from app.db.utils import utcnow
 from app.models.config_item import ConfigItem
 
 MASK_VALUE = "******"
@@ -40,10 +40,6 @@ RESTART_REQUIRED_KEYS = {
 RESTART_REQUIRED_PREFIXES = ("DATABASE_", "REDIS_")
 
 SETTINGS_ENV_FIELD_MAP = {name.upper(): name for name in Settings.model_fields}
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _resolve_env_path() -> Path:

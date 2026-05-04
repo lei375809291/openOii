@@ -384,17 +384,6 @@ export function applyWsEvent(
       });
       break;
 
-    case "error":
-      if (import.meta.env.DEV) {
-        console.error("[WS] 服务器错误:", event.data);
-      }
-      toast.error({
-        title: "服务器错误",
-        message: (event.data.message as string) || "发生未知错误",
-        details: import.meta.env.DEV ? (event.data.code as string) : undefined,
-      });
-      break;
-
     case "character_created":
     case "character_updated":
       if (event.data.character) {
@@ -445,8 +434,13 @@ export function applyWsEvent(
         style?: string;
         blocking_clips?: Array<{ shot_id: number; order: number; status: string; reason: string }>;
       } | undefined;
-      if (projectData?.video_url !== undefined) {
-        store.setProjectVideoUrl(projectData.video_url || null);
+      if (projectData) {
+        if (projectData.video_url !== undefined) {
+          store.setProjectVideoUrl(projectData.video_url || null);
+        }
+        if (projectData.status !== undefined) {
+          store.setProjectStatus(projectData.status);
+        }
       }
       store.setProjectUpdatedAt(Date.now());
       break;

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from sqlmodel import Field, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+from app.db.utils import utcnow
 
 
 class Run(SQLModel, table=True):

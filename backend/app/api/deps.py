@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.db.session import get_session
+from app.models.agent_run import AgentRun
 from app.ws.manager import ConnectionManager, ws_manager
 
 
@@ -35,6 +36,13 @@ async def require_admin(
         )
     if not x_admin_token or not secrets.compare_digest(x_admin_token, settings.admin_token):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+
+def require_run_id(run: AgentRun) -> int:
+    run_id = run.id
+    if run_id is None:
+        raise RuntimeError("Persisted AgentRun is missing an id")
+    return run_id
 
 
 SettingsDep = Depends(get_app_settings)

@@ -922,6 +922,40 @@ describe("useProjectWebSocket", () => {
     expect(useEditorStore.getState().projectVideoUrl).toBe("http://cdn/new.mp4");
   });
 
+  it("handles project_updated with status", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setProjectStatus(null);
+
+    applyWsEvent(
+      {
+        type: "project_updated",
+        data: { project: { status: "generating" } },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().projectStatus).toBe("generating");
+  });
+
+  it("ignores project_updated status when project data is undefined", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setProjectStatus("idle");
+
+    applyWsEvent(
+      {
+        type: "project_updated",
+        data: {},
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().projectStatus).toBe("idle");
+  });
+
   it("reads current_stage from run_completed event data", () => {
     const store = useEditorStore.getState();
     store.reset();

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.orchestrator import GenerationOrchestrator
-from app.api.deps import SessionDep, SettingsDep, WsManagerDep
+from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
 from app.config import Settings
 from app.db.session import async_session_maker
 from app.exceptions import BusinessError
@@ -50,10 +50,7 @@ def _agent_run_thread_id(run: AgentRun) -> str:
 
 
 def _require_run_id(run: AgentRun) -> int:
-    run_id = run.id
-    if run_id is None:
-        raise RuntimeError("Persisted AgentRun is missing an id")
-    return run_id
+    return require_run_id(run)
 
 
 async def _latest_run_for_project(

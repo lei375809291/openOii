@@ -1,13 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional, cast
 
 from sqlalchemy import Column, JSON
 from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, Relationship, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+from app.db.utils import utcnow
 
 
 class Project(SQLModel, table=True):

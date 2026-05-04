@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import pytest
 
 from app.api.v1.routes import characters as characters_routes
+from app.services import agent_runner as agent_runner_mod
 from app.models.agent_run import AgentRun
 from tests.factories import create_character, create_project
 
@@ -283,10 +284,10 @@ async def test_run_agent_plan_handles_missing_project_or_run(test_session, test_
     async def fake_async_session_maker():
         yield _SessionProxy(test_session, get_result=None)
 
-    monkeypatch.setattr(characters_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(characters_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
-    await characters_routes._run_agent_plan(
+    await agent_runner_mod.run_agent_plan(
         project_id=project.id,
         run_id=run.id,
         agent_plan=[_FakeAgent()],
@@ -329,10 +330,10 @@ async def test_run_agent_plan_emits_progress_and_completes(test_session, test_se
     async def fake_async_session_maker():
         yield _SessionProxy(test_session)
 
-    monkeypatch.setattr(characters_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(characters_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
-    await characters_routes._run_agent_plan(
+    await agent_runner_mod.run_agent_plan(
         project_id=project.id,
         run_id=run.id,
         agent_plan=[_FakeAgent()],
@@ -433,10 +434,10 @@ async def test_run_agent_plan_handles_exception(test_session, test_settings, mon
     async def fake_async_session_maker():
         yield _SessionProxy(test_session)
 
-    monkeypatch.setattr(characters_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(characters_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
-    await characters_routes._run_agent_plan(
+    await agent_runner_mod.run_agent_plan(
         project_id=project.id,
         run_id=run.id,
         agent_plan=[_FailingAgent()],
@@ -479,10 +480,10 @@ async def test_run_agent_plan_cancelled(test_session, test_settings, monkeypatch
         if cancel_task and not cancel_task.done():
             cancel_task.cancel()
 
-    monkeypatch.setattr(characters_routes, "async_session_maker", fake_async_session_maker)
-    monkeypatch.setattr(characters_routes.task_manager, "remove", lambda project_id: None)
+    monkeypatch.setattr(agent_runner_mod, "async_session_maker", fake_async_session_maker)
+    monkeypatch.setattr(agent_runner_mod.task_manager, "remove", lambda project_id: None)
 
-    import app.api.v1.routes.characters as mod
+    import app.services.agent_runner as runner_mod
 
     original_create_task = asyncio.create_task
 
@@ -492,15 +493,12 @@ async def test_run_agent_plan_cancelled(test_session, test_settings, monkeypatch
         cancel_task = task
         return task
 
-    monkeypatch.setattr(mod.asyncio, "create_task", _capture_create_task)
+    monkeypatch.setattr(runner_mod.asyncio, "create_task", _capture_create_task)
 
-    # Run in background; the task will cancel itself via fake_async_session_maker
-    # We just need _run_agent_plan to run; it calls _run_agent_plan's own task
-    # Simpler approach: run directly and cancel the asyncio task from outside
     import contextlib
 
     task = asyncio.create_task(
-        characters_routes._run_agent_plan(
+        agent_runner_mod.run_agent_plan(
             project_id=project.id,
             run_id=run.id,
             agent_plan=[_SlowAgent()],
