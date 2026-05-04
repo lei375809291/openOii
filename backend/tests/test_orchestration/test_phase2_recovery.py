@@ -85,7 +85,7 @@ async def test_resume_from_recovery_uses_run_provider_snapshot(test_session, tes
         )
 
     async def _noop_invoke_phase2_graph(self, **_kwargs):
-        return None
+        return False, "merge"
 
     class _StubWs:
         async def send_event(self, _project_id: int, _event: dict) -> None:
@@ -162,7 +162,7 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
         )
 
     async def _fake_invoke_phase2_graph(self, **_kwargs):
-        return True
+        return True, "merge"
 
     async def _noop_clear_confirm_event(_: int) -> None:
         return None

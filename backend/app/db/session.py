@@ -35,12 +35,27 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 def _run_alembic_upgrade() -> None:
     settings = get_settings()
+    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
     cfg = AlembicConfig(str(ALEMBIC_INI))
     cfg.set_main_option("script_location", str(ALEMBIC_DIR))
-    cfg.set_main_option(
-        "sqlalchemy.url",
-        settings.database_url.replace("+asyncpg", "+psycopg2"),
-    )
+    cfg.set_main_option("sqlalchemy.url", sync_url)
+    # alembic default version_num varchar(32) is too short for our revision IDs
+    from sqlalchemy import create_engine, inspect as sa_inspect, text
+    sync_engine = create_engine(sync_url)
+    try:
+        inspector = sa_inspect(sync_engine)
+        if "alembic_version" not in inspector.get_table_names():
+            with sync_engine.connect() as conn:
+                conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(128) NOT NULL)"))
+                conn.commit()
+        else:
+            with sync_engine.connect() as conn:
+                conn.execute(text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"))
+                conn.commit()
+    except Exception:
+        pass
+    finally:
+        sync_engine.dispose()
     alembic_command.upgrade(cfg, "head")
 
 

@@ -53,7 +53,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
   }
 
   component(shape: CharacterSectionShape) {
-    const { characters, placeholder, placeholderText, statusLabel, w, h } = shape.props;
+    const { characters, placeholder, placeholderText, statusLabel, w } = shape.props;
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>

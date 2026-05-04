@@ -41,7 +41,6 @@ describe("VideoSectionShape", () => {
 
   it("shows video element with title", () => {
     render(shapeUtil.component(createShape()));
-
     expect(screen.getByLabelText("创意项目")).toBeInTheDocument();
   });
 
@@ -53,7 +52,6 @@ describe("VideoSectionShape", () => {
         })
       )
     );
-
     expect(screen.getByText("视频生成中，请稍候...")).toBeInTheDocument();
   });
 
@@ -67,7 +65,45 @@ describe("VideoSectionShape", () => {
         })
       )
     );
-
     expect(screen.getByText("等待视频合成...")).toBeInTheDocument();
+  });
+
+  it("hides placeholder when videoUrl present even if placeholder is true", () => {
+    render(
+      shapeUtil.component(
+        createShape({
+          videoUrl: "/static/videos/test.mp4",
+          placeholder: true,
+          placeholderText: "等待视频合成...",
+        })
+      )
+    );
+    expect(screen.queryByText("等待视频合成...")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("创意项目")).toBeInTheDocument();
+  });
+
+  it("returns null indicator", () => {
+    expect(shapeUtil.indicator()).toBeNull();
+  });
+
+  it("has correct static type", () => {
+    expect(VideoSectionShapeUtil.type).toBe("video-section");
+  });
+
+  it("cannot edit or resize", () => {
+    expect(shapeUtil.canEdit()).toBe(false);
+    expect(shapeUtil.canResize()).toBe(false);
+  });
+
+  it("hides selection bounds", () => {
+    expect(shapeUtil.hideSelectionBoundsFg()).toBe(true);
+    expect(shapeUtil.hideSelectionBoundsBg()).toBe(true);
+  });
+
+  it("includes video track element for captions", () => {
+    render(shapeUtil.component(createShape()));
+    const track = screen.getByLabelText("创意项目").querySelector("track");
+    expect(track).toBeTruthy();
+    expect(track?.getAttribute("kind")).toBe("captions");
   });
 });

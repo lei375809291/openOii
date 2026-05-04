@@ -344,26 +344,32 @@ export function applyWsEvent(
       });
       break;
     case "run_completed":
-      // 清除所有 isLoading 状态
-      clearLoadingStates(store);
-      store.setGenerating(false);
-      store.setProgress(1);
-      store.setCurrentAgent(null);
-      store.setAwaitingConfirm(false);
-      store.setCurrentRunId(null);
-      store.setRecoveryControl(null);
-      store.setRecoverySummary(null);
-      store.setRecoveryGate(null);
-      store.setCurrentRunProviderSnapshot(null);
-      store.setCurrentStage("merge");
-      if (typeof event.data?.message === "string" && event.data.message.trim()) {
-        store.addMessage({
-          id: generateMessageId(),
-          agent: "system",
-          role: "assistant",
-          content: event.data.message,
-          timestamp: new Date().toISOString(),
-        });
+      {
+        clearLoadingStates(store);
+        store.setGenerating(false);
+        store.setProgress(1);
+        store.setCurrentAgent(null);
+        store.setAwaitingConfirm(false);
+        store.setCurrentRunId(null);
+        store.setRecoveryControl(null);
+        store.setRecoverySummary(null);
+        store.setRecoveryGate(null);
+        store.setCurrentRunProviderSnapshot(null);
+        const completedStage = event.data?.current_stage as string | undefined;
+        if (completedStage && isWorkflowStage(completedStage)) {
+          store.setCurrentStage(completedStage);
+        } else {
+          store.setCurrentStage("merge");
+        }
+        if (typeof event.data?.message === "string" && event.data.message.trim()) {
+          store.addMessage({
+            id: generateMessageId(),
+            agent: "system",
+            role: "assistant",
+            content: event.data.message,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
       break;
     case "run_failed":
@@ -469,13 +475,16 @@ export function applyWsEvent(
       }
       break;
     case "project_updated":
-      // 项目更新事件（标题、视频等更新时触发）
       {
-        const projectData = event.data.project as { video_url?: string; title?: string } | undefined;
+        const projectData = event.data.project as {
+          video_url?: string;
+          title?: string;
+          status?: string;
+          blocking_clips?: Array<{ shot_id: number; shot_order: number; reason: string }>;
+        } | undefined;
         if (projectData?.video_url) {
           store.setProjectVideoUrl(projectData.video_url);
         }
-        // 触发项目数据刷新
         store.setProjectUpdatedAt(Date.now());
       }
       break;

@@ -83,7 +83,7 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
     const {
       videoUrl, title, blockingText,
       placeholder, placeholderText, statusLabel,
-      w, h,
+      w,
     } = shape.props;
 
     return (

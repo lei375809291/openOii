@@ -230,6 +230,7 @@ class MessageRead(BaseModel):
     agent: str
     role: str
     content: str
+    summary: str | None
     progress: float | None
     is_loading: bool
     created_at: datetime

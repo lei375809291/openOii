@@ -85,6 +85,7 @@ class ProjectUpdatedPayload(BaseModel):
     summary: str | None = None
     video_url: str | None = None
     status: str | None = None
+    blocking_clips: list[dict[str, Any]] | None = None
 
 
 class ProjectUpdatedEventData(BaseModel):

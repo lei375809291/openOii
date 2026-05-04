@@ -46,54 +46,68 @@ describe("StoryboardSectionShape", () => {
             approved_character_ids: [1, 2],
           },
         ],
+        sectionTitle: "分镜",
+        sectionState: "complete",
+        placeholder: false,
+        statusLabel: "已完成",
+        placeholderText: "等待分镜生成...",
         ...props,
       },
     }) as StoryboardSectionShape;
 
   it("shows shot info, duration badge, and description", () => {
     render(shapeUtil.component(createShape()));
-
     expect(screen.getByText("7s")).toBeInTheDocument();
     expect(screen.getByText(/阿宁走进雨夜街道/)).toBeInTheDocument();
     expect(screen.getByText("镜头 1")).toBeInTheDocument();
     expect(screen.getByText("wide")).toBeInTheDocument();
   });
 
-  it("shows superseded shots without version info", () => {
+  it("shows placeholder for shots without image", () => {
     render(
       shapeUtil.component(
         createShape({
           shots: [
             {
-              id: 12,
-              project_id: 1,
-              order: 2,
-              description: "旧镜头",
-              prompt: "old prompt",
-              image_prompt: "old image prompt",
-              image_url: null,
-              video_url: null,
-              duration: 5,
-              camera: "close",
-              motion_note: "old motion",
-              character_ids: [3],
-              approval_state: "superseded",
-              approval_version: 1,
-              approved_at: null,
-              approved_description: null,
-              approved_prompt: null,
-              approved_image_prompt: null,
-              approved_duration: null,
-              approved_camera: null,
-              approved_motion_note: null,
+              id: 12, project_id: 1, order: 1, description: "无图镜头",
+              prompt: "", image_prompt: "", image_url: null, video_url: null,
+              duration: 3, camera: null, motion_note: null, character_ids: [],
+              approval_state: "draft", approval_version: 1, approved_at: null,
+              approved_description: null, approved_prompt: null, approved_image_prompt: null,
+              approved_duration: null, approved_camera: null, approved_motion_note: null,
               approved_character_ids: [],
             },
           ],
         })
       )
     );
+    expect(screen.getByText("生成中...")).toBeInTheDocument();
+    expect(screen.getByText("无图镜头")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("旧镜头")).toBeInTheDocument();
-    expect(screen.queryByText(/approval_version/i)).not.toBeInTheDocument();
+  it("shows placeholder when no shots", () => {
+    render(
+      shapeUtil.component(
+        createShape({
+          shots: [],
+          placeholder: true,
+          placeholderText: "等待分镜生成...",
+        })
+      )
+    );
+    expect(screen.getByText("等待分镜生成...")).toBeInTheDocument();
+  });
+
+  it("returns null indicator", () => {
+    expect(shapeUtil.indicator()).toBeNull();
+  });
+
+  it("has correct static type", () => {
+    expect(StoryboardSectionShapeUtil.type).toBe("storyboard-section");
+  });
+
+  it("cannot edit or resize", () => {
+    expect(shapeUtil.canEdit()).toBe(false);
+    expect(shapeUtil.canResize()).toBe(false);
   });
 });

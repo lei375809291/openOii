@@ -82,7 +82,7 @@ export function ChatPanel({
   generateDisabledReason,
   isPaused = false,
   onPause,
-  onResume,
+  onResume: _onResume,
 }: ChatPanelProps) {
   const generateDisabledReasonId = generateDisabledReason ? "generate-disabled-reason" : undefined;
   const {

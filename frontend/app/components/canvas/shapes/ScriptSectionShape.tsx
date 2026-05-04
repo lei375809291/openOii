@@ -58,7 +58,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   }
 
   component(shape: ScriptSectionShape) {
-    const { story, summary, characters, shots, placeholder, placeholderText, statusLabel, w, h } = shape.props;
+    const { story, summary, characters, shots, placeholder, placeholderText, statusLabel, w } = shape.props;
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>

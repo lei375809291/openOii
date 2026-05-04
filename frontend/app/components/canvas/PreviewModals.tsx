@@ -32,7 +32,7 @@ export function ImagePreviewModal({ src, alt, onClose }: ImagePreviewModalProps)
         <button
           type="button"
           className="absolute -top-3 -right-3 btn btn-circle btn-sm btn-neutral"
-          onClick={onClose}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
           aria-label="关闭"
         >
           <XMarkIcon className="w-5 h-5" aria-hidden="true" />
@@ -84,7 +84,7 @@ export function VideoPreviewModal({
         <button
           type="button"
           className="absolute -top-3 -right-3 btn btn-circle btn-sm btn-neutral"
-          onClick={onClose}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
           aria-label="关闭"
         >
           <XMarkIcon className="w-5 h-5" aria-hidden="true" />

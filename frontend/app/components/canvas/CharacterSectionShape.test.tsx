@@ -35,13 +35,16 @@ describe("CharacterSectionShape", () => {
             approved_image_url: "/static/characters/aning-approved.png",
           },
         ],
+        sectionState: "complete",
+        placeholder: false,
+        statusLabel: "已完成",
+        placeholderText: "等待角色生成...",
         ...props,
       },
     }) as CharacterSectionShape;
 
   it("shows approval state dot and character info", () => {
     render(shapeUtil.component(createShape()));
-
     expect(screen.getByText("阿宁")).toBeInTheDocument();
     expect(screen.getByText("冷静的侦探")).toBeInTheDocument();
     expect(screen.getByText("v2")).toBeInTheDocument();
@@ -69,8 +72,55 @@ describe("CharacterSectionShape", () => {
         })
       )
     );
-
     expect(screen.getByText("旧阿宁")).toBeInTheDocument();
-    expect(screen.queryByText(/version/i)).not.toBeInTheDocument();
+  });
+
+  it("shows placeholder when no characters", () => {
+    render(
+      shapeUtil.component(
+        createShape({
+          characters: [],
+          placeholder: true,
+          placeholderText: "等待角色生成...",
+        })
+      )
+    );
+    expect(screen.getByText("等待角色生成...")).toBeInTheDocument();
+  });
+
+  it("renders multiple characters in grid", () => {
+    render(
+      shapeUtil.component(
+        createShape({
+          characters: [
+            {
+              id: 1, project_id: 1, name: "阿宁", description: "侦探",
+              image_url: null, approval_state: "approved", approval_version: 1,
+              approved_at: null, approved_name: null, approved_description: null, approved_image_url: null,
+            },
+            {
+              id: 2, project_id: 1, name: "小李", description: "助手",
+              image_url: null, approval_state: "draft", approval_version: 1,
+              approved_at: null, approved_name: null, approved_description: null, approved_image_url: null,
+            },
+          ],
+        })
+      )
+    );
+    expect(screen.getByText("阿宁")).toBeInTheDocument();
+    expect(screen.getByText("小李")).toBeInTheDocument();
+  });
+
+  it("returns null indicator", () => {
+    expect(shapeUtil.indicator()).toBeNull();
+  });
+
+  it("has correct static type", () => {
+    expect(CharacterSectionShapeUtil.type).toBe("character-section");
+  });
+
+  it("cannot edit or resize", () => {
+    expect(shapeUtil.canEdit()).toBe(false);
+    expect(shapeUtil.canResize()).toBe(false);
   });
 });

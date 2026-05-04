@@ -501,7 +501,7 @@ async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch)
         auto_mode=False,
     )
 
-    assert result is True
+    assert result == (True, "merge")
     assert project.status == "ready"
 
 
@@ -574,7 +574,7 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
         return {"configurable": {"thread_id": "t1"}}
 
     async def fake_invoke(**kwargs):
-        return False
+        return False, "merge"
 
     monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
     monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
@@ -620,7 +620,7 @@ async def test_run_from_agent_happy_path(monkeypatch):
         return None
 
     async def run_phase2_graph(**kwargs):
-        return False
+        return False, "merge"
 
     async def set_run(run, **fields):
         return run
@@ -662,7 +662,7 @@ async def test_run_from_agent_review_branch(monkeypatch):
         return None
 
     async def run_phase2_graph(**kwargs):
-        return False
+        return False, "merge"
 
     async def set_run(run, **fields):
         return run
@@ -832,7 +832,7 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
     )
 
     assert not confirm_called
-    assert result is False
+    assert result == (False, "merge")
 
 
 @pytest.mark.asyncio
@@ -922,7 +922,7 @@ async def test_invoke_phase2_graph_non_dict_result_breaks(monkeypatch):
         auto_mode=False,
     )
 
-    assert result is False
+    assert result == (False, "merge")
 
 
 @pytest.mark.asyncio
@@ -959,7 +959,7 @@ async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
     ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None)
 
     async def fake_invoke(**kwargs):
-        return False
+        return False, "merge"
 
     monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
     monkeypatch.setattr("app.agents.orchestrator.build_phase2_graph", lambda: SimpleNamespace(compile=lambda checkpointer=None: FakeCompiledGraph([{}])))

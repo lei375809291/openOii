@@ -3,7 +3,6 @@ import {
 	Bars3Icon,
 	ExclamationTriangleIcon,
 	FaceFrownIcon,
-	PauseIcon,
 	PencilIcon,
 	StopIcon,
 } from "@heroicons/react/24/outline";

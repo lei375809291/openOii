@@ -55,7 +55,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
   }
 
   component(shape: StoryboardSectionShape) {
-    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, w, h } = shape.props;
+    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, w } = shape.props;
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>

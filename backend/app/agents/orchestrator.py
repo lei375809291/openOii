@@ -555,7 +555,7 @@ class GenerationOrchestrator:
         runtime_context: Any,
         initial_payload: Any,
         auto_mode: bool,
-    ) -> bool:
+    ) -> tuple[bool, str]:
         if project.id is None or run.id is None:
             raise RuntimeError("Project and run must be persisted before graph execution")
         project_pk = int(project.id)
@@ -563,6 +563,7 @@ class GenerationOrchestrator:
 
         payload: Any = initial_payload
         video_generation_skipped = False
+        final_stage = "merge"
         while True:
             logger.debug("[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__)
             result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
@@ -570,6 +571,8 @@ class GenerationOrchestrator:
             if not isinstance(result, dict):
                 logger.warning("[graph] run=%s result not dict, breaking", run_pk)
                 break
+
+            final_stage = result.get("current_stage", final_stage)
 
             if _video_generation_skipped_in_result(result):
                 video_generation_skipped = True
@@ -606,7 +609,7 @@ class GenerationOrchestrator:
         self.session.add(ctx.project)
         await self.session.commit()
 
-        return video_generation_skipped
+        return video_generation_skipped, final_stage
 
     async def _run_phase2_graph(
         self,
@@ -617,7 +620,7 @@ class GenerationOrchestrator:
         ctx: AgentContext,
         agent_name: str,
         auto_mode: bool,
-    ) -> bool:
+    ) -> tuple[bool, str]:
         if agent_name not in GRAPH_STAGE_FOR_AGENT:
             raise ValueError(f"Unsupported agent for graph execution: {agent_name}")
 
@@ -732,7 +735,7 @@ class GenerationOrchestrator:
                     start_stage=resume_stage,
                     auto_mode=auto_mode,
                 )
-                video_generation_skipped = await self._invoke_phase2_graph(
+                video_generation_skipped, final_stage = await self._invoke_phase2_graph(
                     project=project,
                     run=run,
                     ctx=ctx,
@@ -750,6 +753,7 @@ class GenerationOrchestrator:
                     "type": "run_completed",
                     "data": {
                         "run_id": run_id,
+                        "current_stage": final_stage,
                         **(
                             {"message": "视频未配置，已完成文本和图片生成"}
                             if video_generation_skipped
@@ -895,7 +899,7 @@ class GenerationOrchestrator:
             # 刷新 project 对象，因为 cleanup 可能修改了它
             await self.session.refresh(ctx.project)
 
-            video_generation_skipped = await self._run_phase2_graph(
+            video_generation_skipped, final_stage = await self._run_phase2_graph(
                 project=project,
                 run=run,
                 request=request,
@@ -911,6 +915,7 @@ class GenerationOrchestrator:
                     "type": "run_completed",
                     "data": {
                         "run_id": run_id,
+                        "current_stage": final_stage,
                         **(
                             {"message": "视频未配置，已完成文本和图片生成"}
                             if video_generation_skipped

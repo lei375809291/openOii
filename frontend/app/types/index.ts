@@ -21,9 +21,9 @@ export interface ProjectProviderSettings {
 }
 
 export interface ProjectProviderOverridesPayload {
-  text_provider_override: string | null;
-  image_provider_override: string | null;
-  video_provider_override: string | null;
+  text_provider_override?: string | null;
+  image_provider_override?: string | null;
+  video_provider_override?: string | null;
 }
 
 export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
@@ -115,6 +115,8 @@ export interface AgentRun {
   current_agent: string | null;
   progress: number;
   error: string | null;
+  resource_type: string | null;
+  resource_id: number | null;
   provider_snapshot?: ProjectProviderSettings | null;
   created_at: string;
   updated_at: string;
@@ -225,6 +227,23 @@ export interface AgentMessage {
   isLoading?: boolean; // 是否正在加载
 }
 
+export interface BlockingClip {
+  shot_id: number;
+  shot_order: number;
+  reason: string;
+}
+
+export interface ProjectUpdatedPayload {
+  id: number;
+  title?: string | null;
+  story?: string | null;
+  style?: string | null;
+  summary?: string | null;
+  video_url?: string | null;
+  status?: string | null;
+  blocking_clips?: BlockingClip[] | null;
+}
+
 export interface Message {
   id: number;
   project_id: number;
@@ -232,7 +251,7 @@ export interface Message {
   agent: string;
   role: string;
   content: string;
-  summary: string | null; // 摘要
+  summary: string | null;
   progress: number | null;
   is_loading: boolean;
   created_at: string;

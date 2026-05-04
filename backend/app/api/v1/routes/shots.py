@@ -200,7 +200,15 @@ async def _run_agent_plan(
             session.add(run)
             await session.commit()
 
-            await ws.send_event(project_id, {"type": "run_completed", "data": {"run_id": run_id}})
+            last_agent_name = getattr(agent_plan[-1], "name", None) if agent_plan else None
+            final_stage = AGENT_STAGE_MAP.get(last_agent_name or "", "merge")
+            await ws.send_event(
+                project_id,
+                {
+                    "type": "run_completed",
+                    "data": {"run_id": run_id, "current_stage": final_stage},
+                },
+            )
     except asyncio.CancelledError:
         async with async_session_maker() as cancel_session:
             run = await cancel_session.get(AgentRun, run_id)
