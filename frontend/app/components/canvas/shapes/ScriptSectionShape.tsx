@@ -64,14 +64,14 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
         >
           <div className="space-y-3">
             {story ? (
-              <div className="rounded-lg p-3 border-l-[3px] border-secondary bg-base-200">
+              <div className="rounded-lg p-3 bg-secondary/10">
                 <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{story}</p>
                 {summary && (
                   <p className="text-xs text-base-content/50 mt-2 pt-2 border-t border-base-content/10">{summary}</p>
                 )}
               </div>
             ) : summary ? (
-              <div className="rounded-lg p-3 border-l-[3px] border-secondary bg-base-200">
+              <div className="rounded-lg p-3 bg-secondary/10">
                 <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{summary}</p>
               </div>
             ) : null}

@@ -23,6 +23,7 @@ dependencies = [
   "psycopg[binary,pool]>=3.3.3",
   "greenlet>=3.3.0",
   "psycopg2-binary>=2.9.12",
+  "python-multipart>=0.0.27",
 ]
 
 [dependency-groups]

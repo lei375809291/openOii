@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { type ButtonHTMLAttributes, type ReactNode } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "accent" | "ghost" | "error";
@@ -18,8 +18,6 @@ export function Button({
   onClick,
   ...props
 }: ButtonProps) {
-  const [isProcessing, setIsProcessing] = useState(false);
-
   const baseStyles = "btn-doodle font-heading cursor-pointer";
 
   const variantStyles = {
@@ -37,20 +35,11 @@ export function Button({
   };
 
   const handleClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isProcessing || loading || disabled) return;
-
-    // 防止重复点击
-    setIsProcessing(true);
-
-    try {
-      await onClick?.(e);
-    } finally {
-      // 延迟恢复，防止快速连击
-      setTimeout(() => setIsProcessing(false), 300);
-    }
+    if (loading || disabled) return;
+    await onClick?.(e);
   };
 
-  const isDisabled = disabled || loading || isProcessing;
+  const isDisabled = disabled || loading;
 
   return (
     <button

@@ -2,7 +2,7 @@
 export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
-  "shape-action": { shapeId: string; action: string; entityType: string; entityId: number | null; feedbackType: string };
+  "shape-action": { shapeId: string; action: string; entityType: string; entityId: number | null; feedbackType: string; };
 }
 
 type EventCallback<T> = (data: T) => void;

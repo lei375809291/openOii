@@ -7,7 +7,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 from sqlmodel import SQLModel
 
-from app.models import agent_run, artifact, config_item, message, project, run, stage  # noqa: F401
+from app.models import agent_run, artifact, asset, config_item, message, project, run, stage  # noqa: F401
 
 
 def _backend_root() -> Path:
@@ -39,6 +39,7 @@ def test_alembic_upgrade_head_rebuilds_blank_database(tmp_path: Path) -> None:
         "agentrun",
         "agentmessage",
         "artifact",
+        "asset",
         "character",
         "configitem",
         "message",

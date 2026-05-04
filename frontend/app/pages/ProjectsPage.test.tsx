@@ -59,8 +59,12 @@ vi.mock('~/services/api', () => ({
   },
 }));
 
-vi.mock('~/components/layout/Layout', () => ({
-  Layout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+vi.mock("~/stores/themeStore", () => ({
+  useThemeStore: vi.fn(() => ({ theme: "light", toggleTheme: vi.fn() })),
+}));
+
+vi.mock("~/stores/settingsStore", () => ({
+  useSettingsStore: vi.fn(() => ({ openModal: vi.fn() })),
 }));
 
 vi.mock('~/components/ui/Card', () => ({
@@ -122,6 +126,8 @@ const buildProject = (id: number, overrides: Partial<Project> = {}): Project => 
   status: 'active',
   target_shot_count: null,
   character_hints: [],
+  creation_mode: null,
+  reference_images: [],
   created_at: '2026-04-11T00:00:00Z',
   updated_at: '2026-04-11T00:00:00Z',
   provider_settings: {

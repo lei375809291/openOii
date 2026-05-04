@@ -32,10 +32,12 @@ export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
   style?: string;
   target_shot_count?: number;
   character_hints?: string[];
+  creation_mode?: string;
+  reference_images?: string[];
 }
 
 export type UpdateProjectPayload = Partial<
-  Pick<Project, "title" | "story" | "style"> & ProjectProviderOverridesPayload
+  Pick<Project, "title" | "story" | "style" | "target_shot_count" | "character_hints" | "creation_mode" | "reference_images"> & ProjectProviderOverridesPayload
 >;
 
 // Project types
@@ -49,6 +51,8 @@ export interface Project {
   status: string;
   target_shot_count: number | null;
   character_hints: string[];
+  creation_mode: string | null;
+  reference_images: string[];
   created_at: string;
   updated_at: string;
   provider_settings: ProjectProviderSettings;
@@ -86,6 +90,7 @@ export interface Shot {
   lighting: string | null;
   dialogue: string | null;
   sfx: string | null;
+  seed: number | null;
   character_ids: number[];
   approval_state: ReviewState;
   approval_version: number;
@@ -127,6 +132,7 @@ export interface ShotUpdatePayload {
   lighting?: string | null;
   dialogue?: string | null;
   sfx?: string | null;
+  seed?: number | null;
   character_ids?: number[] | null;
 }
 
@@ -137,6 +143,7 @@ export interface AgentRun {
   current_agent: string | null;
   progress: number;
   error: string | null;
+  thread_id: string | null;
   resource_type: string | null;
   resource_id: number | null;
   provider_snapshot?: ProjectProviderSettings | null;
@@ -190,7 +197,6 @@ export interface RunAwaitingConfirmEventData {
   stage?: string | null;
   next_stage?: string | null;
   recovery_summary: RecoverySummaryRead;
-  preserved_stages: string[];
   message?: string | null;
   completed?: string | null;
   next_step?: string | null;
@@ -264,6 +270,10 @@ export interface ProjectUpdatedPayload {
   summary?: string | null;
   video_url?: string | null;
   status?: string | null;
+  target_shot_count?: number | null;
+  character_hints?: string[] | null;
+  creation_mode?: string | null;
+  reference_images?: string[] | null;
   blocking_clips?: BlockingClip[] | null;
 }
 
@@ -308,3 +318,38 @@ export interface ConfigSection {
 }
 
 export type AppConfig = ConfigItem[];
+
+export const AGENT_NAME_MAP: Record<string, string> = {
+  plan: "规划",
+  render: "渲染",
+  compose: "合成",
+  review: "审查",
+};
+
+export interface Asset {
+  id: number;
+  name: string;
+  asset_type: "character" | "scene" | "style";
+  description: string | null;
+  image_url: string | null;
+  metadata_json: string | null;
+  source_project_id: number | null;
+  tags: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetList {
+  items: Asset[];
+  total: number;
+}
+
+export interface AssetCreatePayload {
+  name: string;
+  asset_type: "character" | "scene" | "style";
+  description?: string | null;
+  image_url?: string | null;
+  metadata_json?: string | null;
+  source_project_id?: number | null;
+  tags?: string | null;
+}

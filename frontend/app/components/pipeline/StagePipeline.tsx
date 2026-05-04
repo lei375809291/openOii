@@ -43,7 +43,7 @@ export function StagePipeline({
   const currentIndex = getPipelineStageIndex(currentStage);
 
   return (
-    <div className="flex items-center gap-1 px-3 py-1.5 bg-base-100/90 backdrop-blur-sm border-b border-base-300 z-20">
+    <div className="flex items-center gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300 z-20">
       {STAGE_PIPELINE.map((stage, index) => {
         const isCurrent = stage.key === currentStage;
         const isPast = index < currentIndex;

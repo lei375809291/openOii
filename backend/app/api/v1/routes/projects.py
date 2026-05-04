@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import cast
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +47,10 @@ async def _project_read_model(project: Project, settings: Settings) -> ProjectRe
         summary=project.summary,
         video_url=project.video_url,
         status=project.status,
+        target_shot_count=project.target_shot_count,
+        character_hints=project.character_hints or [],
+        creation_mode=project.creation_mode,
+        reference_images=project.reference_images or [],
         provider_settings=await _project_provider_settings(project, settings),
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -67,6 +71,8 @@ async def create_project(
         status=payload.status or "draft",
         target_shot_count=payload.target_shot_count,
         character_hints=payload.character_hints or [],
+        creation_mode=payload.creation_mode,
+        reference_images=payload.reference_images or [],
         text_provider_override=payload.text_provider_override,
         image_provider_override=payload.image_provider_override,
         video_provider_override=payload.video_provider_override,
@@ -147,6 +153,49 @@ async def delete_project(project_id: int, session: AsyncSession = SessionDep):
 async def batch_delete_projects(payload: ProjectBatchDeleteRequest, session: AsyncSession = SessionDep):
     await delete_projects_by_ids(session, payload.ids)
     return None
+
+
+@router.post("/{project_id}/upload-reference", response_model=dict)
+async def upload_reference_image(
+    project_id: int,
+    file: UploadFile = File(...),
+    session: AsyncSession = SessionDep,
+):
+    import uuid
+    from pathlib import Path
+
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are accepted")
+
+    ref_dir = Path(__file__).parent.parent.parent / "static" / "references"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = file.content_type.split("/")[-1]
+    if ext == "jpeg":
+        ext = "jpg"
+    filename = f"{uuid.uuid4().hex[:12]}.{ext}"
+    dest = ref_dir / filename
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be under 10MB")
+
+    dest.write_bytes(content)
+
+    url_path = f"/static/references/{filename}"
+
+    images = list(project.reference_images or [])
+    images.append(url_path)
+    project.reference_images = images
+    project.updated_at = utcnow()
+    session.add(project)
+    await session.commit()
+
+    return {"url": url_path, "reference_images": images}
 
 
 @router.get("/{project_id}/characters", response_model=list[CharacterRead])

@@ -1,5 +1,6 @@
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.artifact import Artifact
+from app.models.asset import Asset
 from app.models.config_item import ConfigItem
 from app.models.message import Message
 from app.models.project import Character, Project, Shot, ShotCharacterBinding
@@ -10,6 +11,7 @@ __all__ = [
     "AgentMessage",
     "AgentRun",
     "Artifact",
+    "Asset",
     "Character",
     "ConfigItem",
     "Message",

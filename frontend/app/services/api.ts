@@ -155,6 +155,18 @@ export const projectsApi = {
       method: "POST",
       body: JSON.stringify({ ids }),
     }),
+
+  uploadReference: async (projectId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const baseUrl = getApiBase();
+    const res = await fetch(`${baseUrl}/api/v1/projects/${projectId}/upload-reference`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    return res.json() as Promise<{ url: string; reference_images: string[] }>;
+  },
   
   getCharacters: (id: number) =>
     fetchApi<Character[]>(`/api/v1/projects/${id}/characters`),
@@ -182,10 +194,10 @@ export const projectsApi = {
       body: JSON.stringify({ run_id: runId }),
     }),
 
-  feedback: (id: number, content: string, runId?: number, feedbackType?: string) =>
-    fetchApi<{ status: string }>(`/api/v1/projects/${id}/feedback`, {
+  feedback: (id: number, content: string, runId?: number, feedbackType?: string, entityType?: string, entityId?: number) =>
+    fetchApi<{ status: string; run_id?: number }>(`/api/v1/projects/${id}/feedback`, {
       method: "POST",
-      body: JSON.stringify({ content, run_id: runId, feedback_type: feedbackType }),
+      body: JSON.stringify({ content, run_id: runId, feedback_type: feedbackType, entity_type: entityType, entity_id: entityId }),
     }),
 };
 
@@ -227,6 +239,25 @@ export const charactersApi = {
     }),
   delete: (id: number) =>
     fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),
+};
+
+// Assets API
+export const assetsApi = {
+  list: (assetType?: string) => {
+    const params = assetType ? `?asset_type=${assetType}` : "";
+    return fetchApi<import("~/types").AssetList>(`/api/v1/assets${params}`);
+  },
+  create: (data: import("~/types").AssetCreatePayload) =>
+    fetchApi<import("~/types").Asset>("/api/v1/assets", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  createFromCharacter: (characterId: number) =>
+    fetchApi<import("~/types").Asset>(`/api/v1/assets/from-character/${characterId}`, {
+      method: "POST",
+    }),
+  delete: (id: number) =>
+    fetchApi<void>(`/api/v1/assets/${id}`, { method: "DELETE" }),
 };
 
 // Config API

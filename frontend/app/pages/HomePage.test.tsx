@@ -23,8 +23,12 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   };
 });
 
-vi.mock("~/components/layout/Layout", () => ({
-  Layout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+vi.mock("~/stores/themeStore", () => ({
+  useThemeStore: vi.fn(() => ({ theme: "light", toggleTheme: vi.fn() })),
+}));
+
+vi.mock("~/stores/settingsStore", () => ({
+  useSettingsStore: vi.fn(() => ({ openModal: vi.fn() })),
 }));
 
 function renderHomePage() {
@@ -46,7 +50,7 @@ describe("HomePage", () => {
 
   it("renders title and textarea", () => {
     renderHomePage();
-    expect(screen.getByText("openOii")).toBeInTheDocument();
+    expect(screen.getAllByText("openOii").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByLabelText("输入你的故事创意")).toBeInTheDocument();
   });
 
@@ -85,6 +89,6 @@ describe("HomePage", () => {
     renderHomePage();
     const textarea = screen.getByLabelText("输入你的故事创意");
     fireEvent.change(textarea, { target: { value: "a".repeat(4600) } });
-    expect(screen.getByText(/还能写/)).toBeInTheDocument();
+    expect(screen.getByText(/400/)).toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@ from operator import add
 from types import SimpleNamespace
 from typing import Any
 from typing import Annotated, get_args, get_origin, get_type_hints
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -93,7 +94,17 @@ def test_approval_result_helpers_set_review_routing() -> None:
 
 @pytest.mark.asyncio
 async def test_manual_approval_node_auto_mode_short_circuits() -> None:
-    runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=True))
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(
+            auto_mode=True,
+            agent_context=SimpleNamespace(project=SimpleNamespace(id=1), run=SimpleNamespace(id=1, thread_id=None), session=None),
+            orchestrator=SimpleNamespace(
+                _set_run=AsyncMock(return_value=SimpleNamespace()),
+                ws=SimpleNamespace(send_event=AsyncMock()),
+                session=None,
+            ),
+        )
+    )
 
     result = await _manual_approval_node(
         runtime,
@@ -110,7 +121,17 @@ async def test_manual_approval_node_auto_mode_short_circuits() -> None:
 
 @pytest.mark.asyncio
 async def test_manual_approval_node_normalizes_interrupt_resume(monkeypatch) -> None:
-    runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False))
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(
+            auto_mode=False,
+            agent_context=SimpleNamespace(project=SimpleNamespace(id=1), run=SimpleNamespace(id=1, thread_id=None), session=None),
+            orchestrator=SimpleNamespace(
+                _set_run=AsyncMock(return_value=SimpleNamespace()),
+                ws=SimpleNamespace(send_event=AsyncMock()),
+                session=None,
+            ),
+        )
+    )
 
     monkeypatch.setattr("app.orchestration.nodes.interrupt", lambda payload: {"feedback": "  ok  "})
 
@@ -129,7 +150,17 @@ async def test_manual_approval_node_normalizes_interrupt_resume(monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_manual_approval_node_routes_to_review_when_feedback_present(monkeypatch) -> None:
-    runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False))
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(
+            auto_mode=False,
+            agent_context=SimpleNamespace(project=SimpleNamespace(id=1), run=SimpleNamespace(id=1, thread_id=None), session=None),
+            orchestrator=SimpleNamespace(
+                _set_run=AsyncMock(return_value=SimpleNamespace()),
+                ws=SimpleNamespace(send_event=AsyncMock()),
+                session=None,
+            ),
+        )
+    )
 
     monkeypatch.setattr("app.orchestration.nodes.interrupt", lambda payload: " needs review ")
 

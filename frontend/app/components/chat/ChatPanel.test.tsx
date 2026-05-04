@@ -42,6 +42,10 @@ vi.mock('~/stores/editorStore', () => ({
       getState: () => storeState,
     }
   ),
+  useShallow: (selector: (state: typeof storeState) => unknown) => {
+    const result = selector(storeState);
+    return () => result;
+  },
 }));
 
 vi.mock('./MessageList', () => ({
@@ -95,7 +99,7 @@ describe('ChatPanel', () => {
     const button = screen.getByRole('button', { name: '开始生成漫剧' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-describedby', 'generate-disabled-reason');
-    expect(screen.getByText('当前无法开始生成：还缺少角色设定')).toHaveAttribute('id', 'generate-disabled-reason');
+    expect(screen.getByText('还缺少角色设定')).toHaveAttribute('id', 'generate-disabled-reason');
   });
 
   it('shows processing state and stop button while generating', () => {
@@ -139,11 +143,10 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('等待确认')).toBeInTheDocument();
-    expect(screen.getByText('规划摘要')).toBeInTheDocument();
+    expect(screen.getByText(/规划 已完成/)).toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox'), '  修改剧情节奏  ');
-    await user.click(screen.getByRole('button', { name: /继续/ }));
+    await user.click(screen.getByRole('button', { name: /通过/ }));
 
     expect(onConfirm).toHaveBeenLastCalledWith('修改剧情节奏');
   });
@@ -182,7 +185,7 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.queryByText('等待确认')).not.toBeInTheDocument();
+    expect(screen.queryByText(/已完成/)).not.toBeInTheDocument();
   });
 
   it('sends feedback through onSendFeedback outside generating and confirm states', async () => {

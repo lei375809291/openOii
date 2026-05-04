@@ -8,6 +8,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
+from app.orchestration.state import workflow_progress_for_stage
 from app.services.creative_control import collect_project_blocking_clips
 from app.services.doubao_video import DoubaoVideoService
 from app.services.image_composer import ImageComposer
@@ -62,7 +63,22 @@ class ComposeAgent(BaseAgent):
 
         for i, shot in enumerate(shots):
             try:
+                shot_progress = i / max(total, 1)
                 await self.send_progress_batch(ctx, total=total, current=i, message=f"   正在生成视频 {i+1}/{total}...")
+                await ctx.ws.send_event(
+                    ctx.project.id,
+                    {
+                        "type": "run_progress",
+                        "data": {
+                            "run_id": ctx.run.id,
+                            "current_agent": "compose",
+                            "current_stage": "compose",
+                            "stage": "compose",
+                            "next_stage": None,
+                            "progress": workflow_progress_for_stage("compose", within_stage=shot_progress),
+                        },
+                    },
+                )
                 characters = await resolve_shot_bound_approved_characters(ctx.session, shot)
                 video_prompt = self._build_video_prompt(shot, characters, style=ctx.project.style)
                 duration = self._get_duration(shot, default_duration)

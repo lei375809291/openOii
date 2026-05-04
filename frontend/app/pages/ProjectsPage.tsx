@@ -2,23 +2,30 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { projectsApi } from "~/services/api";
-import { Layout } from "~/components/layout/Layout";
 import { Card } from "~/components/ui/Card";
 import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import {
-  DocumentTextIcon,
-  FaceFrownIcon,
-  PencilIcon,
-  TrashIcon,
+	DocumentTextIcon,
+	FaceFrownIcon,
+	PencilIcon,
+	TrashIcon,
+	Cog6ToothIcon,
+	MoonIcon,
+	SunIcon,
 } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
 import { ApiError } from "~/types/errors";
 import { cleanupDeletedProjectCaches } from "~/features/projects/deleteProject";
+import { useThemeStore } from "~/stores/themeStore";
+import { useSettingsStore } from "~/stores/settingsStore";
 
 export function ProjectsPage() {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<number[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const { theme, toggleTheme } = useThemeStore();
+  const isDark = theme.endsWith("dark");
+  const { openModal: openSettingsModal } = useSettingsStore();
 
   const {
     data: projects,
@@ -100,9 +107,31 @@ export function ProjectsPage() {
   };
 
   return (
-    <Layout>
-      <div className="min-h-screen flex flex-col">
-        <header className="bg-base-100 border-b-3 border-black px-6 py-4">
+    <div className="min-h-screen bg-base-100 font-sans">
+      <header className="flex items-center justify-between px-4 h-10 border-b border-base-content/10">
+        <Link to="/" className="font-comic text-lg text-primary font-bold tracking-wider">openOii</Link>
+        <div className="flex items-center gap-1">
+          <Link to="/" className="btn btn-ghost btn-xs !px-1 !min-h-0 !h-6 text-xs">新建</Link>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="btn btn-ghost btn-xs !px-1 !min-h-0 !h-6"
+            aria-label={isDark ? "切换亮色" : "切换暗色"}
+          >
+            {isDark ? <SunIcon className="w-3.5 h-3.5" /> : <MoonIcon className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={openSettingsModal}
+            className="btn btn-ghost btn-xs !px-1 !min-h-0 !h-6"
+            aria-label="设置"
+          >
+            <Cog6ToothIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </header>
+      <div className="flex flex-col min-h-[calc(100vh-40px)]">
+        <header className="bg-base-100 border-b-3 border-base-content/30 px-6 py-4">
           <h1 className="text-2xl font-heading font-bold">
             <span className="underline-sketch">全部项目</span>
           </h1>
@@ -132,7 +161,7 @@ export function ProjectsPage() {
           <div className="max-w-3xl mx-auto">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <PencilIcon className="w-6 h-6 animate-bounce" aria-hidden="true" />
+                <PencilIcon className="w-6 h-6 animate-pulse" aria-hidden="true" />
                 <p className="font-sketch text-lg text-base-content/70">加载中...</p>
               </div>
             ) : error ? (
@@ -223,6 +252,6 @@ export function ProjectsPage() {
         variant="danger"
         isLoading={deleteMutation.isPending}
       />
-    </Layout>
+    </div>
   );
 }

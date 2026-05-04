@@ -36,20 +36,8 @@ def _require_run_id(run: AgentRun) -> int:
     return require_run_id(run)
 
 
-def _character_payload(character: Character) -> dict[str, Any]:
-    return {
-        "id": character.id,
-        "project_id": character.project_id,
-        "name": character.name,
-        "description": character.description,
-        "image_url": character.image_url,
-        "approval_state": character.approval_state,
-        "approval_version": character.approval_version,
-        "approved_at": character.approved_at,
-        "approved_name": character.approved_name,
-        "approved_description": character.approved_description,
-        "approved_image_url": character.approved_image_url,
-    }
+def _character_read(character: Character) -> dict[str, Any]:
+    return CharacterRead.model_validate(character).model_dump(mode="json")
 
 
 @router.put("/{character_id}", response_model=CharacterRead)
@@ -74,9 +62,9 @@ async def update_character(
 
     await ws.send_event(
         character.project_id,
-        {"type": "character_updated", "data": {"character": _character_payload(character)}},
+        {"type": "character_updated", "data": {"character": _character_read(character)}},
     )
-    return _character_payload(character)
+    return _character_read(character)
 
 
 @router.post("/{character_id}/approve", response_model=CharacterRead)
@@ -94,7 +82,7 @@ async def approve_character(
     await session.commit()
     await session.refresh(character)
 
-    payload = _character_payload(character)
+    payload = _character_read(character)
     await ws.send_event(
         character.project_id,
         {"type": "character_updated", "data": {"character": payload}},
@@ -159,7 +147,7 @@ async def regenerate_character(
 
     await ws.send_event(
         project_id,
-        {"type": "character_updated", "data": {"character": _character_payload(character)}},
+        {"type": "character_updated", "data": {"character": _character_read(character)}},
     )
     await ws.send_event(
         project_id,

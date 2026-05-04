@@ -165,6 +165,10 @@ class ProjectUpdatedPayload(BaseModel):
     summary: str | None = None
     video_url: str | None = None
     status: str | None = None
+    target_shot_count: int | None = None
+    character_hints: list[str] | None = None
+    creation_mode: str | None = None
+    reference_images: list[str] | None = None
     blocking_clips: list[dict[str, Any]] | None = None
 
 

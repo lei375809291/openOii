@@ -26,11 +26,9 @@ function generateMessageId(): string {
 
 const globalConnections = new Map<number, WebSocket>();
 
-const YOLO_AUTO_AGENTS = new Set(["plan", "render", "compose"]);
-
-function shouldAutoConfirm(agent: string | null, runMode: RunMode): boolean {
+function shouldAutoConfirm(_agent: string | null, runMode: RunMode): boolean {
   if (runMode === "yolo") return true;
-  return YOLO_AUTO_AGENTS.has(agent ?? "");
+  return false;
 }
 
 export function useProjectWebSocket(projectId: number | null) {
@@ -74,7 +72,7 @@ export function useProjectWebSocket(projectId: number | null) {
     ws.onopen = () => {
       const wasReconnecting = reconnectAttempts.current > 0;
       if (import.meta.env.DEV) {
-        console.log("[WS] 已连接到项目", projectId);
+        console.debug("[WS] 已连接到项目", projectId);
       }
       reconnectAttempts.current = 0;
       if (wasReconnecting) {
@@ -112,14 +110,14 @@ export function useProjectWebSocket(projectId: number | null) {
 
     ws.onclose = () => {
       if (import.meta.env.DEV) {
-        console.log("[WS] 连接断开");
+        console.debug("[WS] 连接断开");
       }
       globalConnections.delete(projectId);
 
       if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts.current++;
         if (import.meta.env.DEV) {
-          console.log(`[WS] ${RECONNECT_DELAY / 1000}秒后尝试重连 (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
+          console.debug(`[WS] ${RECONNECT_DELAY / 1000}秒后尝试重连 (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
         }
         toast.warning({
           title: "连接中断",
@@ -185,6 +183,22 @@ function clearLoadingStates(
   });
   if (updatedMessages.some((msg, idx) => msg !== currentMessages[idx])) {
     store.setMessages(updatedMessages);
+  }
+}
+
+function cleanupStaleMessages(
+  store: ReturnType<typeof useEditorStore.getState>,
+  completedAgent: string
+): void {
+  const currentMessages = useEditorStore.getState().messages;
+  const cleaned = currentMessages.filter((msg) => {
+    if (msg.agent !== completedAgent) return true;
+    if (msg.role === "info" && (msg.content.includes("已确认") || msg.content.includes("继续执行"))) return false;
+    if (!msg.content?.trim() && !msg.summary) return false;
+    return true;
+  });
+  if (cleaned.length !== currentMessages.length) {
+    store.setMessages(cleaned);
   }
 }
 
@@ -280,8 +294,10 @@ export function applyWsEvent(
       break;
     }
 
-    case "agent_handoff":
+    case "agent_handoff": {
+      const handoffAgent = (event.data.from_agent as string) || (event.data.agent as string) || "";
       clearLoadingStates(store);
+      if (handoffAgent) cleanupStaleMessages(store, handoffAgent);
       store.addMessage({
         id: generateMessageId(),
         agent: "system",
@@ -290,6 +306,7 @@ export function applyWsEvent(
         timestamp: new Date().toISOString(),
       });
       break;
+    }
 
     case "run_awaiting_confirm": {
       clearLoadingStates(store);
@@ -334,6 +351,9 @@ export function applyWsEvent(
 
     case "run_completed": {
       clearLoadingStates(store);
+      const completedAgent = (event.data?.current_agent as string) || "";
+      if (completedAgent) cleanupStaleMessages(store, completedAgent);
+      cleanupStaleMessages(store, "system");
       store.resetRunState();
       store.setProgress(1);
       const completedStage = event.data?.current_stage as string | undefined;
@@ -432,6 +452,10 @@ export function applyWsEvent(
         summary?: string;
         story?: string;
         style?: string;
+        target_shot_count?: number;
+        character_hints?: string[];
+        creation_mode?: string;
+        reference_images?: string[];
         blocking_clips?: Array<{ shot_id: number; order: number; status: string; reason: string }>;
       } | undefined;
       if (projectData) {
@@ -441,9 +465,41 @@ export function applyWsEvent(
         if (projectData.status !== undefined) {
           store.setProjectStatus(projectData.status);
         }
+        if (projectData.title !== undefined) {
+          store.setProjectTitle(projectData.title);
+        }
+        if (projectData.summary !== undefined) {
+          store.setProjectSummary(projectData.summary);
+        }
+        if (projectData.story !== undefined) {
+          store.setProjectStory(projectData.story);
+        }
+        if (projectData.style !== undefined) {
+          store.setProjectStyle(projectData.style);
+        }
+        if (projectData.target_shot_count !== undefined) {
+          store.setProjectTargetShotCount(projectData.target_shot_count);
+        }
+        if (projectData.character_hints !== undefined) {
+          store.setProjectCharacterHints(projectData.character_hints);
+        }
+        if (projectData.creation_mode !== undefined) {
+          store.setProjectCreationMode(projectData.creation_mode);
+        }
+        if (projectData.reference_images !== undefined) {
+          store.setProjectReferenceImages(projectData.reference_images);
+        }
+        if (projectData.blocking_clips !== undefined) {
+          store.setBlockingClips(projectData.blocking_clips || null);
+        }
       }
       store.setProjectUpdatedAt(Date.now());
       break;
     }
+
+    case "pong":
+    case "echo":
+    case "connected":
+      break;
   }
 }

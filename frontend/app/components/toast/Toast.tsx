@@ -30,7 +30,7 @@ export function Toast({ toast }: ToastProps) {
     <div
       className={`
         relative min-w-[320px] max-w-[480px] p-4 bg-base-100
-        border-4 border-base-content/80 border-l-8 ${typeStyles[toast.type]}
+        border-2 ${typeStyles[toast.type]}
         shadow-brutal
         transform -rotate-[0.5deg]
         animate-slide-in-right

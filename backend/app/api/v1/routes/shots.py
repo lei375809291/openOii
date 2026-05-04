@@ -33,31 +33,8 @@ def _require_run_id(run: AgentRun) -> int:
     return require_run_id(run)
 
 
-def _shot_payload(shot: Shot) -> dict[str, Any]:
-    return {
-        "id": shot.id,
-        "project_id": shot.project_id,
-        "order": shot.order,
-        "description": shot.description,
-        "prompt": shot.prompt,
-        "image_prompt": shot.image_prompt,
-        "image_url": shot.image_url,
-        "video_url": shot.video_url,
-        "duration": shot.duration,
-        "camera": shot.camera,
-        "motion_note": shot.motion_note,
-        "character_ids": list(shot.character_ids),
-        "approval_state": shot.approval_state,
-        "approval_version": shot.approval_version,
-        "approved_at": shot.approved_at,
-        "approved_description": shot.approved_description,
-        "approved_prompt": shot.approved_prompt,
-        "approved_image_prompt": shot.approved_image_prompt,
-        "approved_duration": shot.approved_duration,
-        "approved_camera": shot.approved_camera,
-        "approved_motion_note": shot.approved_motion_note,
-        "approved_character_ids": list(shot.approved_character_ids),
-    }
+def _shot_read(shot: Shot) -> dict[str, Any]:
+    return ShotRead.model_validate(shot).model_dump(mode="json")
 
 
 def _validate_shot_approval_ready(shot: Shot) -> None:
@@ -156,9 +133,9 @@ async def update_shot(
 
     await ws.send_event(
         project_id,
-        {"type": "shot_updated", "data": {"shot": _shot_payload(shot)}},
+        {"type": "shot_updated", "data": {"shot": _shot_read(shot)}},
     )
-    return _shot_payload(shot)
+    return _shot_read(shot)
 
 
 @router.post("/{shot_id}/approve", response_model=ShotRead)
@@ -178,7 +155,7 @@ async def approve_shot(
     await session.commit()
     await session.refresh(shot)
 
-    payload = _shot_payload(shot)
+    payload = _shot_read(shot)
     await ws.send_event(
         shot.project_id,
         {"type": "shot_updated", "data": {"shot": payload}},
@@ -237,7 +214,7 @@ async def regenerate_shot(
 
         await ws.send_event(
             project_id,
-            {"type": "shot_updated", "data": {"shot": _shot_payload(shot)}},
+            {"type": "shot_updated", "data": {"shot": _shot_read(shot)}},
         )
         await ws.send_event(
             project_id,

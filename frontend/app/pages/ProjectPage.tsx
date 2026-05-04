@@ -1,20 +1,19 @@
-import {
-	Bars3Icon,
-	StopIcon,
-} from "@heroicons/react/24/outline";
+import { StopIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ChatDrawer } from "~/components/chat/ChatDrawer";
-import { Sidebar } from "~/components/layout/Sidebar";
-import { StagePipeline } from "~/components/pipeline/StagePipeline";
+import { TopBar } from "~/components/layout/TopBar";
 import { StageView } from "~/components/layout/StageView";
+import { AssetDrawer } from "~/components/panels/AssetDrawer";
+import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
 import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
-import { useEditorStore } from "~/stores/editorStore";
-import { useSidebarStore } from "~/stores/sidebarStore";
+import { useEditorStore, useShallow } from "~/stores/editorStore";
+import { useChatPanelStore } from "~/stores/chatPanelStore";
+import { useSettingsStore } from "~/stores/settingsStore";
 import type {
 	ProjectProviderSettings,
 	RecoveryControlRead,
@@ -28,15 +27,32 @@ export function ProjectPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const projectId = parseInt(id || "0", 10);
 	const queryClient = useQueryClient();
-	const store = useEditorStore();
-	const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarStore();
+	const {
+		isGenerating: storeIsGenerating,
+		currentRunId: storeCurrentRunId,
+		currentStage: storeCurrentStage,
+		awaitingConfirm: storeAwaitingConfirm,
+		recoveryControl: storeRecoveryControl,
+		runMode: storeRunMode,
+	} = useEditorStore(useShallow((s) => ({
+		isGenerating: s.isGenerating,
+		currentRunId: s.currentRunId,
+		currentStage: s.currentStage,
+		awaitingConfirm: s.awaitingConfirm,
+		recoveryControl: s.recoveryControl,
+		runMode: s.runMode,
+	})));
+	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
+	const hasRecovery = Boolean(storeRecoveryControl);
+	const { isOpen: chatOpen, toggle: toggleChat } = useChatPanelStore();
+	const { openModal: openSettingsModal } = useSettingsStore();
+	const [assetsOpen, setAssetsOpen] = useState(false);
+	const [historyOpen, setHistoryOpen] = useState(false);
 	const autoStartTriggered = useRef(false);
 	const generateRequestTokenRef = useRef(0);
 	const retryCount = useRef(0);
 
 	const { send } = useProjectWebSocket(projectId);
-	const hasActiveRun = store.isGenerating || Boolean(store.currentRunId);
-	const hasRecovery = Boolean(store.recoveryControl);
 
 	const syncStoreWithActiveRun = (run: {
 		id: number;
@@ -44,15 +60,16 @@ export function ProjectPage() {
 		progress?: number | null;
 		provider_snapshot?: ProjectProviderSettings | null;
 	}) => {
-		store.setGenerating(true);
-		store.setCurrentRunId(run.id);
-		store.setCurrentAgent(run.current_agent ?? "orchestrator");
-		store.setProgress(typeof run.progress === "number" ? run.progress : 0);
-		store.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
-		store.setAwaitingConfirm(false, null, run.id);
-		store.setRecoveryControl(null);
-		store.setRecoverySummary(null);
-		store.setRecoveryGate(null);
+		const s = useEditorStore.getState();
+		s.setGenerating(true);
+		s.setCurrentRunId(run.id);
+		s.setCurrentAgent(run.current_agent ?? "orchestrator");
+		s.setProgress(typeof run.progress === "number" ? run.progress : 0);
+		s.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
+		s.setAwaitingConfirm(false, null, run.id);
+		s.setRecoveryControl(null);
+		s.setRecoverySummary(null);
+		s.setRecoveryGate(null);
 	};
 
 	const {
@@ -157,7 +174,7 @@ export function ProjectPage() {
 
 	const generateMutation = useMutation({
 		mutationFn: ({ requestToken }: { requestToken: number }) =>
-			projectsApi.generate(projectId, { auto_mode: store.runMode === "yolo" }).then((run) => ({ run, requestToken })),
+			projectsApi.generate(projectId, { auto_mode: storeRunMode === "yolo" }).then((run) => ({ run, requestToken })),
 		onSuccess: ({ run, requestToken }) => {
 			if (requestToken !== generateRequestTokenRef.current) return;
 			syncStoreWithActiveRun(run);
@@ -173,13 +190,13 @@ export function ProjectPage() {
 				retryCount.current = 0;
 				const control = apiError?.response as RecoveryControlRead | undefined;
 				if (control) {
-					store.setRecoveryControl(control);
-					store.setRecoverySummary(control.recovery_summary);
-					store.setCurrentRunId(control.active_run.id);
-					store.setGenerating(control.state === "active");
+					useEditorStore.getState().setRecoveryControl(control);
+					useEditorStore.getState().setRecoverySummary(control.recovery_summary);
+					useEditorStore.getState().setCurrentRunId(control.active_run.id);
+					useEditorStore.getState().setGenerating(control.state === "active");
 					if (control.state === "active") {
-						store.setCurrentAgent(control.active_run.current_agent);
-						store.setProgress(control.active_run.progress);
+						useEditorStore.getState().setCurrentAgent(control.active_run.current_agent);
+						useEditorStore.getState().setProgress(control.active_run.progress);
 					}
 				} else {
 					toast.warning({
@@ -203,7 +220,7 @@ export function ProjectPage() {
 	});
 
 	const feedbackMutation = useMutation({
-		mutationFn: (content: string) => projectsApi.feedback(projectId, content),
+		mutationFn: (content: string) => projectsApi.feedback(projectId, content, undefined, "plan"),
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
 			const isConflict =
@@ -226,8 +243,8 @@ export function ProjectPage() {
 	const cancelMutation = useMutation({
 		mutationFn: () => projectsApi.cancel(projectId),
 		onSettled: () => {
-			store.resetRunState();
-			store.addMessage({
+			useEditorStore.getState().resetRunState();
+			useEditorStore.getState().addMessage({
 				agent: "system",
 				role: "system",
 				content: "生成已停止",
@@ -239,30 +256,31 @@ export function ProjectPage() {
 
 	const resumeMutation = useMutation({
 		mutationFn: () => {
-			const control = store.recoveryControl;
+			const control = storeRecoveryControl;
 			if (!control) {
 				throw new Error("没有可恢复的运行");
 			}
 			return projectsApi.resume(projectId, control.active_run.id);
 		},
 		onSuccess: (run) => {
-			const control = store.recoveryControl;
-			store.setGenerating(true);
-			store.setCurrentRunId(run.id);
-			store.setCurrentAgent(run.current_agent);
-			store.setProgress(run.progress);
-			store.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
+			const control = storeRecoveryControl;
+			const s = useEditorStore.getState();
+			s.setGenerating(true);
+			s.setCurrentRunId(run.id);
+			s.setCurrentAgent(run.current_agent);
+			s.setProgress(run.progress);
+			s.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
 			if (control) {
 				const nextStage =
 					control.recovery_summary.next_stage ??
 					control.recovery_summary.current_stage;
 				if (isWorkflowStage(nextStage)) {
-					store.setCurrentStage(nextStage);
+					s.setCurrentStage(nextStage);
 				}
 			}
-			store.setRecoveryControl(null);
-			store.setRecoverySummary(null);
-			store.setRecoveryGate(null);
+			s.setRecoveryControl(null);
+			s.setRecoverySummary(null);
+			s.setRecoveryGate(null);
 		},
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
@@ -278,14 +296,14 @@ export function ProjectPage() {
 		if (generateMutation.isPending || hasActiveRun) return;
 		const requestToken = generateRequestTokenRef.current + 1;
 		generateRequestTokenRef.current = requestToken;
-		store.clearMessages();
-		store.setCurrentStage("plan");
+		useEditorStore.getState().clearMessages();
+		useEditorStore.getState().setCurrentStage("plan");
 		generateMutation.mutate({ requestToken });
 	};
 
 	const handleFeedback = (content: string) => {
 		feedbackMutation.mutate(content);
-		store.addMessage({
+		useEditorStore.getState().addMessage({
 			agent: "user",
 			role: "user",
 			content,
@@ -294,25 +312,23 @@ export function ProjectPage() {
 	};
 
 	const handleConfirm = (feedback?: string) => {
-		const runId = store.currentRunId;
+		const runId = storeCurrentRunId;
 		if (runId) {
 			send({ type: "confirm", data: { run_id: runId, feedback } });
 			if (feedback) {
-				store.addMessage({
+				useEditorStore.getState().addMessage({
 					agent: "user",
 					role: "user",
 					content: feedback,
 					timestamp: new Date().toISOString(),
 				});
 			}
-		} else {
-			console.warn("[handleConfirm] No active run ID, cannot send confirm");
 		}
 	};
 
 	const handleCancel = () => {
-		const activeRunId = store.currentRunId ?? store.recoveryControl?.active_run.id ?? null;
-		if (!activeRunId && !store.isGenerating && store.recoveryControl?.state !== "active") {
+		const activeRunId = storeCurrentRunId ?? storeRecoveryControl?.active_run.id ?? null;
+		if (!activeRunId && !storeIsGenerating && storeRecoveryControl?.state !== "active") {
 			return;
 		}
 		generateRequestTokenRef.current += 1;
@@ -320,16 +336,19 @@ export function ProjectPage() {
 	};
 
 	const handleResume = () => {
-		if (!store.recoveryControl) return;
+		if (!storeRecoveryControl) return;
 		resumeMutation.mutate();
 	};
 
 	useEffect(() => {
-		if (!store.isGenerating && store.progress === 1) {
-			queryClient.invalidateQueries({ queryKey: ["characters", projectId] });
-			queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+		if (!storeIsGenerating) {
+			const progress = useEditorStore.getState().progress;
+			if (progress === 1) {
+				queryClient.invalidateQueries({ queryKey: ["characters", projectId] });
+				queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+			}
 		}
-	}, [store.isGenerating, store.progress, projectId, queryClient]);
+	}, [storeIsGenerating, projectId, queryClient]);
 
 	const projectUpdatedAt = useEditorStore((state) => state.projectUpdatedAt);
 	useEffect(() => {
@@ -361,7 +380,7 @@ export function ProjectPage() {
 	if (projectLoading) {
 		return (
 			<div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base-100">
-				<div className="w-6 h-6 animate-bounce text-base-content/60">✦</div>
+				<div className="w-6 h-6 animate-pulse text-base-content/60">✦</div>
 				<p className="font-sketch text-2xl text-base-content/80">
 					正在加载项目...
 				</p>
@@ -382,62 +401,45 @@ export function ProjectPage() {
 		);
 	}
 
-	const generateDisabled = false;
-
 	return (
-		<>
-			<Sidebar />
-			<div
-				className={`h-screen flex flex-col bg-base-100 font-sans transition-all duration-300 ease-in-out ${
-					sidebarOpen ? "ml-72" : "ml-0"
-				}`}
-			>
-				<header className="flex-shrink-0 flex items-center h-10 px-3 bg-base-100/80 backdrop-blur-sm border-b border-base-300 z-10">
-					<div className="w-8">
-						{!sidebarOpen && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="!px-1.5"
-								onClick={toggleSidebar}
-								title="展开侧边栏"
-							>
-								<Bars3Icon className="w-4 h-4" />
-							</Button>
-						)}
-					</div>
-					<h1
-						className="flex-1 text-sm font-heading font-semibold truncate text-center"
-						title={project.title}
-					>
-						{project.title}
-					</h1>
-					<div className="w-8" />
-				</header>
-
-				<StagePipeline
-					currentStage={store.currentStage}
-					isGenerating={store.isGenerating}
-					awaitingConfirm={store.awaitingConfirm}
+		<div className="h-screen flex flex-col bg-base-100 font-sans overflow-hidden">
+				<TopBar
+					currentStage={storeCurrentStage}
+					isGenerating={storeIsGenerating}
+					awaitingConfirm={storeAwaitingConfirm}
+					hasRecovery={hasRecovery}
+					onToggleChat={toggleChat}
+					onOpenSettings={openSettingsModal}
 					onResume={handleResume}
 					onCancel={handleCancel}
-					hasRecovery={hasRecovery}
+					onGenerate={handleGenerate}
+					onToggleAssets={() => setAssetsOpen((v) => !v)}
+					onToggleHistory={() => setHistoryOpen((v) => !v)}
+					generateDisabled={false}
+					chatOpen={chatOpen}
+					assetsOpen={assetsOpen}
+					historyOpen={historyOpen}
+					projectId={projectId}
 				/>
 
-				<main className="flex-1 relative overflow-hidden">
+			<div className="flex-1 flex overflow-hidden">
+				<div className="flex-1 relative overflow-hidden">
 					<StageView projectId={projectId} />
+				</div>
 
-					<ChatDrawer
-						onSendFeedback={handleFeedback}
-						onConfirm={handleConfirm}
-						onGenerate={handleGenerate}
-						onCancel={handleCancel}
-						isGenerating={hasActiveRun}
-						generateDisabled={generateDisabled}
-						generateDisabledReason={undefined}
-					/>
-				</main>
+				<ChatDrawer
+					onSendFeedback={handleFeedback}
+					onConfirm={handleConfirm}
+					onGenerate={handleGenerate}
+					onCancel={handleCancel}
+					isGenerating={hasActiveRun}
+					generateDisabled={false}
+					generateDisabledReason={undefined}
+				/>
 			</div>
-		</>
+
+			<AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
+			<HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} projectId={projectId} />
+		</div>
 	);
 }

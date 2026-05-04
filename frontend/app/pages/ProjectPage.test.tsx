@@ -25,6 +25,8 @@ const projectData: Project = {
   status: 'active',
   target_shot_count: null,
   character_hints: [],
+  creation_mode: null,
+  reference_images: [],
   created_at: '2026-04-11T00:00:00Z',
   updated_at: '2026-04-11T00:00:00Z',
   provider_settings: {
@@ -264,6 +266,10 @@ vi.mock('~/stores/editorStore', () => ({
       getState: () => storeState,
     }
   ),
+  useShallow: (selector: (state: typeof storeState) => unknown) => {
+    const result = selector(storeState);
+    return () => result;
+  },
 }));
 
 vi.mock('~/services/api', () => ({
@@ -316,21 +322,32 @@ vi.mock('~/components/chat/ChatDrawer', () => ({
   ),
 }));
 
-vi.mock('~/components/layout/Sidebar', () => ({
-  Sidebar: () => <div data-testid="sidebar" />,
+vi.mock('~/components/layout/TopBar', () => ({
+  TopBar: ({
+    onGenerate,
+    onCancel,
+    onResume,
+    onToggleChat,
+    onOpenSettings,
+  }: {
+    onGenerate?: () => void;
+    onCancel?: () => void;
+    onResume?: () => void;
+    onToggleChat?: () => void;
+    onOpenSettings?: () => void;
+  }) => (
+    <div data-testid="top-bar">
+      <button type="button" onClick={onGenerate}>生成</button>
+      <button type="button" onClick={onCancel}>取消</button>
+      <button type="button" onClick={onResume}>恢复运行</button>
+      <button type="button" onClick={onToggleChat}>对话</button>
+      <button type="button" onClick={onOpenSettings}>设置</button>
+    </div>
+  ),
 }));
 
 vi.mock('~/components/layout/StageView', () => ({
   StageView: () => <div data-testid="stage-view" />,
-}));
-
-vi.mock('~/components/pipeline/StagePipeline', () => ({
-  StagePipeline: ({ onResume, onCancel }: { onResume?: () => void; onCancel?: () => void }) => (
-    <div data-testid="stage-pipeline">
-      <button type="button" onClick={onResume}>恢复运行</button>
-      <button type="button" onClick={onCancel}>取消运行</button>
-    </div>
-  ),
 }));
 
 vi.mock('~/components/settings/SettingsModal', () => ({
@@ -369,6 +386,7 @@ describe('ProjectPage live hydration', () => {
       error: null,
       resource_type: null,
       resource_id: null,
+      thread_id: null,
       created_at: '2026-04-11T00:00:00Z',
       updated_at: '2026-04-11T00:00:00Z',
     } as never);
@@ -405,6 +423,7 @@ describe('ProjectPage live hydration', () => {
 				error: null,
 				resource_type: null,
 				resource_id: null,
+				thread_id: 'thread-proof',
 				provider_snapshot: providerSnapshotSample,
 				created_at: '2026-04-11T00:00:00Z',
 				updated_at: '2026-04-11T00:00:00Z',
@@ -666,7 +685,7 @@ describe('ProjectPage live hydration', () => {
     await user.click(screen.getByRole('button', { name: '发送反馈' }));
 
     await waitFor(() => {
-      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏');
+      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏', undefined, 'plan');
     });
     expect(storeState.addMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -714,6 +733,7 @@ describe('ProjectPage live hydration', () => {
         error: null,
         resource_type: null,
         resource_id: null,
+        thread_id: null,
         created_at: '2026-04-11T00:00:00Z',
         updated_at: '2026-04-11T00:00:00Z',
       },
@@ -762,6 +782,7 @@ describe('ProjectPage live hydration', () => {
         error: null,
         resource_type: null,
         resource_id: null,
+        thread_id: null,
         created_at: '2026-04-11T00:00:00Z',
         updated_at: '2026-04-11T00:00:00Z',
       },
@@ -779,7 +800,7 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    await user.click(screen.getByRole('button', { name: '取消运行' }));
+    await user.click(screen.getByRole('button', { name: '取消' }));
 
     await waitFor(() => {
       expect(projectsApi.cancel).toHaveBeenCalledWith(9);
@@ -910,6 +931,7 @@ describe('ProjectPage live hydration', () => {
       error: null,
       resource_type: null,
       resource_id: null,
+      thread_id: null,
       created_at: '2026-04-11T00:00:00Z',
       updated_at: '2026-04-11T00:00:00Z',
     });
@@ -971,6 +993,7 @@ describe('ProjectPage live hydration', () => {
         error: null,
         resource_type: null,
         resource_id: null,
+        thread_id: null,
         created_at: '2026-04-11T00:00:00Z',
         updated_at: '2026-04-11T00:00:00Z',
       },
@@ -1091,6 +1114,7 @@ describe('ProjectPage live hydration', () => {
         error: null,
         resource_type: null,
         resource_id: null,
+        thread_id: null,
         created_at: '2026-04-11T00:00:00Z',
         updated_at: '2026-04-11T00:00:00Z',
       },
@@ -1108,7 +1132,7 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    await user.click(screen.getByRole('button', { name: '取消运行' }));
+    await user.click(screen.getByRole('button', { name: '取消' }));
 
     await waitFor(() => {
       expect(projectsApi.cancel).toHaveBeenCalledWith(9);
@@ -1138,6 +1162,7 @@ describe('ProjectPage live hydration', () => {
         error: null,
         resource_type: null,
         resource_id: null,
+        thread_id: null,
         created_at: '2026-04-11T00:00:00Z',
         updated_at: '2026-04-11T00:00:00Z',
       },

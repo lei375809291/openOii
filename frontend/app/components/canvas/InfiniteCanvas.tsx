@@ -9,13 +9,14 @@ import "tldraw/tldraw.css";
 import { useQuery } from "@tanstack/react-query";
 import { useCanvasLayout } from "~/hooks/useCanvasLayout";
 import type { SectionKey } from "~/hooks/useCanvasLayout";
-import { getStaticUrl, projectsApi } from "~/services/api";
-import { useEditorStore } from "~/stores/editorStore";
+import { getStaticUrl, projectsApi, assetsApi } from "~/services/api";
+import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { CanvasToolbar } from "./CanvasToolbar";
-import { canvasEvents } from "./canvasEvents";
+import { canvasEvents, type CanvasEvents } from "./canvasEvents";
 import { ImagePreviewModal, VideoPreviewModal } from "./PreviewModals";
 import { customShapeUtils } from "./shapes";
 import { getPipelineStageIndex } from "~/utils/pipeline";
+import { toast } from "~/utils/toast";
 import { ShapeContextMenu } from "./ShapeContextMenu";
 
 interface InfiniteCanvasProps {
@@ -28,6 +29,7 @@ const components: TLComponents = {
 	Toolbar: null,
 	StylePanel: null,
 	NavigationPanel: undefined,
+	Minimap: undefined,
 	HelpMenu: null,
 	DebugPanel: null,
 	DebugMenu: null,
@@ -39,6 +41,7 @@ const components: TLComponents = {
 	KeyboardShortcutsDialog: null,
 	HelperButtons: null,
 	ZoomMenu: null,
+	ContextMenu: null,
 };
 
 const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
@@ -59,7 +62,16 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		awaitingConfirm,
 		recoverySummary,
 		currentRunId,
-	} = useEditorStore();
+	} = useEditorStore(useShallow((s) => ({
+		characters: s.characters,
+		shots: s.shots,
+		projectVideoUrl: s.projectVideoUrl,
+		currentStage: s.currentStage,
+		isGenerating: s.isGenerating,
+		awaitingConfirm: s.awaitingConfirm,
+		recoverySummary: s.recoverySummary,
+		currentRunId: s.currentRunId,
+	})));
 
 	const { data: project } = useQuery({
 		queryKey: ["project", projectId],
@@ -119,13 +131,22 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	shapesRef.current = shapes;
 	shapesSignatureRef.current = shapesSignature;
 
-	const handleShapeAction = useCallback((data: { action: string; feedbackType: string }) => {
+	const handleShapeAction = useCallback((data: CanvasEvents["shape-action"]) => {
+		if (data.action === "add-to-assets" && data.entityType === "character" && data.entityId) {
+			assetsApi.createFromCharacter(data.entityId).then(() => {
+				toast.success({ title: "资产库", message: "已添加到资产库" });
+			}).catch(() => {
+				toast.error({ title: "资产库", message: "添加失败" });
+			});
+			return;
+		}
 		const feedbackMap: Record<string, string> = {
 			regenerate: `请重新生成`,
 			edit: `请修改内容`,
+			approve: `批准通过`,
 		};
 		const content = feedbackMap[data.action] || "请修改";
-		projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType);
+		projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType, data.entityType, data.entityId ?? undefined);
 	}, [projectId, currentRunId]);
 
 	useEffect(() => {
@@ -171,16 +192,21 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			editor.deleteShapes(toDelete.map((s) => s.id));
 		}
 
+		const toUpdate: TLShapePartial[] = [];
+		const toCreate: TLShapePartial[] = [];
 		shapes.forEach((shape) => {
 			if (currentIds.has(shape.id)) {
-				editor.updateShapes([shape]);
+				toUpdate.push(shape);
 			} else {
-				editor.createShapes([shape]);
+				toCreate.push(shape);
 			}
 		});
 
+		if (toUpdate.length > 0) editor.updateShapes(toUpdate);
+		if (toCreate.length > 0) editor.createShapes(toCreate);
+
 		const newlyCreated = shapes.filter((s) => !currentIds.has(s.id));
-		if (newlyCreated.length > 0 && isGenerating) {
+		if (newlyCreated.length > 0) {
 			const lastShape = newlyCreated[newlyCreated.length - 1];
 			if (lastShape.id) {
 				const shapeOnPage = editor.getShape(lastShape.id as any);
@@ -204,6 +230,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
+					persistenceKey="openoii-canvas"
 				>
 					<CanvasToolbar />
 					<ShapeContextMenu />

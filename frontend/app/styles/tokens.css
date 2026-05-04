@@ -5,11 +5,9 @@
 
 @layer base {
   :root {
-    /* Semantic Colors - Toast/Alert States */
-    --color-success: #51CF66;
-    --color-error: #FF6B6B;
-    --color-warning: #FFD93D;
-    --color-info: #74C0FC;
+    /* CMYK Registration Colors (theme-aware) */
+    --cmyk-cyan: 0.55 0.14 180;
+    --cmyk-magenta: 0.55 0.26 330;
 
     /* Spacing Scale */
     --space-xs: 0.25rem;  /* 4px */
@@ -41,27 +39,15 @@
     --z-popover: 60;
     --z-tooltip: 70;
   }
+
+  [data-theme="doodle-dark"] {
+    --cmyk-cyan: 0.6 0.12 195;
+    --cmyk-magenta: 0.6 0.24 340;
+  }
 }
 
 /* Utility Classes for Design Tokens */
 @layer utilities {
-  /* Semantic Color Borders */
-  .border-success {
-    border-color: var(--color-success);
-  }
-
-  .border-error {
-    border-color: var(--color-error);
-  }
-
-  .border-warning {
-    border-color: var(--color-warning);
-  }
-
-  .border-info {
-    border-color: var(--color-info);
-  }
-
   /* Touch Target */
   .touch-target {
     min-width: var(--touch-target-min);

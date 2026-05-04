@@ -21,12 +21,26 @@ class RenderAgent(BaseAgent):
         super().__init__()
         self.image_composer = ImageComposer()
 
+    def _style_descriptor(self, style: str) -> str:
+        mapping = {
+            "anime": "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style",
+            "shonen": "anime, shonen style, high contrast, dynamic composition, dramatic lighting, bold lines",
+            "slice-of-life": "anime, slice of life, soft pastel colors, warm lighting, rounded lines, cozy atmosphere",
+            "manga": "manga style, black and white, halftone dots, speed lines, high contrast ink",
+            "donghua": "Chinese animation, ink wash, flowing lines, oriental color palette, watercolor textures",
+            "cinematic": "cinematic, photorealistic, 35mm film grain, natural lighting, shallow depth of field",
+            "pixar": "3D cartoon, Pixar-style rendering, smooth surfaces, global illumination, rounded shapes",
+            "lowpoly": "low poly, geometric, faceted surfaces, hard edge lighting, minimalist palette",
+            "watercolor": "watercolor, soft bleeding edges, transparent layering, white space breathing, painterly",
+            "sketch": "pencil sketch, cross-hatching, monochrome shading, rough lines, hand-drawn",
+            "realistic": "photorealistic, natural lighting, detailed textures, real-world proportions",
+        }
+        return mapping.get(style, mapping.get("anime"))
+
     def _build_character_prompt(self, character: Character, *, style: str) -> str:
         desc = character.description or character.name
-        anime_style = "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style"
-        if style.strip():
-            return f"{desc}, {anime_style}, {style}"
-        return f"{desc}, {anime_style}"
+        style_desc = self._style_descriptor(style)
+        return f"{desc}, {style_desc}"
 
     def _build_shot_prompt(self, shot: Shot, characters: list[Character], *, style: str) -> str:
         desc = shot.image_prompt or shot.description
@@ -34,10 +48,8 @@ class RenderAgent(BaseAgent):
         char_context = build_character_context(characters)
         if char_context:
             parts.append(char_context)
-        anime_style = "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style"
-        parts.append(anime_style)
-        if style.strip():
-            parts.append(style.strip())
+        style_desc = self._style_descriptor(style)
+        parts.append(style_desc)
         return ", ".join(parts)
 
     async def _render_characters(self, ctx: AgentContext) -> int:

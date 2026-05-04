@@ -2,6 +2,7 @@ import { useState } from "react";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { configApi } from "~/services/api";
 import type { ConfigItem } from "~/types";
+import { SvgIcon } from "~/components/ui/SvgIcon";
 
 interface ConfigInputProps {
   item: ConfigItem;
@@ -52,7 +53,7 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
             type="text"
             value={displayValue}
             onChange={onChange}
-            className="input input-bordered w-full border-2 border-black font-mono pr-12"
+            className="input input-bordered w-full border-2 border-base-content/30 font-mono pr-12"
             autoComplete="off"
             placeholder={isRevealed ? "输入新值..." : ""}
           />
@@ -78,8 +79,8 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
           </p>
         )}
         {isRevealed && (
-          <p className="text-xs text-warning">
-            ⚠️ 真实值已显示，请注意保护隐私
+          <p className="text-xs text-warning inline-flex items-center gap-1">
+            <SvgIcon name="triangle-alert" size={12} />真实值已显示，请注意保护隐私
           </p>
         )}
       </div>
@@ -94,7 +95,7 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
       type="text"
       value={value}
       onChange={onChange}
-      className="input input-bordered w-full border-2 border-black font-mono"
+      className="input input-bordered w-full border-2 border-base-content/30 font-mono"
       autoComplete="off"
     />
   );

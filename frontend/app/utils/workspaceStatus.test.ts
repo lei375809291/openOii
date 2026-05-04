@@ -20,6 +20,8 @@ const baseInput: WorkspaceProjectionInput = {
     status: "draft",
     target_shot_count: null,
     character_hints: [],
+    creation_mode: null,
+    reference_images: [],
     created_at: "2026-04-11T00:00:00Z",
     updated_at: "2026-04-11T00:00:00Z",
     provider_settings: {
@@ -202,6 +204,7 @@ describe("buildWorkspaceStatus", () => {
           approved_scene: null, approved_action: null, approved_expression: null,
           approved_lighting: null, approved_dialogue: null, approved_sfx: null,
           approved_character_ids: [2],
+          seed: null,
         },
       ],
     });
@@ -255,6 +258,7 @@ describe("buildWorkspaceStatus", () => {
           approved_scene: null, approved_action: null, approved_expression: null,
           approved_lighting: null, approved_dialogue: null, approved_sfx: null,
           approved_character_ids: [],
+          seed: null,
         },
       ],
     });
@@ -293,6 +297,7 @@ describe("buildWorkspaceStatus", () => {
           approved_scene: null, approved_action: null, approved_expression: null,
           approved_lighting: null, approved_dialogue: null, approved_sfx: null,
           approved_character_ids: [],
+          seed: null,
         },
       ],
     });
@@ -352,6 +357,7 @@ describe("buildWorkspaceStatus", () => {
           approved_scene: null, approved_action: null, approved_expression: null,
           approved_lighting: null, approved_dialogue: null, approved_sfx: null,
           approved_character_ids: [],
+          seed: null,
         },
       ],
     });

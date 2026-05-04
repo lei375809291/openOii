@@ -1,9 +1,9 @@
-import { Canvas } from "~/components/canvas/Canvas";
+import { InfiniteCanvas } from "~/components/canvas/InfiniteCanvas";
 
 interface StageViewProps {
   projectId: number;
 }
 
 export function StageView({ projectId }: StageViewProps) {
-  return <Canvas projectId={projectId} />;
+  return <InfiniteCanvas projectId={projectId} />;
 }

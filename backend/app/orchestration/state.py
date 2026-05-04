@@ -22,20 +22,24 @@ PRODUCTION_STAGE_SEQUENCE: tuple[str, ...] = (
 
 
 def next_production_stage(stage: str | None) -> str | None:
-    if not isinstance(stage, str) or stage not in PRODUCTION_STAGE_SEQUENCE:
+    if not isinstance(stage, str):
         return None
-    next_index = PRODUCTION_STAGE_SEQUENCE.index(stage) + 1
+    base = stage.removesuffix("_approval")
+    if base not in PRODUCTION_STAGE_SEQUENCE:
+        return None
+    next_index = PRODUCTION_STAGE_SEQUENCE.index(base) + 1
     if next_index >= len(PRODUCTION_STAGE_SEQUENCE):
         return None
     return PRODUCTION_STAGE_SEQUENCE[next_index]
 
 
 def workflow_progress_for_stage(stage: str, *, within_stage: float = 0.0) -> float:
-    if stage not in PRODUCTION_STAGE_SEQUENCE:
+    base = stage.removesuffix("_approval")
+    if base not in PRODUCTION_STAGE_SEQUENCE:
         return 0.0
 
     clamped_within = max(0.0, min(within_stage, 1.0))
-    stage_index = PRODUCTION_STAGE_SEQUENCE.index(stage)
+    stage_index = PRODUCTION_STAGE_SEQUENCE.index(base)
     total = len(PRODUCTION_STAGE_SEQUENCE)
     return min((stage_index + clamped_within) / total, 1.0)
 

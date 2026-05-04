@@ -20,9 +20,9 @@ const DEFAULT_CONFIG: LayoutConfig = {
   startX: 100,
   startY: 100,
   sectionWidth: 800,
-  sectionGap: 60,
+  sectionGap: 96,
   shotCardWidth: 180,
-  shotCardHeight: 240,
+  shotCardHeight: 320,
   shotCardGap: 16,
 };
 

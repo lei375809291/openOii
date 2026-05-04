@@ -18,6 +18,11 @@ from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
 
 
+def _next_stage(stage: str) -> str | None:
+    from app.orchestration.state import next_production_stage
+    return next_production_stage(stage)
+
+
 async def run_agent_plan(
     *,
     project_id: int,
@@ -49,7 +54,14 @@ async def run_agent_plan(
 
             await ws.send_event(
                 project_id,
-                {"type": "run_started", "data": {"run_id": run_id, "project_id": project_id, "current_agent": agent_plan[0].name if agent_plan else None}},
+                {
+                    "type": "run_started",
+                    "data": {
+                        "run_id": run_id,
+                        "project_id": project_id,
+                        "current_agent": agent_plan[0].name if agent_plan else None,
+                    },
+                },
             )
 
             total_steps = max(len(agent_plan), 1)
@@ -71,8 +83,11 @@ async def run_agent_plan(
                         "type": "run_progress",
                         "data": {
                             "run_id": run_id,
+                            "project_id": project_id,
                             "current_agent": run.current_agent,
+                            "current_stage": stage,
                             "stage": stage,
+                            "next_stage": _next_stage(stage),
                             "progress": progress,
                         },
                     },

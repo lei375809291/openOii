@@ -12,6 +12,8 @@ import {
   getWorkspaceSectionPlaceholderText,
   getWorkspaceSectionStatusLabel,
 } from "~/utils/workspaceStatus";
+import { getStaticUrl } from "~/services/api";
+import { SvgIcon } from "~/components/ui/SvgIcon";
 
 const PLACEHOLDER_ICON = (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 opacity-40">
@@ -96,7 +98,7 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
           {videoUrl ? (
             <div className="space-y-2">
               <video
-                className="w-full rounded-lg bg-black"
+                className="w-full rounded-lg bg-neutral"
                 src={videoUrl}
                 controls
                 onPointerDown={(e) => e.stopPropagation()}
@@ -106,6 +108,17 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
                   src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`)}`}
                 />
               </video>
+              <div className="flex gap-1.5 justify-end">
+                <a
+                  href={getStaticUrl(videoUrl) ?? undefined}
+                  download
+                  className="btn btn-sm btn-ghost border-2 border-base-content/15 text-xs gap-1 hover:border-primary/40 hover:-translate-y-0.5 transition-all"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <SvgIcon name="download" size={12} />
+                  下载
+                </a>
+              </div>
               {blockingText && <p className="text-xs text-warning">{blockingText}</p>}
             </div>
           ) : null}

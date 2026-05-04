@@ -39,13 +39,22 @@ test("final delivery surface keeps preview, download, and retry together", async
         return jsonResponse({
           id: 7,
           title: "创意项目",
-          story: null,
-          style: null,
-          summary: "夜色中的追踪故事",
+          story: "一只小猫的故事",
+          style: "anime",
+          summary: "温馨小片段",
           video_url: "/static/videos/final-current.mp4",
           status: "active",
-          created_at: "2026-04-11T00:00:00Z",
-          updated_at: "2026-04-11T00:00:00Z",
+          target_shot_count: 6,
+          character_hints: [],
+          creation_mode: "story",
+          reference_images: [],
+          provider_settings: {
+            text: { selected_key: "openai", resolved_key: "openai", source: "default", valid: true, status: "valid" },
+            image: { selected_key: "fal", resolved_key: "fal", source: "default", valid: true, status: "valid" },
+            video: { selected_key: "runway", resolved_key: "runway", source: "default", valid: true, status: "valid" },
+          },
+          created_at: "2026-05-05T00:00:00Z",
+          updated_at: "2026-05-05T00:00:00Z",
         });
       }
 

@@ -143,6 +143,59 @@ vi.mock("~/stores/editorStore", () => ({
     currentStage: "render",
     recoverySummary: null,
   }),
+  useShallow: (selector: any) => {
+    const state = {
+      characters: [
+        {
+          id: 1,
+          project_id: 1,
+          name: "阿宁",
+          description: "冷静的侦探",
+          image_url: null,
+          approval_state: "draft",
+          approval_version: 1,
+          approved_at: null,
+          approved_name: null,
+          approved_description: null,
+          approved_image_url: null,
+        },
+      ],
+      shots: [
+        {
+          id: 11,
+          project_id: 1,
+          order: 1,
+          description: "阿宁走进雨夜街道",
+          prompt: "prompt",
+          image_prompt: "image prompt",
+          image_url: null,
+          video_url: null,
+          duration: 7,
+          camera: "wide",
+          motion_note: "slow push in",
+          scene: null, action: null, expression: null, lighting: null, dialogue: null, sfx: null,
+          character_ids: [1],
+          approval_state: "draft",
+          approval_version: 1,
+          approved_at: null,
+          approved_description: null,
+          approved_prompt: null,
+          approved_image_prompt: null,
+          approved_duration: null,
+          approved_camera: null,
+          approved_motion_note: null,
+          approved_scene: null, approved_action: null, approved_expression: null,
+          approved_lighting: null, approved_dialogue: null, approved_sfx: null,
+          approved_character_ids: [],
+        },
+      ],
+      projectVideoUrl: null,
+      currentStage: "render",
+      recoverySummary: null,
+    };
+    const result = selector(state);
+    return () => result;
+  },
 }));
 
 vi.mock("~/services/api", () => ({

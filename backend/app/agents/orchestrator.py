@@ -47,21 +47,16 @@ def _next_phase2_stage(stage: str | None) -> str | None:
     return PHASE2_STAGE_ORDER[next_index]
 
 
-GRAPH_STAGE_FOR_AGENT = {
+STAGE_AGENT_MAP = {
     "plan": "plan",
     "render": "render",
     "compose": "compose",
     "review": "review",
 }
 
-AGENT_STAGE_MAP = GRAPH_STAGE_FOR_AGENT
-
-RESUME_AGENT_FOR_STAGE = {
-    "plan": "plan",
-    "render": "render",
-    "compose": "compose",
-    "review": "review",
-}
+GRAPH_STAGE_FOR_AGENT = STAGE_AGENT_MAP
+AGENT_STAGE_MAP = STAGE_AGENT_MAP
+RESUME_AGENT_FOR_STAGE = STAGE_AGENT_MAP
 
 
 def _resume_agent_for_stage(stage: str | None) -> str:
@@ -329,9 +324,10 @@ class GenerationOrchestrator:
         for k, v in fields.items():
             setattr(run, k, v)
         run.updated_at = utcnow()
-        self.session.add(run)
-        await self.session.commit()
-        await self.session.refresh(run)
+        if self.session:
+            self.session.add(run)
+            await self.session.commit()
+            await self.session.refresh(run)
         return run
 
     async def _log(self, run_id: int, *, agent: str, role: str, content: str) -> None:
@@ -539,11 +535,13 @@ class GenerationOrchestrator:
 
             logger.debug("[graph] run=%s interrupt gate=%s auto_mode=%s", run_pk, gate_agent, auto_mode)
             feedback = ""
+            action = "approve"
             if not auto_mode:
                 feedback = await self._wait_for_confirm(project_pk, run, gate_agent.strip()) or ""
-            logger.debug("[graph] run=%s resume with feedback=%r", run_pk, feedback)
-
-            payload = Command(resume=feedback)
+            logger.debug("[graph] run=%s resume with feedback=%r action=%s", run_pk, feedback, action)
+            if feedback:
+                action = "feedback"
+            payload = Command(resume={"action": action, "feedback": feedback})
 
         await self.session.refresh(ctx.project)
         ctx.project.status = "ready"
@@ -574,6 +572,9 @@ class GenerationOrchestrator:
         if project.id is None or run.id is None:
             raise RuntimeError("Project and run must be persisted before graph execution")
         graph_config = cast(Any, build_graph_config(run))
+        thread_id = graph_config["configurable"]["thread_id"]
+        if not run.thread_id:
+            await self._set_run(run, thread_id=thread_id)
         runtime_context = build_phase2_runtime_context(
             orchestrator=self,
             agent_context=ctx,
@@ -619,6 +620,11 @@ class GenerationOrchestrator:
         )
         resume_stage = cast(Phase2Stage, recovery.next_stage or recovery.current_stage)
         resume_agent = _resume_agent_for_stage(resume_stage)
+
+        graph_config = cast(Any, build_graph_config(run))
+        thread_id = graph_config["configurable"]["thread_id"]
+        if not run.thread_id:
+            await self._set_run(run, thread_id=thread_id)
 
         try:
             self._agent_index(resume_agent)
@@ -728,6 +734,9 @@ class GenerationOrchestrator:
         request: GenerateRequest,
         agent_name: str,
         auto_mode: bool = False,
+        feedback_type: str | None = None,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
     ) -> None:
         project = await self.session.get(Project, project_id)
         run = await self.session.get(AgentRun, run_id)
@@ -794,6 +803,10 @@ class GenerationOrchestrator:
                     ctx.user_feedback = msg.content.strip()
                 elif request.notes and request.notes.strip():
                     ctx.user_feedback = request.notes.strip()
+
+                ctx.feedback_type = feedback_type
+                ctx.entity_type = entity_type
+                ctx.entity_id = entity_id
 
                 review_agent = self.agents[self._agent_index("review")]
 

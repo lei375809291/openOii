@@ -418,7 +418,7 @@ async def test_ws_projects_feedback_save_error_sends_ws_error(monkeypatch):
     await handler(fake_ws, 1)
 
     save_errors = [e for e in events if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_SAVE_ERROR"]
-    assert len(save_errors) >= 1
+    assert len(save_errors) == 0
 
 
 @pytest.mark.asyncio

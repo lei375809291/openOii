@@ -413,7 +413,7 @@ async def test_cleanup_for_rerun_unsupported_start_agent_raises():
 
 @pytest.mark.asyncio
 async def test_set_run_updates_and_commits():
-    run = SimpleNamespace(id=1, updated_at=None)
+    run = SimpleNamespace(id=1, updated_at=None, thread_id=None)
     session = FakeSession()
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -448,7 +448,7 @@ async def test_log_persists_agent_message():
 @pytest.mark.asyncio
 async def test_build_agent_context_uses_provider_snapshot(monkeypatch):
     project = SimpleNamespace(id=1)
-    run = SimpleNamespace(id=2, provider_snapshot={"provider": "openai"})
+    run = SimpleNamespace(id=2, provider_snapshot={"provider": "openai"}, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -465,7 +465,7 @@ async def test_build_agent_context_uses_provider_snapshot(monkeypatch):
 @pytest.mark.asyncio
 async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch):
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -518,7 +518,7 @@ async def test_run_from_agent_returns_early_when_project_missing():
 @pytest.mark.asyncio
 async def test_run_from_agent_handles_failure_and_sends_failed(monkeypatch):
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2, provider_snapshot={})
+    run = SimpleNamespace(id=2, provider_snapshot={}, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -547,7 +547,7 @@ async def test_run_from_agent_handles_failure_and_sends_failed(monkeypatch):
 @pytest.mark.asyncio
 async def test_resume_from_recovery_happy_path(monkeypatch):
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2, provider_snapshot={})
+    run = SimpleNamespace(id=2, provider_snapshot={}, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -602,7 +602,7 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_from_agent_happy_path(monkeypatch):
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2, provider_snapshot={})
+    run = SimpleNamespace(id=2, provider_snapshot={}, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -640,7 +640,7 @@ async def test_run_from_agent_happy_path(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_from_agent_review_branch(monkeypatch):
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2, provider_snapshot={})
+    run = SimpleNamespace(id=2, provider_snapshot={}, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -786,7 +786,7 @@ async def test_cleanup_for_rerun_full_compose(monkeypatch):
 async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
     """Auto mode: _wait_for_confirm is never called; interrupts are auto-resumed."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -829,7 +829,7 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
 async def test_invoke_phase2_graph_invalid_gate_raises(monkeypatch):
     """Invalid gate name in interrupt value raises RuntimeError."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -860,7 +860,7 @@ async def test_invoke_phase2_graph_invalid_gate_raises(monkeypatch):
 async def test_invoke_phase2_graph_no_gate_key_raises(monkeypatch):
     """Interrupt value without 'gate' key raises RuntimeError."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -891,7 +891,7 @@ async def test_invoke_phase2_graph_no_gate_key_raises(monkeypatch):
 async def test_invoke_phase2_graph_non_dict_result_breaks(monkeypatch):
     """Non-dict result from ainvoke causes immediate break."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -919,7 +919,7 @@ async def test_invoke_phase2_graph_non_dict_result_breaks(monkeypatch):
 async def test_run_phase2_graph_unsupported_agent_raises():
     """_run_phase2_graph raises ValueError for agent not in GRAPH_STAGE_FOR_AGENT."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -939,7 +939,7 @@ async def test_run_phase2_graph_unsupported_agent_raises():
 async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
     """_run_phase2_graph: review agent sets ctx.user_feedback from request.notes."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -981,7 +981,7 @@ async def test_resume_from_recovery_missing_project_returns():
 async def test_wait_for_confirm_timeout(monkeypatch):
     """_wait_for_confirm raises RuntimeError on timeout."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
@@ -1015,7 +1015,7 @@ async def test_wait_for_confirm_with_user_feedback(monkeypatch):
     from app.models.agent_run import AgentMessage
 
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     msg = AgentMessage(id=10, run_id=2, role="user", content="  user feedback  ", agent="user")
     session = FakeSession(project=project, run=run, scalars_result=[msg])
     ws = MockWsManager()
@@ -1049,7 +1049,7 @@ async def test_wait_for_confirm_with_user_feedback(monkeypatch):
 async def test_wait_for_confirm_no_feedback_returns_none(monkeypatch):
     """_wait_for_confirm returns None when no new user feedback found."""
     project = SimpleNamespace(id=1, status="draft")
-    run = SimpleNamespace(id=2)
+    run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run, scalars_result=[])
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(

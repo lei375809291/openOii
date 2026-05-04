@@ -70,6 +70,17 @@ export function ShapeContextMenu() {
   const handleAction = useCallback((action: string) => {
     if (!context) return;
 
+    if (action === "regenerate") {
+      const labelMap: Record<string, string> = {
+        "script-section": "重新规划会覆盖当前内容",
+        "character-section": "重新生成会覆盖当前角色",
+        "storyboard-section": "重新生成会覆盖当前分镜",
+        "video-section": "重新合成会覆盖当前视频",
+      };
+      const msg = labelMap[context.shapeType] || "重新生成会覆盖当前内容，确定？";
+      if (!window.confirm(msg)) return;
+    }
+
     canvasEvents.emit("shape-action", {
       shapeId: context.shapeId,
       action,

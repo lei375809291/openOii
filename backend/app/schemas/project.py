@@ -59,6 +59,8 @@ class ProjectCreate(BaseModel):
     status: str | None = None
     target_shot_count: int | None = None
     character_hints: list[str] | None = None
+    creation_mode: str | None = None
+    reference_images: list[str] | None = None
     text_provider_override: TextProviderKey | None = None
     image_provider_override: ImageProviderKey | None = None
     video_provider_override: VideoProviderKey | None = None
@@ -69,6 +71,10 @@ class ProjectUpdate(BaseModel):
     story: str | None = None
     style: str | None = None
     status: str | None = None
+    target_shot_count: int | None = None
+    character_hints: list[str] | None = None
+    creation_mode: str | None = None
+    reference_images: list[str] | None = None
     text_provider_override: TextProviderKey | None = None
     image_provider_override: ImageProviderKey | None = None
     video_provider_override: VideoProviderKey | None = None
@@ -90,6 +96,8 @@ class ProjectRead(BaseModel):
     status: str
     target_shot_count: int | None = None
     character_hints: list[str] = Field(default_factory=list)
+    creation_mode: str | None = None
+    reference_images: list[str] = Field(default_factory=list)
     provider_settings: ProjectProviderSettingsRead
     created_at: datetime
     updated_at: datetime
@@ -136,6 +144,7 @@ class ShotRead(BaseModel):
     lighting: str | None = None
     dialogue: str | None = None
     sfx: str | None = None
+    seed: int | None = None
     character_ids: list[int]
     approval_state: Literal["draft", "approved", "superseded"]
     approval_version: int
@@ -203,6 +212,7 @@ class AgentRunRead(BaseModel):
     current_agent: str | None
     progress: float
     error: str | None
+    thread_id: str | None = None
     resource_type: str | None  # 资源类型：character|shot|project
     resource_id: int | None  # 资源 ID
     provider_snapshot: ProjectProviderSettingsRead | None = None
@@ -241,6 +251,9 @@ class RecoveryControlRead(BaseModel):
 class FeedbackRequest(BaseModel):
     content: str = Field(min_length=1)
     run_id: int | None = None
+    feedback_type: str | None = None
+    entity_type: str | None = None
+    entity_id: int | None = None
 
 
 class MessageRead(BaseModel):
@@ -256,3 +269,33 @@ class MessageRead(BaseModel):
     progress: float | None
     is_loading: bool
     created_at: datetime
+
+
+class AssetCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    asset_type: Literal["character", "scene", "style"]
+    description: str | None = None
+    image_url: str | None = None
+    metadata_json: str | None = None
+    source_project_id: int | None = None
+    tags: str | None = None
+
+
+class AssetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    asset_type: str
+    description: str | None
+    image_url: str | None
+    metadata_json: str | None
+    source_project_id: int | None
+    tags: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssetListRead(BaseModel):
+    items: list[AssetRead]
+    total: int

@@ -9,7 +9,7 @@ interface ImagePreviewModalProps {
 export function ImagePreviewModal({ src, alt, onClose }: ImagePreviewModalProps) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-neutral/80 p-4"
       onClick={onClose}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -59,7 +59,7 @@ export function VideoPreviewModal({
 }: VideoPreviewModalProps) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-neutral/80 p-4"
       onClick={onClose}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -90,13 +90,13 @@ export function VideoPreviewModal({
           <XMarkIcon className="w-5 h-5" aria-hidden="true" />
         </button>
         {showDownload && (
-          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between bg-black/60 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/10">
+          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between bg-neutral/80 rounded-xl px-4 py-3 border border-base-content/10">
             <span className="text-primary-content text-sm font-medium truncate">
               {title}
             </span>
             <button
               type="button"
-              className="btn btn-sm btn-accent gap-2 border-2 border-black shadow-brutal-sm hover:shadow-brutal hover:-translate-y-0.5 transition-all"
+              className="btn btn-sm btn-accent gap-2 border-2 border-base-content/30 shadow-brutal-sm hover:shadow-brutal hover:-translate-y-0.5 transition-all"
               onClick={(e) => {
                 e.stopPropagation();
                 if (onDownload) {

@@ -1,21 +1,51 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import patch
 
-from app.models.agent_run import AgentRun
+from app.api.deps import require_admin, get_app_settings, get_ws_manager
 
-
-def test_require_run_id_returns_id():
-    from app.api.deps import require_run_id
-
-    run = AgentRun(project_id=1, id=42)
-    assert require_run_id(run) == 42
+from fastapi import HTTPException
 
 
-def test_require_run_id_raises_on_none():
-    from app.api.deps import require_run_id
+@pytest.mark.asyncio
+async def test_get_app_settings_returns_settings():
+    result = await get_app_settings()
+    assert result is not None
 
-    run = AgentRun(project_id=1)
-    run.id = None
-    with pytest.raises(RuntimeError, match="missing an id"):
-        require_run_id(run)
+
+@pytest.mark.asyncio
+async def test_get_ws_manager_returns_manager():
+    result = await get_ws_manager()
+    assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_require_admin_no_token_configured():
+    with patch("app.api.deps.get_settings", return_value=type("S", (), {"admin_token": ""})()):
+        with pytest.raises(HTTPException) as exc_info:
+            await require_admin(x_admin_token=None)
+        assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_require_admin_wrong_token():
+    with patch("app.api.deps.get_settings", return_value=type("S", (), {"admin_token": "secret"})()):
+        with pytest.raises(HTTPException) as exc_info:
+            await require_admin(x_admin_token="wrong")
+        assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_require_admin_correct_token():
+    with patch("app.api.deps.get_settings", return_value=type("S", (), {"admin_token": "secret"})()):
+        result = await require_admin(x_admin_token="secret")
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_require_admin_no_header():
+    with patch("app.api.deps.get_settings", return_value=type("S", (), {"admin_token": "secret"})()):
+        with pytest.raises(HTTPException) as exc_info:
+            await require_admin(x_admin_token=None)
+        assert exc_info.value.status_code == 403

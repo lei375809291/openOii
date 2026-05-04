@@ -9,10 +9,14 @@ vi.mock("~/stores/editorStore", () => ({
     shots: [],
     characters: [],
   }),
+  useShallow: (selector: any) => {
+    const result = selector({ currentStage: "plan", shots: [], characters: [] });
+    return () => result;
+  },
 }));
 
-vi.mock("~/components/canvas/Canvas", () => ({
-  Canvas: ({ projectId }: { projectId: number }) => (
+vi.mock("~/components/canvas/InfiniteCanvas", () => ({
+  InfiniteCanvas: ({ projectId }: { projectId: number }) => (
     <div data-testid="projected-canvas">project:{projectId}</div>
   ),
 }));

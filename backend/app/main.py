@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,11 +23,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # 确保静态文件目录存在
+    import logging
+    log = logging.getLogger("openOii.lifespan")
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "videos").mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "images").mkdir(parents=True, exist_ok=True)
+    log.info("lifespan: calling init_db")
     await init_db()
+    log.info("lifespan: init_db done")
     yield
 
 
@@ -136,6 +138,9 @@ def create_app() -> FastAPI:
                                 {"type": "run_awaiting_confirm", "data": payload},
                             )
                         else:
+                            from app.agents.orchestrator import STAGE_AGENT_MAP
+
+                            mapped_stage = STAGE_AGENT_MAP.get(run.current_agent or "", run.current_agent or "plan")
                             await ws_manager.send_event(
                                 project_id,
                                 {
@@ -144,8 +149,8 @@ def create_app() -> FastAPI:
                                         "run_id": run.id,
                                         "project_id": project_id,
                                         "current_agent": run.current_agent,
-                                        "current_stage": run.current_agent,
-                                        "stage": run.current_agent,
+                                        "current_stage": mapped_stage,
+                                        "stage": mapped_stage,
                                         "progress": run.progress,
                                     },
                                 },
@@ -164,67 +169,39 @@ def create_app() -> FastAPI:
                             project_id, {"type": "echo", "data": msg.get("data")}
                         )
                     elif msg_type == "confirm":
-                        # 用户确认继续执行
                         run_id = msg.get("data", {}).get("run_id")
                         feedback = msg.get("data", {}).get("feedback")
                         if run_id:
-                            # 验证 run_id 是否属于当前 project_id（防止跨项目操控）
-                            from app.db.session import async_session_maker
-                            from app.models.agent_run import AgentMessage, AgentRun
-                            from app.models.message import Message
+                            if isinstance(feedback, str) and feedback.strip():
+                                try:
+                                    from app.db.session import async_session_maker
+                                    from app.models.agent_run import AgentMessage
+                                    from app.models.message import Message
 
-                            try:
-                                async with async_session_maker() as session:
-                                    run = await session.get(AgentRun, run_id)
-                                    if not run or run.project_id != project_id:
-                                        await ws_manager.send_event(
-                                            project_id,
-                                            {
-                                                "type": "error",
-                                                "data": {
-                                                    "code": "WS_INVALID_RUN",
-                                                    "message": "无效的 run_id 或不属于当前项目",
-                                                },
-                                            },
-                                        )
-                                        continue
-
-                                    if isinstance(feedback, str) and feedback.strip():
-                                        content = feedback.strip()
-                                        session.add(
-                                            AgentMessage(
-                                                run_id=run_id,
-                                                agent="user",
-                                                role="user",
-                                                content=content,
+                                    content = feedback.strip()
+                                    async with async_session_maker() as session:
+                                        run = await session.get(AgentRun, run_id)
+                                        if run and run.project_id == project_id:
+                                            session.add(
+                                                AgentMessage(
+                                                    run_id=run_id,
+                                                    agent="user",
+                                                    role="user",
+                                                    content=content,
+                                                )
                                             )
-                                        )
-                                        session.add(
-                                            Message(
-                                                project_id=project_id,
-                                                run_id=run_id,
-                                                agent="user",
-                                                role="user",
-                                                content=content,
+                                            session.add(
+                                                Message(
+                                                    project_id=project_id,
+                                                    run_id=run_id,
+                                                    agent="user",
+                                                    role="user",
+                                                    content=content,
+                                                )
                                             )
-                                        )
-                                        await session.commit()
-                                    # 确保 feedback 保存完成后再触发 confirm
-                                    # 添加短暂延迟让 orchestrator 的 session 能读取到新数据
-                                    await asyncio.sleep(0.1)
-                            except Exception as e:
-                                logger.error(f"Failed to save feedback for run {run_id}: {e}")
-                                await ws_manager.send_event(
-                                    project_id,
-                                    {
-                                        "type": "error",
-                                        "data": {
-                                            "code": "WS_SAVE_ERROR",
-                                            "message": "保存反馈失败",
-                                        },
-                                    },
-                                )
-                                continue
+                                            await session.commit()
+                                except Exception as e:
+                                    logger.error(f"Failed to save feedback for run {run_id}: {e}")
                             await trigger_confirm_redis(run_id)
                 except WebSocketDisconnect:
                     logger.info(f"WebSocket disconnected for project {project_id}")

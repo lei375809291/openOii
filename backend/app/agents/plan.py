@@ -241,6 +241,8 @@ class PlanAgent(BaseAgent):
                 "story": ctx.project.story,
                 "style": ctx.project.style,
                 "status": ctx.project.status,
+                "creation_mode": getattr(ctx.project, "creation_mode", None),
+                "target_shot_count": getattr(ctx.project, "target_shot_count", None),
             },
             "mode": ctx.rerun_mode,
         }

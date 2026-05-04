@@ -10,9 +10,10 @@
 - **TypeScript strict mode** + `noUnusedLocals` + `noUnusedParameters`.
 - **Tailwind CSS v4** via `@import "tailwindcss"` in `app/styles/globals.css` (DaisyUI theme on top, "doodle" / "brutal" custom utility classes).
 - **`clsx`** for conditional class composition.
-- **`@heroicons/react`** for icons.
+- **`@heroicons/react`** for page-level icons (nav, settings).
+- **`SvgIcon`** (`components/ui/SvgIcon.tsx`) for canvas card and inline icons — 8 Lucide paths embedded as named `name` prop, zero external deps, `currentColor` + `size` prop. Add new icons by appending path to `LUCIDE_PATHS` in SvgIcon.tsx.
 - **`react-router-dom`** for routing.
-- **TanStack Query** for server state, **Zustand** for UI state.
+- **TanStack Query** for server state, **Zustand** for UI state (with `useShallow` for precise subscriptions + `devtools` middleware).
 
 ---
 
@@ -122,7 +123,9 @@ Buttons own their `loading` UI. Pages own their page-level `LoadingOverlay`. Don
 
 - Use utility classes directly. No CSS modules, no `styled-components`.
 - Theme tokens: `bg-primary`, `text-primary-content`, `bg-base-100`, `border-base-content/30`.
-- Project-specific utilities like `btn-doodle`, `shadow-brutal`, `shadow-brutal-sm`, `font-heading`, `touch-target` come from `globals.css`.
+- Comic/manga visual language: `halftone-bg` (light dots), `halftone-bg-dense` (dense dots), `card-comic` (CMYK offset shadow + thick border), `speech-bubble` / `speech-bubble-user` (dialog balloons with CSS triangles).
+- Project-specific utilities: `btn-doodle`, `shadow-brutal`, `shadow-brutal-sm`, `font-heading`, `font-comic`, `card-comic`, `halftone-bg` / `halftone-bg-accent` / `halftone-bg-dense`, `speech-bubble` / `speech-bubble-user`, `touch-target` come from `globals.css`.
+- **`@layer components` limitation**: Cannot use `@apply` with Tailwind `fontFamily` utilities (e.g., `font-comic`) inside `@layer components` blocks. Use direct CSS `font-family` declarations instead.
 - Use `clsx` for conditional classes; never string-concatenate Tailwind classes manually (purger may miss them).
 - Don't hardcode hex colors when a theme token exists.
 
@@ -133,7 +136,7 @@ Buttons own their `loading` UI. Pages own their page-level `LoadingOverlay`. Don
 
 ### Dark / light theme
 
-Theme is controlled by `app/stores/themeStore.ts` and toggled at the `<html>` element. Components should rely on theme tokens, not hardcoded `text-white` / `text-black`.
+Theme is controlled by `app/stores/themeStore.ts` and toggled at the `<html>` element. Components should rely on theme tokens, not hardcoded `text-white` / `text-black`. Dark mode uses a 5-level elevation system (`base-100` → `base-200` → `base-300` → `base-content/5` → `base-content/10`) with muted brand colors (`primary/80`, etc.) to prevent "glow" on dark backgrounds.
 
 ---
 
@@ -187,8 +190,11 @@ Use the project's DaisyUI-flavored `<dialog className="modal modal-open" open>` 
 | Direct DOM manipulation (`document.querySelector`, raw `addEventListener`) inside render | Use refs + `useEffect` cleanup; for canvas events use the existing `canvasEvents.ts` helper. |
 | `dangerouslySetInnerHTML` without sanitization | Don't accept HTML from users; if unavoidable, sanitize with DOMPurify. |
 | Calling axios / fetch directly | Go through `services/api.ts`. |
+| Storing base64 data URIs in project fields | Use `projectsApi.uploadReference(projectId, file)` → backend stores file in `static/references/` → returns URL path. DB only stores path, not base64. |
 | Reading from a Zustand store inside a deep ref / class | Use the hook in a function component. |
 | Passing entire store objects as props | Pass the slice you need or use a selector. |
+| Full-subscription Zustand calls (`useStore()` without selector) | Use `useStore(useShallow(s => ({ field1, field2 })))` for precise subscriptions. |
+| Using emoji characters (↻✎✓★▸💡🔊⚠️) as UI icons | Use `SvgIcon` component — emoji render inconsistently across OS, fail accessibility, can't be styled. |
 
 ---
 
@@ -208,6 +214,17 @@ Use the project's DaisyUI-flavored `<dialog className="modal modal-open" open>` 
 3. **Calling `onClick` synchronously and bypassing the Button's debounce** — the wrapper should `await onClick?.(e)`; if it returns `void`, that's still fine.
 4. **Importing `react`'s `useState` from a wildcard** — use named imports.
 5. **Using `useState(initial)` where `useRef` would do** — re-renders with no purpose.
+6. **Using emoji in JSX** — use `SvgIcon` component instead (see `LUCIDE_PATHS` in SvgIcon.tsx). Zero emoji in production code.
+7. **Full-subscription Zustand** — always use `useShallow` selector to prevent unnecessary re-renders on unrelated state changes.
+
+---
+
+## Panel Drawers
+
+- **AssetDrawer** (`components/panels/AssetDrawer.tsx`): Global asset library. Grid display, supports delete. API: `assetsApi` service.
+- **HistoryDrawer** (`components/panels/HistoryDrawer.tsx`): Conversation history per run. Groups by run, shows agent/user messages.
+- **ChatDrawer** (`components/chat/ChatDrawer.tsx`): Active conversation during generation. Opens automatically on `awaitingConfirm` in manual mode.
+- TopBar has icon+text tab buttons for 资产库 and 历史记录 that toggle these drawers.
 
 ---
 

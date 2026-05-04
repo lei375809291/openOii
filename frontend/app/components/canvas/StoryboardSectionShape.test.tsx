@@ -83,6 +83,7 @@ describe("StoryboardSectionShape", () => {
               approved_scene: null, approved_action: null, approved_expression: null,
               approved_lighting: null, approved_dialogue: null, approved_sfx: null,
               approved_character_ids: [],
+              seed: null,
             },
           ],
         })

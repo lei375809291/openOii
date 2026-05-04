@@ -1,6 +1,9 @@
 import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 import type {
   AgentMessage,
+  BlockingClip,
   Character,
   ProjectProviderSettings,
   RecoveryControlRead,
@@ -34,6 +37,15 @@ interface EditorState {
   projectVideoUrl: string | null;
   projectStatus: string | null;
   projectUpdatedAt: number | null;
+  projectTitle: string | null;
+  projectSummary: string | null;
+  projectStory: string | null;
+  projectStyle: string | null;
+  projectTargetShotCount: number | null;
+  projectCharacterHints: string[] | null;
+  projectCreationMode: string | null;
+  projectReferenceImages: string[] | null;
+  blockingClips: BlockingClip[] | null;
 
   setSelectedShot: (id: number | null) => void;
   setSelectedCharacter: (id: number | null) => void;
@@ -53,6 +65,15 @@ interface EditorState {
   setProjectVideoUrl: (url: string | null) => void;
   setProjectStatus: (status: string | null) => void;
   setProjectUpdatedAt: (timestamp: number) => void;
+  setProjectTitle: (title: string | null) => void;
+  setProjectSummary: (summary: string | null) => void;
+  setProjectStory: (story: string | null) => void;
+  setProjectStyle: (style: string | null) => void;
+  setProjectTargetShotCount: (count: number | null) => void;
+  setProjectCharacterHints: (hints: string[] | null) => void;
+  setProjectCreationMode: (mode: string | null) => void;
+  setProjectReferenceImages: (images: string[] | null) => void;
+  setBlockingClips: (clips: BlockingClip[] | null) => void;
   setAwaitingConfirm: (awaiting: boolean, agent?: string | null, runId?: number | null) => void;
   setCurrentRunId: (runId: number | null) => void;
   setCurrentRunProviderSnapshot: (snapshot: ProjectProviderSettings | null) => void;
@@ -90,60 +111,85 @@ const initialState = {
   projectVideoUrl: null,
   projectStatus: null,
   projectUpdatedAt: null,
+  projectTitle: null,
+  projectSummary: null,
+  projectStory: null,
+  projectStyle: null,
+  projectTargetShotCount: null,
+  projectCharacterHints: null,
+  projectCreationMode: null,
+  projectReferenceImages: null,
+  blockingClips: null,
   ...initialRunState,
 };
 
-export const useEditorStore = create<EditorState>((set) => ({
-  ...initialState,
+export const useEditorStore = create<EditorState>()(
+  devtools(
+    (set) => ({
+      ...initialState,
 
-  setSelectedShot: (id) => set({ selectedShotId: id }),
-  setSelectedCharacter: (id) => set({ selectedCharacterId: id }),
-  setHighlightedMessage: (index) => set({ highlightedMessageIndex: index }),
-  setGenerating: (isGenerating) => set({ isGenerating }),
-  setCurrentStage: (stage) => set({ currentStage: stage }),
-  setCurrentAgent: (agent) => set({ currentAgent: agent }),
-  setProgress: (progress) => set({ progress }),
-  addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
-  setMessages: (messages) => set({ messages }),
-  clearMessages: () => set({ messages: [], highlightedMessageIndex: null }),
-  setRecoveryControl: (control) => set({ recoveryControl: control }),
-  setRecoverySummary: (summary) => set({ recoverySummary: summary }),
-  setRecoveryGate: (gate) => set({ recoveryGate: gate }),
-  setCharacters: (characters) => set({ characters }),
-  setShots: (shots) => set({ shots }),
-  setProjectVideoUrl: (url) => set({ projectVideoUrl: url }),
-  setProjectStatus: (status) => set({ projectStatus: status }),
-  setProjectUpdatedAt: (timestamp) => set({ projectUpdatedAt: timestamp }),
-  setAwaitingConfirm: (awaiting, agent = null, runId) =>
-    set((state) => ({
-      awaitingConfirm: awaiting,
-      awaitingAgent: agent,
-      currentRunId: runId !== undefined ? runId : state.currentRunId
-    })),
-  setCurrentRunId: (runId) => set({ currentRunId: runId }),
-  setCurrentRunProviderSnapshot: (snapshot) => set({ currentRunProviderSnapshot: snapshot }),
-  setRunMode: (mode) => set({ runMode: mode }),
-  updateCharacter: (character) =>
-    set((state) => ({
-      characters: state.characters.some((c) => c.id === character.id)
-        ? state.characters.map((c) => (c.id === character.id ? character : c))
-        : [...state.characters, character],
-    })),
-  updateShot: (shot) =>
-    set((state) => ({
-      shots: state.shots.some((s) => s.id === shot.id)
-        ? state.shots.map((s) => (s.id === shot.id ? shot : s))
-        : [...state.shots, shot],
-    })),
-  removeCharacter: (characterId) =>
-    set((state) => ({
-      characters: state.characters.filter((c) => c.id !== characterId),
-    })),
-  removeShot: (shotId) =>
-    set((state) => ({
-      shots: state.shots.filter((s) => s.id !== shotId),
-    })),
-  resetRunState: () => set(initialRunState),
-  reset: () => set(initialState),
-}));
+      setSelectedShot: (id) => set({ selectedShotId: id }, false, "setSelectedShot"),
+      setSelectedCharacter: (id) => set({ selectedCharacterId: id }, false, "setSelectedCharacter"),
+      setHighlightedMessage: (index) => set({ highlightedMessageIndex: index }, false, "setHighlightedMessage"),
+      setGenerating: (isGenerating) => set({ isGenerating }, false, "setGenerating"),
+      setCurrentStage: (stage) => set({ currentStage: stage }, false, "setCurrentStage"),
+      setCurrentAgent: (agent) => set({ currentAgent: agent }, false, "setCurrentAgent"),
+      setProgress: (progress) => set({ progress }, false, "setProgress"),
+      addMessage: (message) =>
+        set((state) => ({ messages: [...state.messages, message] }), false, "addMessage"),
+      setMessages: (messages) => set({ messages }, false, "setMessages"),
+      clearMessages: () => set({ messages: [], highlightedMessageIndex: null }, false, "clearMessages"),
+      setRecoveryControl: (control) => set({ recoveryControl: control }, false, "setRecoveryControl"),
+      setRecoverySummary: (summary) => set({ recoverySummary: summary }, false, "setRecoverySummary"),
+      setRecoveryGate: (gate) => set({ recoveryGate: gate }, false, "setRecoveryGate"),
+      setCharacters: (characters) => set({ characters }, false, "setCharacters"),
+      setShots: (shots) => set({ shots }, false, "setShots"),
+      setProjectVideoUrl: (url) => set({ projectVideoUrl: url }, false, "setProjectVideoUrl"),
+      setProjectStatus: (status) => set({ projectStatus: status }, false, "setProjectStatus"),
+      setProjectUpdatedAt: (timestamp) => set({ projectUpdatedAt: timestamp }, false, "setProjectUpdatedAt"),
+      setProjectTitle: (title) => set({ projectTitle: title }, false, "setProjectTitle"),
+      setProjectSummary: (summary) => set({ projectSummary: summary }, false, "setProjectSummary"),
+      setProjectStory: (story) => set({ projectStory: story }, false, "setProjectStory"),
+      setProjectStyle: (style) => set({ projectStyle: style }, false, "setProjectStyle"),
+      setProjectTargetShotCount: (count) => set({ projectTargetShotCount: count }, false, "setProjectTargetShotCount"),
+      setProjectCharacterHints: (hints) => set({ projectCharacterHints: hints }, false, "setProjectCharacterHints"),
+      setProjectCreationMode: (mode) => set({ projectCreationMode: mode }, false, "setProjectCreationMode"),
+      setProjectReferenceImages: (images) => set({ projectReferenceImages: images }, false, "setProjectReferenceImages"),
+      setBlockingClips: (clips) => set({ blockingClips: clips }, false, "setBlockingClips"),
+      setAwaitingConfirm: (awaiting, agent = null, runId) =>
+        set((state) => ({
+          awaitingConfirm: awaiting,
+          awaitingAgent: agent,
+          currentRunId: runId !== undefined ? runId : state.currentRunId
+        }), false, "setAwaitingConfirm"),
+      setCurrentRunId: (runId) => set({ currentRunId: runId }, false, "setCurrentRunId"),
+      setCurrentRunProviderSnapshot: (snapshot) => set({ currentRunProviderSnapshot: snapshot }, false, "setCurrentRunProviderSnapshot"),
+      setRunMode: (mode) => set({ runMode: mode }, false, "setRunMode"),
+      updateCharacter: (character) =>
+        set((state) => ({
+          characters: state.characters.some((c) => c.id === character.id)
+            ? state.characters.map((c) => (c.id === character.id ? character : c))
+            : [...state.characters, character],
+        }), false, "updateCharacter"),
+      updateShot: (shot) =>
+        set((state) => ({
+          shots: state.shots.some((s) => s.id === shot.id)
+            ? state.shots.map((s) => (s.id === shot.id ? shot : s))
+            : [...state.shots, shot],
+        }), false, "updateShot"),
+      removeCharacter: (characterId) =>
+        set((state) => ({
+          characters: state.characters.filter((c) => c.id !== characterId),
+        }), false, "removeCharacter"),
+      removeShot: (shotId) =>
+        set((state) => ({
+          shots: state.shots.filter((s) => s.id !== shotId),
+        }), false, "removeShot"),
+      resetRunState: () => set(initialRunState, false, "resetRunState"),
+      reset: () => set(initialState, false, "reset"),
+    }),
+    { name: "EditorStore", enabled: import.meta.env.DEV }
+  )
+);
+
+export { useShallow };

@@ -104,6 +104,7 @@ These apply on top of the global agent defaults.
 
 - Tailwind utilities first; DaisyUI components for buttons/inputs that look standard.
 - Custom CSS lives in `app/styles/` (tokens, globals, doodle theme) — not next to components.
+- Google Fonts are loaded via `<link rel="stylesheet" media="print" onload="this.media='all'">` in `index.html` to avoid render-blocking. Never add `@import url(...)` for fonts in CSS files.
 - Theme switching uses the `data-theme` attribute (see `themeStore`).
 - Don't inline `style={{...}}` for layout. Use Tailwind classes; reserve inline styles for dynamic values that can't be expressed as utilities.
 

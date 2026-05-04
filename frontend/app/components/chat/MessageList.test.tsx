@@ -36,7 +36,7 @@ describe("MessageList", () => {
   it("renders separator role as divider", () => {
     const sep = { ...baseMsg, id: "sep1", role: "separator" as const, content: "---" };
     const { container } = render(<MessageList messages={[sep]} />);
-    expect(container.querySelector(".border-t-2")).toBeInTheDocument();
+    expect(container.querySelector("[class*='border-t']")).toBeInTheDocument();
   });
 
   it("renders handoff role as badge", () => {
@@ -45,10 +45,10 @@ describe("MessageList", () => {
     expect(screen.getByText("切换到编剧")).toBeInTheDocument();
   });
 
-  it("returns null for system info messages", () => {
+  it("filters out system info messages", () => {
     const sysInfo = { ...baseMsg, id: "s1", role: "info" as const, agent: "system" };
     const { container } = render(<MessageList messages={[sysInfo]} />);
-    expect(container.querySelector(".chat")).toBeNull();
+    expect(container.textContent).not.toContain("Hello world");
   });
 
   it("renders loading indicator for loading messages", () => {
@@ -57,8 +57,8 @@ describe("MessageList", () => {
     expect(screen.getByText("处理中")).toBeInTheDocument();
   });
 
-  it("renders agent badge with correct text", () => {
+  it("renders agent badge with localized name", () => {
     render(<MessageList messages={[baseMsg]} />);
-    expect(screen.getByText("plan")).toBeInTheDocument();
+    expect(screen.getByText("规划")).toBeInTheDocument();
   });
 });

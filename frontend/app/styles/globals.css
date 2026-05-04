@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap') layer(fonts);
 @import './tokens.css';
 
 @tailwind base;
@@ -6,104 +5,208 @@
 @tailwind utilities;
 
 @layer base {
- body {
-   @apply bg-base-100 text-base-content min-h-screen font-sans;
+  body {
+    @apply bg-base-100 text-base-content min-h-screen font-sans;
   }
 
- /* 主题切换平滑过渡 */
- * {
-   transition-property: background-color, border-color, color, fill, stroke;
-   transition-duration: 200ms;
-   transition-timing-function: ease-in-out;
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
- /* 排除动画元素的主题过渡 */
- *[class*="animate-"],
- *[class*="transition-"] {
-   transition-property: none;
+  :focus-visible {
+    outline: 2px solid oklch(var(--p));
+    outline-offset: 2px;
   }
 
- h1, h2, h3, h4, h5, h6 {
-   @apply font-heading;
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 
- /* Skip to Content 链接样式 */
- .sr-only {
-   position: absolute;
-   width: 1px;
-   height: 1px;
-   padding: 0;
-   margin: -1px;
-   overflow: hidden;
-   clip: rect(0, 0, 0, 0);
-   white-space: nowrap;
-   border-width: 0;
+  [data-theme], .btn, .card-doodle, .card-comic, .btn-doodle, .btn-comic, .input-doodle, a, nav, header, aside {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 200ms;
+    transition-timing-function: ease-in-out;
   }
 
- .sr-only:focus,
- .focus\:not-sr-only:focus {
-   position: static;
-   width: auto;
-   height: auto;
-   padding: inherit;
-   margin: inherit;
-   overflow: visible;
-   clip: auto;
-   white-space: normal;
+  * {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 200ms;
+    transition-timing-function: ease-in-out;
+  }
+
+  *[class*="animate-"],
+  *[class*="transition-"] {
+    transition-property: none;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .sr-only:focus,
+  .focus\:not-sr-only:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
   }
 }
 
 @layer components {
- /* 涂鸦风格卡片 */
- .card-doodle {
-   @apply bg-base-100 border-3 border-base-content/30 rounded-xl shadow-brutal transition-all duration-200;
+  .card-doodle {
+    @apply bg-base-100 border-3 border-base-content/30 rounded-xl transition-all duration-200;
+    box-shadow: 4px 4px 0px 0px oklch(var(--bc) / 0.3);
   }
- .card-doodle:hover {
-   @apply shadow-brutal-lg -translate-x-0.5 -translate-y-0.5;
-  }
-
- /* 涂鸦风格按钮 */
- .btn-doodle {
-   @apply border-3 border-base-content/30 rounded-lg shadow-brutal font-bold uppercase tracking-wide transition-all duration-150;
-  }
- .btn-doodle:hover:not(:disabled) {
-   @apply shadow-brutal-hover -translate-x-0.5 -translate-y-0.5;
-  }
- .btn-doodle:active:not(:disabled) {
-   @apply shadow-none translate-x-1 translate-y-1;
-  }
- .btn-doodle:disabled {
-   @apply cursor-not-allowed;
+  .card-doodle:hover {
+    @apply -translate-x-0.5 -translate-y-0.5;
+    box-shadow: 6px 6px 0px 0px oklch(var(--bc) / 0.3);
   }
 
- /* 涂鸦风格输入框 */
- .input-doodle {
-   @apply border-3 border-base-content/30 rounded-lg bg-base-100 outline-none focus:border-primary transition-colors;
+  .card-comic {
+    @apply bg-base-100 border-3 border-base-content/40 rounded-lg transition-all duration-150;
+    box-shadow: 4px 4px 0px 0px oklch(var(--cmyk-cyan) / 0.7), 7px 7px 0px 0px oklch(var(--cmyk-magenta) / 0.5);
+  }
+  .card-comic:hover {
+    @apply -translate-x-0.5 -translate-y-0.5;
+    box-shadow: 5px 5px 0px 0px oklch(var(--cmyk-cyan) / 0.8), 9px 9px 0px 0px oklch(var(--cmyk-magenta) / 0.6);
+  }
+  [data-theme="doodle-dark"] .card-comic:hover {
+    border-color: oklch(var(--bc) / 0.5);
+    box-shadow: 5px 5px 0px 0px oklch(var(--cmyk-cyan) / 0.7), 9px 9px 0px 0px oklch(var(--cmyk-magenta) / 0.5);
   }
 
- /* 手绘下划线效果 */
- .underline-sketch {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10'%3E%3Cpath d='M0 8 Q 25 2, 50 8 T 100 8' stroke='%23FFDE59' stroke-width='3' fill='none'/%3E%3C/svg%3E");
-    background-repeat: repeat-x;
-    background-position: bottom;
-    background-size: 100px 10px;
-    padding-bottom: 8px;
+  .btn-doodle {
+    @apply border-3 border-base-content/30 rounded-lg font-bold uppercase tracking-wide transition-all duration-150;
+    box-shadow: 4px 4px 0px 0px oklch(var(--bc) / 0.3);
+  }
+  .btn-doodle:hover:not(:disabled) {
+    @apply -translate-x-0.5 -translate-y-0.5;
+    box-shadow: 6px 6px 0px 0px oklch(var(--bc) / 0.3);
+  }
+  .btn-doodle:active:not(:disabled) {
+    @apply translate-x-1 translate-y-1;
+    box-shadow: none;
+  }
+  .btn-doodle:disabled {
+    @apply cursor-not-allowed;
   }
 
- /* 涂鸦装饰 - 星星 */
- .doodle-star::before {
-    content: "✦";
-   @apply absolute -top-2 -right-2 text-primary text-xl animate-pulse;
+  .btn-comic {
+    @apply border-3 border-base-content/40 rounded-lg font-bold tracking-wide transition-all duration-150;
+    box-shadow: 4px 4px 0px 0px oklch(var(--cmyk-cyan) / 0.7), 7px 7px 0px 0px oklch(var(--cmyk-magenta) / 0.5);
+  }
+  .btn-comic:hover:not(:disabled) {
+    @apply -translate-x-0.5 -translate-y-0.5;
+    box-shadow: 5px 5px 0px 0px oklch(var(--cmyk-cyan) / 0.8), 9px 9px 0px 0px oklch(var(--cmyk-magenta) / 0.6);
+  }
+  .btn-comic:active:not(:disabled) {
+    @apply translate-x-1 translate-y-1;
+    box-shadow: none;
   }
 
- /* 涂鸦装饰 - 圆圈 */
- .doodle-circle {
-   @apply relative;
+  .input-doodle {
+    @apply border-3 border-base-content/30 rounded-lg bg-base-100 outline-none focus:border-primary transition-colors;
   }
- .doodle-circle::after {
+
+  .halftone-bg {
+    background-image: radial-gradient(circle, oklch(var(--bc) / 0.08) 1.2px, transparent 1.2px);
+    background-size: 7px 7px;
+  }
+
+  .halftone-bg-accent {
+    background-image: radial-gradient(circle, oklch(var(--p) / 0.16) 1.2px, transparent 1.2px);
+    background-size: 7px 7px;
+  }
+
+  .halftone-bg-dense {
+    background-image: radial-gradient(circle, oklch(var(--bc) / 0.1) 1.4px, transparent 1.4px);
+    background-size: 5px 5px;
+  }
+
+  [data-theme="doodle-dark"] .halftone-bg {
+    background-image: radial-gradient(circle, oklch(var(--bc) / 0.2) 1.2px, transparent 1.2px);
+  }
+  [data-theme="doodle-dark"] .halftone-bg-dense {
+    background-image: radial-gradient(circle, oklch(var(--bc) / 0.25) 1.4px, transparent 1.4px);
+  }
+  [data-theme="doodle-dark"] .halftone-bg-accent {
+    background-image: radial-gradient(circle, oklch(var(--p) / 0.3) 1.2px, transparent 1.2px);
+  }
+
+  .speech-bubble {
+    @apply relative bg-base-300/50 rounded-xl px-3 py-2;
+    font-family: "Bangers", "Impact", sans-serif;
+  }
+  .speech-bubble::after {
     content: "";
-   @apply absolute -inset-2 border-2 border-dashed border-secondary rounded-full opacity-50;
+    @apply absolute -left-1.5 top-2.5;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-right: 6px solid oklch(var(--b3) / 0.5);
   }
+  [data-theme="doodle-dark"] .speech-bubble::after {
+    border-right: 6px solid oklch(var(--b3) / 0.7);
+  }
+
+  .speech-bubble-user {
+    @apply relative bg-primary/10 rounded-xl px-3 py-2;
+  }
+  .speech-bubble-user::after {
+    content: "";
+    @apply absolute -right-1.5 top-2.5;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid oklch(var(--p) / 0.1);
+  }
+  [data-theme="doodle-dark"] .speech-bubble-user::after {
+    border-left: 6px solid oklch(var(--p) / 0.3);
+  }
+
+  .underline-sketch {
+     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10'%3E%3Cpath d='M0 8 Q 25 2, 50 8 T 100 8' stroke='%23FFDE59' stroke-width='3' fill='none'/%3E%3C/svg%3E");
+     background-repeat: repeat-x;
+     background-position: bottom;
+     background-size: 100px 10px;
+     padding-bottom: 8px;
+   }
+
+  .doodle-star::before {
+     content: "✦";
+    @apply absolute -top-2 -right-2 text-primary text-xl animate-pulse;
+   }
+
+  .doodle-circle {
+    @apply relative;
+   }
+  .doodle-circle::after {
+    content: "";
+    @apply absolute -inset-2 border-2 border-dashed border-secondary rounded-full opacity-50;
+   }
 }
 
 @layer utilities {
@@ -129,11 +232,11 @@
     will-change: transform, opacity;
   }
 
- @keyframes bounce-in {
-    0% { transform: scale(0) rotate(-5deg); opacity: 0; }
-    60% { transform: scale(1.05) rotate(2deg); }
-    100% { transform: scale(1) rotate(0deg); opacity: 1; }
-  }
+  @keyframes bounce-in {
+     0% { transform: scale(0) rotate(-5deg); opacity: 0; }
+     60% { transform: scale(1.02) rotate(0.5deg); }
+     100% { transform: scale(1) rotate(0deg); opacity: 1; }
+   }
 
  /* 手绘描边动画 */
  .animate-draw-in {
@@ -264,7 +367,7 @@
   }
 }
 
-/* 减少动画偏好 */
+ /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
  .animate-wiggle,
  .animate-bounce-in,
@@ -275,6 +378,28 @@
  .animate-shimmer {
     animation: none;
   }
+
+ [data-theme],
+ .btn,
+ .card-doodle,
+ a,
+ nav,
+ input,
+ select,
+ textarea {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 键盘焦点指示器 */
+:focus-visible {
+  outline: 2px solid oklch(var(--p));
+  outline-offset: 2px;
+}
+
+.btn:focus-visible {
+  outline: 2px solid oklch(var(--p));
+  outline-offset: 2px;
 }
 
 /* ========== tldraw 无限画布样式覆盖 ========== */

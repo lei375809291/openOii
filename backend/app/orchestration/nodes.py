@@ -150,6 +150,31 @@ async def _manual_approval_node(
     message: str,
     next_stage: str,
 ) -> dict[str, Any]:
+    agent_ctx = runtime.context.agent_context
+    orchestrator = runtime.context.orchestrator
+
+    approval_progress = workflow_progress_for_stage(approval_stage)
+
+    await orchestrator._set_run(  # noqa: SLF001
+        agent_ctx.run,
+        current_agent=gate,
+        progress=approval_progress,
+    )
+    await orchestrator.ws.send_event(
+        agent_ctx.project.id,
+        {
+            "type": "run_progress",
+            "data": {
+                "run_id": agent_ctx.run.id,
+                "current_agent": gate,
+                "current_stage": approval_stage,
+                "stage": approval_stage,
+                "next_stage": next_stage,
+                "progress": approval_progress,
+            },
+        },
+    )
+
     if runtime.context.auto_mode:
         return _auto_approval_result(
             approval_stage=approval_stage,
@@ -193,6 +218,27 @@ async def render_approval_node(
 ) -> dict[str, Any]:
     agent_ctx = runtime.context.agent_context
     if _is_video_provider_invalid(_get_run_provider_snapshot(agent_ctx)):
+        orchestrator = runtime.context.orchestrator
+        approval_progress = workflow_progress_for_stage("render_approval")
+        await orchestrator._set_run(  # noqa: SLF001
+            agent_ctx.run,
+            current_agent="render",
+            progress=approval_progress,
+        )
+        await orchestrator.ws.send_event(
+            agent_ctx.project.id,
+            {
+                "type": "run_progress",
+                "data": {
+                    "run_id": agent_ctx.run.id,
+                    "current_agent": "render",
+                    "current_stage": "render_approval",
+                    "stage": "render_approval",
+                    "next_stage": "compose",
+                    "progress": approval_progress,
+                },
+            },
+        )
         return _auto_approval_result(
             approval_stage="render_approval",
             history_key="render",
@@ -288,9 +334,14 @@ def _normalize_resume_value(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     if isinstance(value, dict):
+        maybe_action = value.get("action")
         maybe_feedback = value.get("feedback")
-        if isinstance(maybe_feedback, str):
+        if isinstance(maybe_feedback, str) and maybe_feedback.strip():
             return maybe_feedback.strip()
+        if isinstance(maybe_action, str) and maybe_action == "approve":
+            return ""
+        if isinstance(maybe_action, str) and maybe_action == "reject":
+            return value.get("reason", "") if isinstance(value.get("reason"), str) else ""
         maybe_text = value.get("text")
         if isinstance(maybe_text, str):
             return maybe_text.strip()

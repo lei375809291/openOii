@@ -43,6 +43,8 @@ class AgentContext:
     video: VideoServiceProtocol
     user_feedback: str | None = None
     feedback_type: str | None = None  # "plan" | "render" | "compose"
+    entity_type: str | None = None  # "character" | "shot"
+    entity_id: int | None = None    # per-entity feedback target
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID
 

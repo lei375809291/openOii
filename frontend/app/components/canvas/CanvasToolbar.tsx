@@ -50,7 +50,7 @@ export const CanvasToolbar = track(function CanvasToolbar({
 
   return (
     <div
-      className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 p-1.5 rounded-xl bg-base-100/90 backdrop-blur-sm border-2 border-base-content/20 shadow-brutal text-base-content ${className || ""}`}
+      className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 p-1.5 rounded-xl bg-base-100 border-3 border-base-content/25 shadow-comic text-base-content ${className || ""}`}
     >
       {/* 选择工具 */}
       <div className="tooltip tooltip-top" data-tip="选择工具 (V)">

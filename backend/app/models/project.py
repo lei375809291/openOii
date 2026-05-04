@@ -23,6 +23,8 @@ class Project(SQLModel, table=True):
     video_provider_override: Optional[str] = None
     target_shot_count: Optional[int] = None
     character_hints: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
+    creation_mode: Optional[str] = None
+    reference_images: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -92,6 +94,7 @@ class Shot(SQLModel, table=True):
     lighting: Optional[str] = None
     dialogue: Optional[str] = None
     sfx: Optional[str] = None
+    seed: Optional[int] = None
     character_ids: list[int] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     approved_description: Optional[str] = None
     approved_prompt: Optional[str] = None

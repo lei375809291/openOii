@@ -637,7 +637,7 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(configApi.revealValue).toHaveBeenCalledWith('ANTHROPIC_API_KEY');
       expect(screen.getByDisplayValue('sk-revealed-value')).toBeInTheDocument();
-      expect(screen.getByText('⚠️ 真实值已显示，请注意保护隐私')).toBeInTheDocument();
+      expect(screen.getByText('真实值已显示，请注意保护隐私')).toBeInTheDocument();
     });
 
     const hideButton = screen.getByTitle('隐藏真实值');
@@ -645,7 +645,7 @@ describe('SettingsModal', () => {
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('sk-a******key')).toBeInTheDocument();
-      expect(screen.queryByText('⚠️ 真实值已显示，请注意保护隐私')).not.toBeInTheDocument();
+      expect(screen.queryByText('真实值已显示，请注意保护隐私')).not.toBeInTheDocument();
     });
   });
 

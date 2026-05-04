@@ -22,10 +22,11 @@ frontend/app/
 ├── vite-env.d.ts           # Vite type ambient
 │
 ├── components/             # Reusable UI building blocks
-│   ├── ui/                 # Generic primitives: Button, Card, Modal, Input, ConfirmModal, ErrorBoundary, ...
+│   ├── ui/                 # Generic primitives: Button, Card, Modal, Input, ConfirmModal, ErrorBoundary, SvgIcon, ...
 │   ├── canvas/             # Infinite canvas surface + section shapes
 │   ├── chat/               # Chat / orchestrator UI
-│   ├── layout/             # Page-level layout wrappers
+│   ├── layout/             # Page-level layout wrappers, TopBar with dropdown/drawer tabs
+│   ├── panels/             # Side drawers: AssetDrawer, HistoryDrawer
 │   ├── project/            # Project-detail composites
 │   ├── settings/           # SettingsModal + provider config UI
 │   └── toast/              # ToastContainer + Toast item
@@ -86,8 +87,9 @@ E2E tests live in `frontend/tests/e2e/` (configured via `frontend/playwright.con
 
 ### A Zustand store
 
-- One file per store under `app/stores/`. Naming: `<purpose>Store.ts` (e.g., `editorStore.ts`, `settingsStore.ts`, `sidebarStore.ts`, `themeStore.ts`, `toast.store.ts`).
+- One file per store under `app/stores/`. Naming: `<purpose>Store.ts` (e.g., `editorStore.ts`, `settingsStore.ts`, `themeStore.ts`, `toast.store.ts`).
 - Test file co-located: `<store>.test.ts` (see `editorStore.test.ts`).
+- **Deleted stores**: `sidebarStore.ts` (removed; project navigation moved to TopBar dropdown).
 
 ### A backend API call
 
@@ -158,6 +160,7 @@ If you add another globally-controlled overlay (e.g., a global confirm), follow 
 
 - Page wired into the router: `app/App.tsx` + `app/pages/ProjectPage.tsx`.
 - UI primitive with co-located test: `app/components/ui/Button.tsx` + `Button.test.tsx`.
+- Canvas inline icons: `app/components/ui/SvgIcon.tsx` (Lucide paths, zero deps).
 - Feature mutation: `app/features/projects/deleteProject.ts` + `deleteProject.test.ts`.
 - Cross-cutting hook: `app/hooks/useWebSocket.ts`.
 - Zustand store with tests: `app/stores/editorStore.ts` + `editorStore.test.ts`.

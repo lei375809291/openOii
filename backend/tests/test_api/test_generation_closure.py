@@ -92,7 +92,7 @@ class _StubOrchestrator:
         if exc is not None:
             raise exc
 
-    async def run_from_agent(self, *, project_id, run_id, request, agent_name, auto_mode) -> None:
+    async def run_from_agent(self, *, project_id, run_id, request, agent_name, auto_mode, feedback_type=None, entity_type=None, entity_id=None) -> None:
         self.run_from_agent_calls.append(
             {
                 "project_id": project_id,
@@ -100,6 +100,9 @@ class _StubOrchestrator:
                 "request": request,
                 "agent_name": agent_name,
                 "auto_mode": auto_mode,
+                "feedback_type": feedback_type,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
             }
         )
         exc = type(self).next_run_from_agent_exception
