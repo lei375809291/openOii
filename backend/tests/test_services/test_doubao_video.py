@@ -190,11 +190,28 @@ async def test_wait_for_completion_times_out(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_url_from_bytes_is_not_implemented():
+async def test_generate_url_from_bytes_too_large():
     svc = DoubaoVideoService(make_settings())
+    big = b"x" * (10 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="Image too large"):
+        await svc.generate_url_from_bytes(prompt="p", image_bytes=big)
 
-    with pytest.raises(NotImplementedError, match="requires image URL"):
-        await svc.generate_url_from_bytes(prompt="p", image_bytes=b"x")
+
+@pytest.mark.asyncio
+async def test_generate_url_from_bytes_creates_data_uri(monkeypatch):
+    svc = DoubaoVideoService(make_settings())
+    captured = {}
+
+    async def fake_generate_url(*, prompt, image_url, **kw):
+        captured["image_url"] = image_url
+        captured["prompt"] = prompt
+        return "https://video.example.com/out.mp4"
+
+    monkeypatch.setattr(svc, "generate_url", fake_generate_url)
+    result = await svc.generate_url_from_bytes(prompt="a cat running", image_bytes=b"\x89PNG")
+    assert result == "https://video.example.com/out.mp4"
+    assert captured["image_url"].startswith("data:image/png;base64,")
+    assert captured["prompt"] == "a cat running"
 
 
 @pytest.mark.asyncio

@@ -363,3 +363,111 @@ async def test_ws_projects_confirm_valid_run_saves_feedback_and_triggers_confirm
     await handler(fake_ws, 1)
 
     assert trigger_calls == [123]
+
+
+@pytest.mark.asyncio
+async def test_ws_projects_feedback_save_error_sends_ws_error(monkeypatch):
+    events = []
+
+    class FakeManager:
+        async def connect(self, project_id, websocket):
+            pass
+
+        async def disconnect(self, project_id, websocket):
+            pass
+
+        async def send_event(self, project_id, event):
+            events.append((project_id, event))
+
+    class FakeRun:
+        id = 123
+        project_id = 1
+
+    class FakeSessionCtx:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, model, run_id):
+            return FakeRun()
+
+        def add(self, obj):
+            pass
+
+        async def commit(self):
+            raise RuntimeError("db is gone")
+
+    class FakeAsyncSessionMaker:
+        def __call__(self):
+            return FakeSessionCtx()
+
+    monkeypatch.setattr(main_module, "ws_manager", FakeManager())
+    monkeypatch.setattr(main_module, "get_settings", lambda: SimpleNamespace(app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"))
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
+
+    fake_ws = _FakeWebSocket([
+        {"type": "confirm", "data": {"run_id": 123, "feedback": "ok"}},
+    ])
+
+    app = main_module.create_app()
+    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+
+    await handler(fake_ws, 1)
+
+    save_errors = [e for e in events if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_SAVE_ERROR"]
+    assert len(save_errors) >= 1
+
+
+@pytest.mark.asyncio
+async def test_ws_projects_message_exception_sends_error(monkeypatch):
+    events = []
+
+    class FakeManager:
+        async def connect(self, project_id, websocket):
+            pass
+
+        async def disconnect(self, project_id, websocket):
+            pass
+
+        async def send_event(self, project_id, event):
+            events.append((project_id, event))
+
+    class FakeSessionCtx:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeAsyncSessionMaker:
+        def __call__(self):
+            return FakeSessionCtx()
+
+    class BrokenWebSocket(_FakeWebSocket):
+        def __init__(self):
+            super().__init__([])
+            self._attempts = 0
+
+        async def receive_json(self):
+            self._attempts += 1
+            if self._attempts > 2:
+                raise WebSocketDisconnect(code=1000)
+            raise ValueError("bad json")
+
+    monkeypatch.setattr(main_module, "ws_manager", FakeManager())
+    monkeypatch.setattr(main_module, "get_settings", lambda: SimpleNamespace(app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"))
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
+
+    fake_ws = BrokenWebSocket()
+
+    app = main_module.create_app()
+    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+
+    await handler(fake_ws, 1)
+
+    msg_errors = [e for e in events if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_MESSAGE_ERROR"]
+    assert len(msg_errors) >= 1
