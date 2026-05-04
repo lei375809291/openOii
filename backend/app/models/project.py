@@ -84,6 +84,12 @@ class Shot(SQLModel, table=True):
     duration: Optional[float] = None
     camera: Optional[str] = None
     motion_note: Optional[str] = None
+    scene: Optional[str] = None
+    action: Optional[str] = None
+    expression: Optional[str] = None
+    lighting: Optional[str] = None
+    dialogue: Optional[str] = None
+    sfx: Optional[str] = None
     character_ids: list[int] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     approved_description: Optional[str] = None
     approved_prompt: Optional[str] = None
@@ -91,6 +97,12 @@ class Shot(SQLModel, table=True):
     approved_duration: Optional[float] = None
     approved_camera: Optional[str] = None
     approved_motion_note: Optional[str] = None
+    approved_scene: Optional[str] = None
+    approved_action: Optional[str] = None
+    approved_expression: Optional[str] = None
+    approved_lighting: Optional[str] = None
+    approved_dialogue: Optional[str] = None
+    approved_sfx: Optional[str] = None
     approved_character_ids: list[int] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
@@ -114,6 +126,12 @@ class Shot(SQLModel, table=True):
             and self.duration == self.approved_duration
             and self.camera == self.approved_camera
             and self.motion_note == self.approved_motion_note
+            and self.scene == self.approved_scene
+            and self.action == self.approved_action
+            and self.expression == self.approved_expression
+            and self.lighting == self.approved_lighting
+            and self.dialogue == self.approved_dialogue
+            and self.sfx == self.approved_sfx
             and list(self.character_ids) == list(self.approved_character_ids)
         ):
             return "approved"
@@ -126,6 +144,12 @@ class Shot(SQLModel, table=True):
         self.approved_duration = self.duration
         self.approved_camera = self.camera
         self.approved_motion_note = self.motion_note
+        self.approved_scene = self.scene
+        self.approved_action = self.action
+        self.approved_expression = self.expression
+        self.approved_lighting = self.lighting
+        self.approved_dialogue = self.dialogue
+        self.approved_sfx = self.sfx
         self.approved_character_ids = list(self.character_ids)
         self.approved_at = utcnow()
         self.approval_version = max(self.approval_version, 0) + 1

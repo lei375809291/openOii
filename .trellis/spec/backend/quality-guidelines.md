@@ -98,6 +98,7 @@ Use `SettingsDep` (from `app.api.deps`) inside routes. Inside `get_settings()`-a
 | Catching exception and re-raising as `HTTPException` from a service | Use `AppException` subclasses; let routes / global handler do HTTP. |
 | Hardcoded magic strings repeated in 3+ places | Lift to a constant or enum. |
 | Defining local `utcnow()` in any module | Use `from app.db.utils import utcnow` — single canonical source. |
+| Using LLM for deterministic routing decisions | Use `app.agents.review_rules` — rule-based validation/routing; reserve LLM calls for creative tasks only. |
 
 ---
 

@@ -6,28 +6,18 @@ from typing import Annotated, Any, Literal, TypedDict
 
 
 Phase2Stage = Literal[
-    "ideate",
-    "ideate_approval",
-    "script",
-    "script_approval",
-    "character",
-    "character_approval",
-    "storyboard",
-    "storyboard_approval",
-    "clip",
-    "clip_approval",
-    "merge",
+    "plan",
+    "plan_approval",
+    "render",
+    "render_approval",
+    "compose",
     "review",
 ]
 
-
 PRODUCTION_STAGE_SEQUENCE: tuple[str, ...] = (
-    "ideate",
-    "script",
-    "character",
-    "storyboard",
-    "clip",
-    "merge",
+    "plan",
+    "render",
+    "compose",
 )
 
 
@@ -69,5 +59,5 @@ class Phase2State(TypedDict, total=False):
 class Phase2RuntimeContext:
     orchestrator: Any
     agent_context: Any
-    start_stage: Phase2Stage = "ideate"
+    start_stage: Phase2Stage = "plan"
     auto_mode: bool = False

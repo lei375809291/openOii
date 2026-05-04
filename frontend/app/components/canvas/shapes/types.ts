@@ -29,6 +29,12 @@ export interface ShotReviewSnapshot {
   approved_duration: number | null;
   approved_camera: string | null;
   approved_motion_note: string | null;
+  approved_scene: string | null;
+  approved_action: string | null;
+  approved_expression: string | null;
+  approved_lighting: string | null;
+  approved_dialogue: string | null;
+  approved_sfx: string | null;
   approved_character_ids: number[];
 }
 

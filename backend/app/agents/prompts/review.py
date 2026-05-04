@@ -15,7 +15,7 @@ Context / 你会收到的上下文（可能不完整）
   - shots: [{id, order, description, prompt, image_prompt, image_url, video_url, duration}]
 
 Routing Rules / 路由规则（请遵循，但允许你根据具体反馈做更优选择）
-- 如果涉及剧情、台词、镜头文本/提示词（prompt）修改：start_agent = "scriptwriter"
+- 如果涉及剧情、台词、镜头文本/提示词（prompt）修改：start_agent = "plan"
 - 如果主要是某些角色的形象/外观不满意，需要重画角色图：start_agent = "character_artist"
 - 如果主要是某些分镜首帧画面构图/内容不满意，需要重画分镜图：start_agent = "storyboard_artist"
 - 如果主要是视频动作、镜头运动、时长、节奏、画面"动起来"的效果不满意：start_agent = "video_generator"

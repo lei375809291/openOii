@@ -133,14 +133,10 @@ class TestAgentIndex:
         return GenerationOrchestrator(settings=settings, ws=ws, session=None)
 
     def test_valid_agent_indices(self, orchestrator):
-        assert orchestrator._agent_index("onboarding") == 0
-        assert orchestrator._agent_index("director") == 1
-        assert orchestrator._agent_index("scriptwriter") == 2
-        assert orchestrator._agent_index("character_artist") == 3
-        assert orchestrator._agent_index("storyboard_artist") == 4
-        assert orchestrator._agent_index("video_generator") == 5
-        assert orchestrator._agent_index("video_merger") == 6
-        assert orchestrator._agent_index("review") == 7
+        assert orchestrator._agent_index("plan") == 0
+        assert orchestrator._agent_index("render") == 1
+        assert orchestrator._agent_index("compose") == 2
+        assert orchestrator._agent_index("review") == 3
 
     def test_invalid_agent_raises(self, orchestrator):
         with pytest.raises(ValueError, match="Unknown agent"):
@@ -149,9 +145,9 @@ class TestAgentIndex:
 
 def test_stage_helpers_and_state_building():
     assert _next_phase2_stage(None) is None
-    assert _next_phase2_stage("script") == "script_approval"
-    assert _resume_agent_for_stage(None) == "scriptwriter"
-    assert _resume_agent_for_stage("merge") == "video_merger"
+    assert _next_phase2_stage("plan") == "plan_approval"
+    assert _resume_agent_for_stage(None) == "plan"
+    assert _resume_agent_for_stage("compose") == "compose"
     assert _video_generation_skipped_in_result({"video_generation_skipped": 1}) is True
     assert _video_generation_skipped_in_result([1, 2]) is False
     orchestrator = GenerationOrchestrator(
@@ -164,9 +160,9 @@ def test_stage_helpers_and_state_building():
         ws=MockWsManager(),
         session=None,
     )
-    state = orchestrator._build_phase2_state(project_id=1, run_id=2, thread_id="t1", start_stage="script")
-    assert state["current_stage"] == "script"
-    assert state["route_stage"] == "script"
+    state = orchestrator._build_phase2_state(project_id=1, run_id=2, thread_id="t1", start_stage="plan")
+    assert state["current_stage"] == "plan"
+    assert state["route_stage"] == "plan"
 
 
 @pytest.mark.asyncio
@@ -366,7 +362,7 @@ async def test_cleanup_for_rerun_full_branch(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "scriptwriter", mode="full")
+    await orchestrator._cleanup_for_rerun(1, "plan", mode="full")
 
     assert ("shots", 1) in called
     assert ("chars", 1) in called
@@ -397,9 +393,9 @@ async def test_cleanup_for_rerun_incremental_branch(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "storyboard_artist", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "render", mode="incremental")
 
-    assert called == [("clear_shots", 1), ("clear_videos", 1)]
+    assert called == [("clear_chars", 1), ("clear_shots", 1), ("clear_videos", 1)]
     assert session.commits == 1
 
 
@@ -501,7 +497,7 @@ async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch)
         auto_mode=False,
     )
 
-    assert result == (True, "merge")
+    assert result == (True, "compose")
     assert project.status == "ready"
 
 
@@ -574,7 +570,7 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
         return {"configurable": {"thread_id": "t1"}}
 
     async def fake_invoke(**kwargs):
-        return False, "merge"
+        return False, "compose"
 
     monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
     monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
@@ -599,7 +595,7 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
     await orchestrator.resume_from_recovery(project_id=1, run_id=2)
 
     assert ws.events[0][1]["type"] == "run_started"
-    assert ws.events[0][1]["data"]["current_agent"] == "scriptwriter"
+    assert ws.events[0][1]["data"]["current_agent"] == "plan"
     assert ws.events[-1][1]["type"] == "run_completed"
 
 
@@ -621,7 +617,7 @@ async def test_run_from_agent_happy_path(monkeypatch):
         return None
 
     async def run_phase2_graph(**kwargs):
-        return False, "merge"
+        return False, "compose"
 
     async def set_run(run, **fields):
         return run
@@ -634,10 +630,10 @@ async def test_run_from_agent_happy_path(monkeypatch):
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop_async)
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop_async)
 
-    await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="scriptwriter")
+    await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="plan")
 
     assert ws.events[0][1]["type"] == "run_started"
-    assert ws.events[0][1]["data"]["current_agent"] == "scriptwriter"
+    assert ws.events[0][1]["data"]["current_agent"] == "plan"
     assert ws.events[-1][1]["type"] == "run_completed"
 
 
@@ -664,7 +660,7 @@ async def test_run_from_agent_review_branch(monkeypatch):
         return None
 
     async def run_phase2_graph(**kwargs):
-        return False, "merge"
+        return False, "compose"
 
     async def set_run(run, **fields):
         return run
@@ -685,8 +681,8 @@ async def test_run_from_agent_review_branch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_incremental_character_artist(monkeypatch):
-    """Incremental mode: character_artist clears character+shot images/videos."""
+async def test_cleanup_for_rerun_incremental_render(monkeypatch):
+    """Incremental mode: render clears character+shot images/videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
@@ -703,14 +699,14 @@ async def test_cleanup_for_rerun_incremental_character_artist(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "character_artist", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "render", mode="incremental")
 
     assert cleared == ["chars", "shots", "videos"]
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_incremental_video_generator(monkeypatch):
-    """Incremental mode: video_generator only clears shot videos."""
+async def test_cleanup_for_rerun_incremental_compose(monkeypatch):
+    """Incremental mode: compose only clears shot videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
@@ -723,23 +719,9 @@ async def test_cleanup_for_rerun_incremental_video_generator(monkeypatch):
 
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "video_generator", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "compose", mode="incremental")
 
     assert cleared == ["videos"]
-
-
-@pytest.mark.asyncio
-async def test_cleanup_for_rerun_incremental_video_merger(monkeypatch):
-    """Incremental mode: video_merger does nothing (pass branch)."""
-    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
-    orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
-        ws=MockWsManager(),
-        session=session,
-    )
-
-    await orchestrator._cleanup_for_rerun(1, "video_merger", mode="incremental")
-    assert session.commits == 1
 
 
 @pytest.mark.asyncio
@@ -757,8 +739,8 @@ async def test_cleanup_for_rerun_incremental_unknown_raises():
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_full_character_artist(monkeypatch):
-    """Full mode: character_artist clears character+shot images/videos."""
+async def test_cleanup_for_rerun_full_render(monkeypatch):
+    """Full mode: render clears character+shot images/videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
@@ -775,14 +757,15 @@ async def test_cleanup_for_rerun_full_character_artist(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "character_artist", mode="full")
+    await orchestrator._cleanup_for_rerun(1, "render", mode="full")
 
     assert cleared == ["chars", "shots", "videos"]
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_full_video_merger(monkeypatch):
-    """Full mode: video_merger does nothing (pass branch)."""
+async def test_cleanup_for_rerun_full_compose(monkeypatch):
+    """Full mode: compose only clears shot videos."""
+    cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
@@ -790,8 +773,13 @@ async def test_cleanup_for_rerun_full_video_merger(monkeypatch):
         session=session,
     )
 
-    await orchestrator._cleanup_for_rerun(1, "video_merger", mode="full")
-    assert session.commits == 1
+    async def clear_videos(pid): cleared.append("videos")
+
+    monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
+
+    await orchestrator._cleanup_for_rerun(1, "compose", mode="full")
+
+    assert cleared == ["videos"]
 
 
 @pytest.mark.asyncio
@@ -834,7 +822,7 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
     )
 
     assert not confirm_called
-    assert result == (False, "merge")
+    assert result == (False, "compose")
 
 
 @pytest.mark.asyncio
@@ -924,7 +912,7 @@ async def test_invoke_phase2_graph_non_dict_result_breaks(monkeypatch):
         auto_mode=False,
     )
 
-    assert result == (False, "merge")
+    assert result == (False, "compose")
 
 
 @pytest.mark.asyncio
@@ -961,7 +949,7 @@ async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
     ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None)
 
     async def fake_invoke(**kwargs):
-        return False, "merge"
+        return False, "compose"
 
     monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
     monkeypatch.setattr("app.agents.orchestrator.build_phase2_graph", lambda: SimpleNamespace(compile=lambda checkpointer=None: FakeCompiledGraph([{}])))

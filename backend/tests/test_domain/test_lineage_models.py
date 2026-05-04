@@ -44,7 +44,7 @@ async def test_lineage_models_persist_project_run_stage_and_artifact(test_sessio
     stage = Stage(
         project_id=project.id,
         run_id=run.id,
-        name="storyboard",
+        name="render",
         status="pending",
         version=1,
         source="langgraph",

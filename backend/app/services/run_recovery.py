@@ -23,28 +23,18 @@ from app.schemas.project import (
 
 
 PHASE2_STAGE_ORDER: tuple[str, ...] = (
-    "ideate",
-    "ideate_approval",
-    "script",
-    "script_approval",
-    "character",
-    "character_approval",
-    "storyboard",
-    "storyboard_approval",
-    "clip",
-    "clip_approval",
-    "merge",
+    "plan",
+    "plan_approval",
+    "render",
+    "render_approval",
+    "compose",
     "review",
 )
 
 AGENT_TO_STAGE: dict[str, str] = {
-    "onboarding": "ideate",
-    "director": "ideate",
-    "scriptwriter": "script",
-    "character_artist": "character",
-    "storyboard_artist": "storyboard",
-    "video_generator": "clip",
-    "video_merger": "merge",
+    "plan": "plan",
+    "render": "render",
+    "compose": "compose",
     "review": "review",
 }
 
@@ -188,7 +178,7 @@ def _infer_current_stage(run: AgentRun, snapshots: Sequence[Any]) -> str:
     if mapped_stage is not None:
         return mapped_stage
 
-    return "ideate"
+    return "plan"
 
 
 async def build_recovery_summary(

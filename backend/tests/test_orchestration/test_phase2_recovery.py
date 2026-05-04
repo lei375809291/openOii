@@ -77,15 +77,15 @@ async def test_resume_from_recovery_uses_run_provider_snapshot(test_session, tes
             project_id=run.project_id,
             run_id=run.id or 0,
             thread_id=f"agent-run-{run.id}",
-            current_stage="ideate",
-            next_stage="script",
+            current_stage="plan",
+            next_stage="render",
             preserved_stages=[],
             stage_history=[],
             resumable=True,
         )
 
     async def _noop_invoke_phase2_graph(self, **_kwargs):
-        return False, "merge"
+        return False, "compose"
 
     class _StubWs:
         async def send_event(self, _project_id: int, _event: dict) -> None:
@@ -154,15 +154,15 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
             project_id=run.project_id,
             run_id=run.id or 0,
             thread_id=f"agent-run-{run.id}",
-            current_stage="storyboard",
-            next_stage="clip",
+            current_stage="render",
+            next_stage="compose",
             preserved_stages=[],
             stage_history=[],
             resumable=True,
         )
 
     async def _fake_invoke_phase2_graph(self, **_kwargs):
-        return True, "merge"
+        return True, "compose"
 
     async def _noop_clear_confirm_event(_: int) -> None:
         return None
@@ -191,21 +191,21 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
 async def test_build_recovery_summary_keeps_approval_stage_as_resume_target(test_session, monkeypatch):
     project = await create_project(test_session)
     run = await create_run(test_session, project_id=project.id, status="failed")
-    run.current_agent = "scriptwriter"
+    run.current_agent = "plan"
     await test_session.commit()
 
     async def _fake_checkpoint_history(_database_url, _run):
         return [
             SimpleNamespace(
                 values={
-                    "current_stage": "script_approval",
-                    "stage_history": ["ideate", "script"],
+                    "current_stage": "plan_approval",
+                    "stage_history": ["plan"],
                 }
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"ideate": 2, "script": 1}
+        return {"plan": 2}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -216,9 +216,9 @@ async def test_build_recovery_summary_keeps_approval_stage_as_resume_target(test
         run=run,
     )
 
-    assert summary.current_stage == "script_approval"
-    assert summary.next_stage == "script_approval"
-    assert summary.preserved_stages == ["ideate", "script"]
+    assert summary.current_stage == "plan_approval"
+    assert summary.next_stage == "plan_approval"
+    assert summary.preserved_stages == ["plan"]
 
 
 @pytest.mark.asyncio
@@ -233,14 +233,14 @@ async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(
             SimpleNamespace(
                 values={
                     "current_stage": "review",
-                    "route_stage": "character",
-                    "stage_history": ["ideate", "script"],
+                    "route_stage": "render",
+                    "stage_history": ["plan"],
                 }
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"ideate": 2, "script": 1, "character": 0}
+        return {"plan": 2, "render": 0}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -252,30 +252,30 @@ async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(
     )
 
     assert summary.current_stage == "review"
-    assert summary.next_stage == "character"
-    assert summary.preserved_stages == ["ideate", "script"]
+    assert summary.next_stage == "render"
+    assert summary.preserved_stages == ["plan"]
 
 
 @pytest.mark.asyncio
 async def test_build_recovery_summary_promotes_pending_approval_checkpoint_to_current_stage(test_session, monkeypatch):
     project = await create_project(test_session)
     run = await create_run(test_session, project_id=project.id, status="running")
-    run.current_agent = "director"
+    run.current_agent = "plan"
     await test_session.commit()
 
     async def _fake_checkpoint_history(_database_url, _run):
         return [
             SimpleNamespace(
                 values={
-                    "current_stage": "ideate",
-                    "stage_history": ["ideate"],
+                    "current_stage": "plan",
+                    "stage_history": ["plan"],
                 },
-                next=("ideate_approval",),
+                next=("plan_approval",),
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"ideate": 2}
+        return {"plan": 2}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -286,6 +286,6 @@ async def test_build_recovery_summary_promotes_pending_approval_checkpoint_to_cu
         run=run,
     )
 
-    assert summary.current_stage == "ideate_approval"
-    assert summary.next_stage == "ideate_approval"
-    assert summary.preserved_stages == ["ideate"]
+    assert summary.current_stage == "plan_approval"
+    assert summary.next_stage == "plan_approval"
+    assert summary.preserved_stages == ["plan"]

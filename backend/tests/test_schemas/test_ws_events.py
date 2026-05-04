@@ -33,18 +33,22 @@ CHARACTER_DATA = {
 SHOT_DATA = {
     "id": 1, "project_id": 1, "order": 1, "shot_order": 1, "description": "Opening",
     "prompt": "A scene", "image_prompt": "A scene", "image_url": None, "video_url": None,
-    "duration": 3.0, "camera": "medium", "motion_note": "pan left", "character_ids": [],
+    "duration": 3.0, "camera": "medium", "motion_note": "pan left",
+    "scene": None, "action": None, "expression": None, "lighting": None, "dialogue": None, "sfx": None,
+    "character_ids": [],
     "approval_state": "draft", "approval_version": 0, "approved_at": None,
     "approved_description": None, "approved_prompt": None, "approved_image_prompt": None,
     "approved_duration": None, "approved_camera": None, "approved_motion_note": None,
+    "approved_scene": None, "approved_action": None, "approved_expression": None,
+    "approved_lighting": None, "approved_dialogue": None, "approved_sfx": None,
     "approved_character_ids": [],
     "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T00:00:00Z",
 }
 
 RECOVERY_SUMMARY_DATA = {
-    "project_id": 1, "run_id": 1, "thread_id": "t1", "current_stage": "script",
-    "active_run": {"id": 1, "status": "running", "current_agent": "director", "current_stage": "script", "progress": 0.5, "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T00:00:00Z"},
-    "preserved_stages": ["ideate"], "next_stage": "character", "completed_stages": ["ideate"],
+    "project_id": 1, "run_id": 1, "thread_id": "t1", "current_stage": "plan",
+    "active_run": {"id": 1, "status": "running", "current_agent": "plan", "current_stage": "plan", "progress": 0.5, "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T00:00:00Z"},
+    "preserved_stages": ["plan"], "next_stage": "render", "completed_stages": ["plan"],
 }
 
 
@@ -65,14 +69,14 @@ class TestRunStartedEventData:
             "run_id": 1,
             "project_id": 10,
             "provider_snapshot": {"text": "openai"},
-            "current_stage": "ideate",
-            "stage": "ideate",
-            "next_stage": "script",
+            "current_stage": "plan",
+            "stage": "plan",
+            "next_stage": "render",
             "progress": 0.1,
-            "current_agent": "scriptwriter",
+            "current_agent": "plan",
         })
         assert d.run_id == 1
-        assert d.current_agent == "scriptwriter"
+        assert d.current_agent == "plan"
 
     def test_minimal(self):
         d = RunStartedEventData.model_validate({"run_id": 5})
@@ -83,10 +87,10 @@ class TestRunStartedEventData:
         d = RunStartedEventData.model_validate({
             "run_id": 1,
             "recovery_summary": RECOVERY_SUMMARY_DATA,
-            "preserved_stages": ["ideate"],
+            "preserved_stages": ["plan"],
         })
         assert d.recovery_summary is not None
-        assert d.preserved_stages == ["ideate"]
+        assert d.preserved_stages == ["plan"]
 
     def test_recovery_summary_optional(self):
         d = RunStartedEventData.model_validate({"run_id": 1})
@@ -97,8 +101,8 @@ class TestRunStartedEventData:
 class TestRunProgressEventData:
     def test_valid(self):
         d = RunProgressEventData.model_validate({
-            "run_id": 1, "progress": 0.5, "current_agent": "director",
-            "current_stage": "script", "stage": "script",
+            "run_id": 1, "progress": 0.5, "current_agent": "plan",
+            "current_stage": "render", "stage": "render",
         })
         assert d.progress == 0.5
 
@@ -110,7 +114,7 @@ class TestRunProgressEventData:
 class TestRunMessageEventData:
     def test_with_summary(self):
         d = RunMessageEventData.model_validate({
-            "agent": "scriptwriter", "content": "hello", "summary": "brief",
+            "agent": "plan", "content": "hello", "summary": "brief",
             "isLoading": True,
         })
         assert d.summary == "brief"
@@ -125,9 +129,9 @@ class TestRunMessageEventData:
 class TestRunCompletedEventData:
     def test_with_current_stage(self):
         d = RunCompletedEventData.model_validate({
-            "run_id": 1, "current_stage": "merge", "message": "done",
+            "run_id": 1, "current_stage": "compose", "message": "done",
         })
-        assert d.current_stage == "merge"
+        assert d.current_stage == "compose"
 
     def test_minimal(self):
         d = RunCompletedEventData.model_validate({})
@@ -137,8 +141,8 @@ class TestRunCompletedEventData:
 class TestRunFailedEventData:
     def test_valid(self):
         d = RunFailedEventData.model_validate({
-            "run_id": 1, "error": "boom", "agent": "director",
-            "current_stage": "script",
+            "run_id": 1, "error": "boom", "agent": "plan",
+            "current_stage": "render",
         })
         assert d.error == "boom"
 
@@ -163,10 +167,10 @@ class TestRunCancelledEventData:
 class TestAgentHandoffEventData:
     def test_valid(self):
         d = AgentHandoffEventData.model_validate({
-            "from_agent": "scriptwriter", "to_agent": "director",
-            "message": "@scriptwriter invited @director",
+            "from_agent": "plan", "to_agent": "render",
+            "message": "@plan invited @render",
         })
-        assert d.from_agent == "scriptwriter"
+        assert d.from_agent == "plan"
 
     def test_message_optional(self):
         d = AgentHandoffEventData.model_validate({
@@ -179,14 +183,14 @@ class TestDataClearedEventData:
     def test_with_cleared_types(self):
         d = DataClearedEventData.model_validate({
             "cleared_types": ["characters", "shots"],
-            "start_agent": "scriptwriter", "mode": "full",
+            "start_agent": "plan", "mode": "full",
         })
         assert d.cleared_types == ["characters", "shots"]
-        assert d.start_agent == "scriptwriter"
+        assert d.start_agent == "plan"
 
     def test_cleared_types_default_empty(self):
         d = DataClearedEventData.model_validate({
-            "start_agent": "character_artist", "mode": "incremental",
+            "start_agent": "render", "mode": "incremental",
         })
         assert d.cleared_types == []
 

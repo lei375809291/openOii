@@ -26,7 +26,7 @@ async def run_agent_plan(
     settings: Settings,
     ws: ConnectionManager,
     target_ids: TargetIds | None = None,
-    default_final_stage: str = "ideate",
+    default_final_stage: str = "plan",
 ) -> None:
     try:
         async with async_session_maker() as session:

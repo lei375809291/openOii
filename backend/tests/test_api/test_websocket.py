@@ -51,8 +51,8 @@ async def test_websocket_manager_enriches_recovery_payloads():
             "data": {
                 "run_id": 7,
                 "project_id": 1,
-                "agent": "scriptwriter",
-                "gate": "scriptwriter",
+                "agent": "plan",
+                "gate": "plan",
                 "current_stage": "script",
                 "stage": "script",
                 "next_stage": "character",
@@ -168,7 +168,7 @@ def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_clien
                 type("Run", (), {
                     "id": run_id,
                     "project_id": project_id,
-                    "current_agent": "storyboard_artist",
+                    "current_agent": "render",
                     "progress": 0.65,
                 })()
             ]
@@ -199,7 +199,7 @@ def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_clien
     assert connected["type"] == "connected"
     assert replayed["type"] == "run_progress"
     assert replayed["data"]["run_id"] == run_id
-    assert replayed["data"]["current_agent"] == "storyboard_artist"
+    assert replayed["data"]["current_agent"] == "render"
     assert replayed["data"]["progress"] == 0.65
 
 

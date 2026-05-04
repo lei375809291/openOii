@@ -8,25 +8,18 @@ from typing import Annotated, get_args, get_origin, get_type_hints
 import pytest
 
 from app.config import Settings
-from app.models.run import Run
 from app.agents.orchestrator import GenerationOrchestrator
-from app.orchestration.nodes import _normalize_resume_value
 from app.orchestration.nodes import (
-    clip_approval_node,
-    review_node,
-    route_after_review,
-    route_after_storyboard_approval,
-    route_from_start,
-    storyboard_approval_node,
-)
-from app.orchestration.nodes import (
+    _normalize_resume_value,
     _auto_approval_result,
     _approval_result,
     _manual_approval_node,
-    route_after_character_approval,
-    route_after_clip_approval,
-    route_after_ideate_approval,
-    route_after_script_approval,
+    render_approval_node,
+    review_node,
+    route_after_plan_approval,
+    route_after_render_approval,
+    route_after_review,
+    route_from_start,
 )
 
 
@@ -58,6 +51,7 @@ def test_phase2_state_contract_uses_thread_id_and_stage_history_reducer() -> Non
 
 def test_phase2_runtime_config_uses_persisted_run_thread_id() -> None:
     from app.orchestration.runtime import build_graph_config
+    from app.models.run import Run
 
     run = Run(project_id=7, thread_id="thread-7")
 
@@ -65,35 +59,32 @@ def test_phase2_runtime_config_uses_persisted_run_thread_id() -> None:
 
 
 def test_route_helpers_fall_back_to_expected_stages() -> None:
-    assert route_after_ideate_approval({}) == "script"
-    assert route_after_script_approval({}) == "character"
-    assert route_after_character_approval({}) == "storyboard"
-    assert route_after_storyboard_approval({}) == "clip"
-    assert route_after_clip_approval({}) == "merge"
-    assert route_after_review({}) == "script"
-    assert route_from_start({}) == "ideate"
+    assert route_after_plan_approval({}) == "render"
+    assert route_after_render_approval({}) == "compose"
+    assert route_after_review({}) == "plan"
+    assert route_from_start({}) == "plan"
 
 
 def test_approval_result_helpers_set_review_routing() -> None:
     approved = _approval_result(
-        approval_stage="script_approval",
-        history_key="script",
-        next_stage="character",
+        approval_stage="plan_approval",
+        history_key="plan",
+        next_stage="render",
         feedback="",
     )
     revised = _approval_result(
-        approval_stage="script_approval",
-        history_key="script",
-        next_stage="character",
+        approval_stage="plan_approval",
+        history_key="plan",
+        next_stage="render",
         feedback="needs work",
     )
     auto = _auto_approval_result(
-        approval_stage="script_approval",
-        history_key="script",
-        next_stage="character",
+        approval_stage="plan_approval",
+        history_key="plan",
+        next_stage="render",
     )
 
-    assert approved["route_stage"] == "character"
+    assert approved["route_stage"] == "render"
     assert approved["review_requested"] is False
     assert revised["route_stage"] == "review"
     assert revised["review_requested"] is True
@@ -106,14 +97,14 @@ async def test_manual_approval_node_auto_mode_short_circuits() -> None:
 
     result = await _manual_approval_node(
         runtime,
-        approval_stage="script_approval",
-        history_key="script",
-        gate="scriptwriter",
+        approval_stage="plan_approval",
+        history_key="plan",
+        gate="plan",
         message="msg",
-        next_stage="character",
+        next_stage="render",
     )
 
-    assert result["route_stage"] == "character"
+    assert result["route_stage"] == "render"
     assert result["review_requested"] is False
 
 
@@ -125,11 +116,11 @@ async def test_manual_approval_node_normalizes_interrupt_resume(monkeypatch) -> 
 
     result = await _manual_approval_node(
         runtime,
-        approval_stage="script_approval",
-        history_key="script",
-        gate="scriptwriter",
+        approval_stage="plan_approval",
+        history_key="plan",
+        gate="plan",
         message="msg",
-        next_stage="character",
+        next_stage="render",
     )
 
     assert result["approval_feedback"] == "ok"
@@ -144,11 +135,11 @@ async def test_manual_approval_node_routes_to_review_when_feedback_present(monke
 
     result = await _manual_approval_node(
         runtime,
-        approval_stage="script_approval",
-        history_key="script",
-        gate="scriptwriter",
+        approval_stage="plan_approval",
+        history_key="plan",
+        gate="plan",
         message="msg",
-        next_stage="character",
+        next_stage="render",
     )
 
     assert result["review_requested"] is True
@@ -184,13 +175,9 @@ class _Orchestrator:
     def __init__(self, executed: list[str]) -> None:
         self.ws = _Ws()
         self.agents = [
-            _NoopAgent("onboarding", executed),
-            _NoopAgent("director", executed),
-            _NoopAgent("scriptwriter", executed),
-            _NoopAgent("character_artist", executed),
-            _NoopAgent("storyboard_artist", executed),
-            _NoopAgent("video_generator", executed),
-            _NoopAgent("video_merger", executed),
+            _NoopAgent("plan", executed),
+            _NoopAgent("render", executed),
+            _NoopAgent("compose", executed),
             _NoopAgent("review", executed),
         ]
 
@@ -226,11 +213,8 @@ def _initial_state(start_stage: str) -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("start_stage", "expected_agents", "expected_gate"),
     [
-        ("ideate", ["onboarding", "director"], "director"),
-        ("script", ["scriptwriter"], "scriptwriter"),
-        ("character", ["character_artist"], "character_artist"),
-        ("storyboard", ["storyboard_artist"], "storyboard_artist"),
-        ("clip", ["video_generator"], "video_generator"),
+        ("plan", ["plan"], "plan"),
+        ("render", ["render"], "render"),
     ],
 )
 async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
@@ -242,22 +226,13 @@ async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
     from app.orchestration.graph import build_phase2_graph
     from app.orchestration.runtime import build_phase2_runtime_context
 
-    if start_stage == "storyboard":
-        async def _allow_clip_generation(*_args: Any, **_kwargs: Any) -> bool:
-            return True
-
-        monkeypatch.setattr(
-            "app.orchestration.nodes.can_enter_clip_generation",
-            _allow_clip_generation,
-        )
-
     executed: list[str] = []
     orchestrator = _Orchestrator(executed)
     runtime_context = build_phase2_runtime_context(
         orchestrator=orchestrator,
         agent_context=SimpleNamespace(
             project=SimpleNamespace(id=1),
-            run=SimpleNamespace(id=1, resource_type=None, resource_id=None),
+            run=SimpleNamespace(id=1, resource_type=None, resource_id=None, provider_snapshot={}),
             session=None,
             target_ids=None,
         ),
@@ -280,7 +255,37 @@ async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
 
 
 @pytest.mark.asyncio
-async def test_phase2_graph_auto_skips_clip_merge_when_video_provider_invalid() -> None:
+async def test_phase2_graph_compose_skips_to_end_without_interrupt() -> None:
+    from app.orchestration.graph import build_phase2_graph
+    from app.orchestration.runtime import build_phase2_runtime_context
+
+    executed: list[str] = []
+    orchestrator = _Orchestrator(executed)
+    runtime_context = build_phase2_runtime_context(
+        orchestrator=orchestrator,
+        agent_context=SimpleNamespace(
+            project=SimpleNamespace(id=1),
+            run=SimpleNamespace(id=1, resource_type=None, resource_id=None, provider_snapshot={}),
+            session=None,
+            target_ids=None,
+        ),
+        start_stage="compose",  # type: ignore[arg-type]
+        auto_mode=False,
+    )
+
+    compiled = build_phase2_graph().compile()
+    result = await compiled.ainvoke(
+        _initial_state("compose"),
+        {"configurable": {"thread_id": "thread-compose-end"}},
+        context=runtime_context,
+    )
+
+    assert executed == ["compose"]
+    assert result.get("__interrupt__") is None or len(result.get("__interrupt__", [])) == 0
+
+
+@pytest.mark.asyncio
+async def test_phase2_graph_auto_skips_compose_when_video_provider_invalid() -> None:
     from app.orchestration.graph import build_phase2_graph
     from app.orchestration.runtime import build_phase2_runtime_context
 
@@ -299,21 +304,19 @@ async def test_phase2_graph_auto_skips_clip_merge_when_video_provider_invalid() 
             session=None,
             target_ids=None,
         ),
-        start_stage="storyboard",  # type: ignore[arg-type]
+        start_stage="render",  # type: ignore[arg-type]
         auto_mode=False,
     )
 
     compiled = build_phase2_graph().compile()
     result = await compiled.ainvoke(
-        _initial_state("storyboard"),
-        {"configurable": {"thread_id": "thread-storyboard-no-video"}},
+        _initial_state("render"),
+        {"configurable": {"thread_id": "thread-render-no-video"}},
         context=runtime_context,
     )
 
-    assert executed == ["storyboard_artist"]
-    interrupts = result.get("__interrupt__") or []
-    assert not interrupts, "video-provider invalid should auto-skip clip/merge without interrupt"
-    assert result.get("current_stage") == "merge"
+    assert executed == ["render"]
+    assert result.get("current_stage") == "compose"
 
 
 def test_normalize_resume_value_handles_supported_shapes() -> None:
@@ -325,29 +328,7 @@ def test_normalize_resume_value_handles_supported_shapes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_storyboard_approval_routes_to_review_when_clip_not_ready(monkeypatch):
-    orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
-        ws=MockWsManager(),
-        session=None,
-    )
-    project = SimpleNamespace(id=1)
-    run = SimpleNamespace(id=2, provider_snapshot={})
-    agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), target_ids=None)
-    runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False, orchestrator=orchestrator, agent_context=agent_ctx))
-    async def fake_clip_ready(*args, **kwargs):
-        return False
-
-    monkeypatch.setattr("app.orchestration.nodes.can_enter_clip_generation", fake_clip_ready)
-
-    state = await storyboard_approval_node({}, runtime)
-
-    assert state["review_requested"] is True
-    assert state["route_stage"] == "review"
-
-
-@pytest.mark.asyncio
-async def test_storyboard_approval_video_invalid_auto_routes_to_merge(monkeypatch):
+async def test_render_approval_auto_routes_to_compose_when_video_invalid() -> None:
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
         ws=MockWsManager(),
@@ -358,37 +339,22 @@ async def test_storyboard_approval_video_invalid_auto_routes_to_merge(monkeypatc
     agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), target_ids=None)
     runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False, orchestrator=orchestrator, agent_context=agent_ctx))
 
-    state = await storyboard_approval_node({}, runtime)
+    state = await render_approval_node({}, runtime)
 
-    assert state["route_stage"] == "merge"
-
-
-@pytest.mark.asyncio
-async def test_clip_approval_video_invalid_auto_routes_to_merge(monkeypatch):
-    orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
-        ws=MockWsManager(),
-        session=None,
-    )
-    project = SimpleNamespace(id=1)
-    run = SimpleNamespace(id=2, provider_snapshot={"video": {"valid": False}})
-    agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), target_ids=None)
-    runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False, orchestrator=orchestrator, agent_context=agent_ctx))
-
-    state = await clip_approval_node({}, runtime)
-
-    assert state["route_stage"] == "merge"
+    assert state["route_stage"] == "compose"
 
 
 def test_route_helpers_prefer_route_stage_and_fallbacks():
-    assert route_from_start({}) == "ideate"
-    assert route_after_review({}) == "script"
-    assert route_after_storyboard_approval({}) == "clip"
-    assert route_after_storyboard_approval({"review_requested": True}) == "review"
+    assert route_from_start({}) == "plan"
+    assert route_after_review({}) == "plan"
+    assert route_after_plan_approval({}) == "render"
+    assert route_after_plan_approval({"review_requested": True}) == "review"
+    assert route_after_render_approval({}) == "compose"
+    assert route_after_render_approval({"review_requested": True}) == "review"
 
 
 @pytest.mark.asyncio
-async def test_review_node_routes_to_scriptwriter_and_cleans_up(monkeypatch):
+async def test_review_node_routes_to_plan_and_cleans_up(monkeypatch):
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
         ws=MockWsManager(),
@@ -396,14 +362,14 @@ async def test_review_node_routes_to_scriptwriter_and_cleans_up(monkeypatch):
     )
     project = SimpleNamespace(id=1)
     run = SimpleNamespace(id=2)
-    agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), user_feedback="keep it short", rerun_mode=None, target_ids=None)
+    agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), user_feedback="keep it short", feedback_type="plan", rerun_mode=None, target_ids=None)
     runtime = SimpleNamespace(context=SimpleNamespace(orchestrator=orchestrator, agent_context=agent_ctx))
 
     async def review_run(ctx):
-        return {"start_agent": "scriptwriter", "mode": "incremental", "target_ids": [1, 2]}
+        return {"start_agent": "plan", "mode": "incremental", "target_ids": None}
 
     review_agent = SimpleNamespace(run=review_run)
-    orchestrator.agents = [SimpleNamespace(name="scriptwriter"), review_agent]
+    orchestrator.agents = [SimpleNamespace(name="plan"), review_agent]
     monkeypatch.setattr(orchestrator, "_agent_index", lambda name: 1 if name == "review" else 0)
 
     cleaned = {"called": False}
@@ -421,6 +387,6 @@ async def test_review_node_routes_to_scriptwriter_and_cleans_up(monkeypatch):
     state = await review_node({"approval_feedback": "need shorter"}, runtime)
 
     assert cleaned["called"] is True
-    assert cleaned["args"] == (1, "scriptwriter", "incremental")
-    assert state["route_stage"] == "script"
+    assert cleaned["args"] == (1, "plan", "incremental")
+    assert state["route_stage"] == "plan"
     assert state["route_mode"] == "incremental"

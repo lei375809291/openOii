@@ -119,24 +119,36 @@ class ShotRead(BaseModel):
     project_id: int
     order: int
     description: str
-    prompt: str | None
-    image_prompt: str | None
-    image_url: str | None
-    video_url: str | None
-    duration: float | None
-    camera: str | None
-    motion_note: str | None
+    prompt: str | None = None
+    image_prompt: str | None = None
+    image_url: str | None = None
+    video_url: str | None = None
+    duration: float | None = None
+    camera: str | None = None
+    motion_note: str | None = None
+    scene: str | None = None
+    action: str | None = None
+    expression: str | None = None
+    lighting: str | None = None
+    dialogue: str | None = None
+    sfx: str | None = None
     character_ids: list[int]
     approval_state: Literal["draft", "approved", "superseded"]
     approval_version: int
-    approved_at: datetime | None
-    approved_description: str | None
-    approved_prompt: str | None
-    approved_image_prompt: str | None
-    approved_duration: float | None
-    approved_camera: str | None
-    approved_motion_note: str | None
-    approved_character_ids: list[int]
+    approved_at: datetime | None = None
+    approved_description: str | None = None
+    approved_prompt: str | None = None
+    approved_image_prompt: str | None = None
+    approved_duration: float | None = None
+    approved_camera: str | None = None
+    approved_motion_note: str | None = None
+    approved_scene: str | None = None
+    approved_action: str | None = None
+    approved_expression: str | None = None
+    approved_lighting: str | None = None
+    approved_dialogue: str | None = None
+    approved_sfx: str | None = None
+    approved_character_ids: list[int] = Field(default_factory=list)
 
 
 class ShotUpdate(BaseModel):
@@ -147,6 +159,12 @@ class ShotUpdate(BaseModel):
     duration: float | None = Field(default=None, gt=0)
     camera: str | None = None
     motion_note: str | None = None
+    scene: str | None = None
+    action: str | None = None
+    expression: str | None = None
+    lighting: str | None = None
+    dialogue: str | None = None
+    sfx: str | None = None
     character_ids: list[int] | None = None
 
 

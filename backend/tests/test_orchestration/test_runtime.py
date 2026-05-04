@@ -52,7 +52,7 @@ def test_build_phase2_runtime_context_defaults():
     ctx = build_phase2_runtime_context(orchestrator="orch", agent_context="ac")
     assert ctx.orchestrator == "orch"
     assert ctx.agent_context == "ac"
-    assert ctx.start_stage == "ideate"
+    assert ctx.start_stage == "plan"
     assert ctx.auto_mode is False
 
 
@@ -81,7 +81,7 @@ async def test_build_stage_recovery_config_async():
 
     async def fake_history(config, limit=None):
         yield FakeSnapshot(next=("script",), config={"configurable": {"thread_id": "tid-1", "from": "snap"}})
-        yield FakeSnapshot(next=("ideate",), config={"configurable": {"thread_id": "tid-1"}})
+        yield FakeSnapshot(next=("plan",), config={"configurable": {"thread_id": "tid-1"}})
 
     graph = SimpleNamespace(aget_state_history=fake_history)
     cfg = await build_stage_recovery_config(graph, run, before_stage="script")

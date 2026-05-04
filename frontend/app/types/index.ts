@@ -76,6 +76,12 @@ export interface Shot {
   duration: number | null;
   camera: string | null;
   motion_note: string | null;
+  scene: string | null;
+  action: string | null;
+  expression: string | null;
+  lighting: string | null;
+  dialogue: string | null;
+  sfx: string | null;
   character_ids: number[];
   approval_state: ReviewState;
   approval_version: number;
@@ -86,6 +92,12 @@ export interface Shot {
   approved_duration: number | null;
   approved_camera: string | null;
   approved_motion_note: string | null;
+  approved_scene: string | null;
+  approved_action: string | null;
+  approved_expression: string | null;
+  approved_lighting: string | null;
+  approved_dialogue: string | null;
+  approved_sfx: string | null;
   approved_character_ids: number[];
 }
 
@@ -105,6 +117,12 @@ export interface ShotUpdatePayload {
   duration?: number | null;
   camera?: string | null;
   motion_note?: string | null;
+  scene?: string | null;
+  action?: string | null;
+  expression?: string | null;
+  lighting?: string | null;
+  dialogue?: string | null;
+  sfx?: string | null;
   character_ids?: number[] | null;
 }
 

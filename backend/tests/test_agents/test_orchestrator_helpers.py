@@ -33,27 +33,23 @@ from tests.factories import create_project, create_run
 
 class TestPureHelpers:
     def test_next_phase2_stage_known(self):
-        assert _next_phase2_stage("ideate") == "ideate_approval"
-        assert _next_phase2_stage("ideate_approval") == "script"
-        assert _next_phase2_stage("script") == "script_approval"
+        assert _next_phase2_stage("plan") == "plan_approval"
+        assert _next_phase2_stage("plan_approval") == "render"
+        assert _next_phase2_stage("render") == "render_approval"
 
     def test_next_phase2_stage_unknown_returns_none(self):
         assert _next_phase2_stage("not-a-stage") is None
         assert _next_phase2_stage(None) is None
 
     def test_resume_agent_for_stage_known(self):
-        assert _resume_agent_for_stage("ideate") == "scriptwriter"
-        assert _resume_agent_for_stage("script") == "scriptwriter"
-        assert _resume_agent_for_stage("character") == "character_artist"
-        assert _resume_agent_for_stage("storyboard") == "storyboard_artist"
-        assert _resume_agent_for_stage("clip") == "video_generator"
-        assert _resume_agent_for_stage("merge") == "video_merger"
+        assert _resume_agent_for_stage("plan") == "plan"
+        assert _resume_agent_for_stage("render") == "render"
+        assert _resume_agent_for_stage("compose") == "compose"
 
     def test_resume_agent_for_unknown_stage_falls_back(self):
-        # falls back to "scriptwriter" for unknown / non-string
-        assert _resume_agent_for_stage("unknown") == "scriptwriter"
-        assert _resume_agent_for_stage(None) == "scriptwriter"
-        assert _resume_agent_for_stage(123) == "scriptwriter"
+        assert _resume_agent_for_stage("unknown") == "plan"
+        assert _resume_agent_for_stage(None) == "plan"
+        assert _resume_agent_for_stage(123) == "plan"
 
     def test_video_generation_skipped_in_result_dict(self):
         assert _video_generation_skipped_in_result({"video_generation_skipped": True}) is True
@@ -290,14 +286,14 @@ async def orch_with_session(test_session, test_settings_minimal, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_onboarding_deletes_all(test_session, orch_with_session):
+async def test_cleanup_full_mode_plan_deletes_all(test_session, orch_with_session):
     orch, ws = orch_with_session
     project = await create_project(test_session)
     test_session.add(Character(project_id=project.id, name="A", description="desc"))
     test_session.add(Shot(project_id=project.id, order=0, description="s0"))
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "onboarding", mode="full")
+    await orch._cleanup_for_rerun(project.id, "plan", mode="full")
 
     chars = (await test_session.execute(__import__("sqlalchemy").select(Character))).scalars().all()
     shots = (await test_session.execute(__import__("sqlalchemy").select(Shot))).scalars().all()
@@ -308,7 +304,7 @@ async def test_cleanup_full_mode_onboarding_deletes_all(test_session, orch_with_
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_character_artist_clears_images(
+async def test_cleanup_full_mode_render_clears_images(
     test_session, orch_with_session, monkeypatch
 ):
     orch, ws = orch_with_session
@@ -319,7 +315,7 @@ async def test_cleanup_full_mode_character_artist_clears_images(
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "character_artist", mode="full")
+    await orch._cleanup_for_rerun(project.id, "render", mode="full")
 
     await test_session.refresh(char)
     await test_session.refresh(shot)
@@ -331,14 +327,14 @@ async def test_cleanup_full_mode_character_artist_clears_images(
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_storyboard_clears_shot_assets(test_session, orch_with_session):
+async def test_cleanup_full_mode_render_clears_shot_assets(test_session, orch_with_session):
     orch, _ws = orch_with_session
     project = await create_project(test_session)
     shot = Shot(project_id=project.id, order=0, description="s", image_url="i", video_url="v")
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "storyboard_artist", mode="full")
+    await orch._cleanup_for_rerun(project.id, "render", mode="full")
 
     await test_session.refresh(shot)
     assert shot.image_url is None
@@ -346,33 +342,18 @@ async def test_cleanup_full_mode_storyboard_clears_shot_assets(test_session, orc
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_video_generator_clears_only_video(test_session, orch_with_session):
+async def test_cleanup_full_mode_compose_clears_only_video(test_session, orch_with_session):
     orch, _ws = orch_with_session
     project = await create_project(test_session)
     shot = Shot(project_id=project.id, order=0, description="s", image_url="keep", video_url="v")
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "video_generator", mode="full")
+    await orch._cleanup_for_rerun(project.id, "compose", mode="full")
 
     await test_session.refresh(shot)
     assert shot.image_url == "keep"
     assert shot.video_url is None
-
-
-@pytest.mark.asyncio
-async def test_cleanup_full_mode_video_merger_noop(test_session, orch_with_session):
-    orch, _ws = orch_with_session
-    project = await create_project(test_session)
-    shot = Shot(project_id=project.id, order=0, description="s", image_url="i", video_url="v")
-    test_session.add(shot)
-    await test_session.commit()
-
-    await orch._cleanup_for_rerun(project.id, "video_merger", mode="full")
-
-    await test_session.refresh(shot)
-    assert shot.image_url == "i"  # unchanged
-    assert shot.video_url == "v"
 
 
 @pytest.mark.asyncio
@@ -392,7 +373,7 @@ async def test_cleanup_incremental_mode_unknown_agent_raises(test_session, orch_
 
 
 @pytest.mark.asyncio
-async def test_cleanup_incremental_mode_scriptwriter_clears_assets(
+async def test_cleanup_incremental_mode_plan_clears_assets(
     test_session, orch_with_session
 ):
     orch, ws = orch_with_session
@@ -403,7 +384,7 @@ async def test_cleanup_incremental_mode_scriptwriter_clears_assets(
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "scriptwriter", mode="incremental")
+    await orch._cleanup_for_rerun(project.id, "plan", mode="incremental")
 
     await test_session.refresh(char)
     await test_session.refresh(shot)
@@ -420,18 +401,18 @@ async def test_cleanup_incremental_mode_scriptwriter_clears_assets(
 
 
 @pytest.mark.asyncio
-async def test_cleanup_incremental_mode_video_merger_noop(test_session, orch_with_session):
+async def test_cleanup_incremental_mode_compose_clears_only_video(test_session, orch_with_session):
     orch, _ws = orch_with_session
     project = await create_project(test_session)
     shot = Shot(project_id=project.id, order=0, description="s", image_url="i", video_url="v")
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "video_merger", mode="incremental")
+    await orch._cleanup_for_rerun(project.id, "compose", mode="incremental")
 
     await test_session.refresh(shot)
     assert shot.image_url == "i"
-    assert shot.video_url == "v"
+    assert shot.video_url is None
 
 
 # ---------------------------------------------------------------------------

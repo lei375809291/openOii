@@ -300,7 +300,7 @@ async def regenerate_shot(
             settings=settings,
             ws=ws,
             target_ids=target_ids,
-            default_final_stage="merge",
+            default_final_stage="compose",
         )
     )
     task_manager.register(project_id, task)

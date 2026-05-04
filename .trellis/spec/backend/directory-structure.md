@@ -13,7 +13,7 @@ The backend is a FastAPI + SQLModel + LangGraph application. It follows a layere
 - **Models layer** — SQLModel ORM tables (single source of truth for DB schema).
 - **Services layer** — pure business logic, no HTTP concerns.
 - **Orchestration layer** — LangGraph state machine, persistence, runtime.
-- **Agents layer** — LLM agent implementations (orchestrator, scriptwriter, etc.).
+- **Agents layer** — LLM agent implementations (orchestrator, plan, render, compose, review_rules).
 - **Tools layer** — demo MCP tools (MCP-style).
 - **WS layer** — WebSocket connection manager.
 
@@ -43,7 +43,7 @@ backend/app/
 │
 ├── orchestration/           # LangGraph: state.py, graph.py, nodes.py, runtime.py, persistence.py
 │
-├── agents/                  # LLM agents: orchestrator.py, scriptwriter.py, director.py, ..., base.py, prompts/
+├── agents/                  # LLM agents: orchestrator.py, plan.py, render.py, compose.py, review_rules.py, base.py, prompts/
 │
 ├── tools/                   # demo MCP tools (e.g., media_tools.py)
 │

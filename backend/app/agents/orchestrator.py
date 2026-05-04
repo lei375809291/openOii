@@ -11,14 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.utils import utcnow
 from app.agents.base import AgentContext
-from app.agents.character_artist import CharacterArtistAgent
-from app.agents.director import DirectorAgent
-from app.agents.onboarding import OnboardingAgent
-from app.agents.scriptwriter import ScriptwriterAgent
-from app.agents.storyboard_artist import StoryboardArtistAgent
-from app.agents.video_generator import VideoGeneratorAgent
-from app.agents.video_merger import VideoMergerAgent
-from app.agents.review import ReviewAgent
+from app.agents.plan import PlanAgent
+from app.agents.render import RenderAgent
+from app.agents.compose import ComposeAgent
+from app.agents.review_rules import ReviewRuleEngine
 from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.project import Character, Project, Shot
@@ -52,34 +48,26 @@ def _next_phase2_stage(stage: str | None) -> str | None:
 
 
 GRAPH_STAGE_FOR_AGENT = {
-    "onboarding": "ideate",
-    "director": "ideate",
-    "scriptwriter": "script",
-    "character_artist": "character",
-    "storyboard_artist": "storyboard",
-    "video_generator": "clip",
-    "video_merger": "merge",
+    "plan": "plan",
+    "render": "render",
+    "compose": "compose",
     "review": "review",
 }
 
-# 兼容细粒度阶段映射的历史导入点
 AGENT_STAGE_MAP = GRAPH_STAGE_FOR_AGENT
 
 RESUME_AGENT_FOR_STAGE = {
-    "script": "scriptwriter",
-    "character": "character_artist",
-    "storyboard": "storyboard_artist",
-    "clip": "video_generator",
-    "merge": "video_merger",
+    "plan": "plan",
+    "render": "render",
+    "compose": "compose",
     "review": "review",
-    "ideate": "scriptwriter",
 }
 
 
 def _resume_agent_for_stage(stage: str | None) -> str:
     if not isinstance(stage, str):
-        return "scriptwriter"
-    return RESUME_AGENT_FOR_STAGE.get(stage, "scriptwriter")
+        return "plan"
+    return RESUME_AGENT_FOR_STAGE.get(stage, "plan")
 
 
 def _video_generation_skipped_in_result(result: Any) -> bool:
@@ -90,39 +78,19 @@ def _video_generation_skipped_in_result(result: Any) -> bool:
 
 # Agent 完成后的描述信息
 AGENT_COMPLETION_INFO = {
-    "onboarding": {
-        "completed": "已完成项目初始化",
-        "next": "接下来将由导演规划整体创作方向",
-        "question": "项目设置看起来如何？",
-    },
-    "director": {
-        "completed": "已完成创作方向规划",
-        "next": "接下来编剧将创作剧本、设计角色和规划分镜",
-        "question": "创作方向是否符合您的预期？",
-    },
-    "scriptwriter": {
-        "completed": "已完成剧本创作",
+    "plan": {
+        "completed": "已完成创作方案规划",
         "details": "生成了角色设定和分镜脚本",
-        "next": "接下来将为角色生成参考图片",
-        "question": "剧本内容和角色设定是否满意？如果需要修改，请告诉我具体的调整意见。",
+        "next": "接下来将为角色和分镜生成参考图片",
+        "question": "创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
     },
-    "character_artist": {
-        "completed": "已完成角色图片生成",
-        "next": "接下来将为每个分镜生成首帧图片",
-        "question": "角色形象是否符合您的想象？如果需要重新生成某个角色，请告诉我。",
+    "render": {
+        "completed": "已完成角色形象和分镜首帧图生成",
+        "next": "接下来将根据分镜生成视频片段并合成",
+        "question": "角色形象和分镜画面是否满意？如果需要重新生成，请告诉我。",
     },
-    "storyboard_artist": {
-        "completed": "已完成分镜首帧图片生成",
-        "next": "接下来将根据分镜生成视频片段",
-        "question": "分镜画面是否满意？如果某些镜头需要调整，请告诉我。",
-    },
-    "video_generator": {
-        "completed": "已完成视频片段生成",
-        "next": "接下来将把所有片段拼接成完整视频",
-        "question": "视频片段效果如何？是否需要重新生成某些镜头？",
-    },
-    "video_merger": {
-        "completed": "已完成视频拼接",
+    "compose": {
+        "completed": "已完成视频合成",
         "next": "您的漫剧已经准备就绪！可以下载或分享了。",
         "question": "最终视频效果满意吗？",
     },
@@ -249,14 +217,10 @@ class GenerationOrchestrator:
         self.session = session
         self._last_user_feedback_id: int | None = None
         self.agents = [
-            OnboardingAgent(),
-            DirectorAgent(),
-            ScriptwriterAgent(),  # 生成角色+分镜描述
-            CharacterArtistAgent(),  # 生成角色图片
-            StoryboardArtistAgent(),  # 生成分镜首帧图片
-            VideoGeneratorAgent(),  # 生成分镜视频
-            VideoMergerAgent(),  # 拼接完整视频
-            ReviewAgent(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
+            PlanAgent(),
+            RenderAgent(),
+            ComposeAgent(),
+            ReviewRuleEngine(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
         ]
 
     def _agent_index(self, agent_name: str) -> int:
@@ -319,48 +283,29 @@ class GenerationOrchestrator:
         cleared_types: list[str] = []
 
         if mode == "incremental":
-            # 增量模式：只清理下游产物（图片/视频），保留数据结构
-            if start_agent in {"onboarding", "director", "scriptwriter"}:
-                # 增量模式下 scriptwriter 不删除数据，只清理下游产物
+            if start_agent in {"plan"}:
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                # 不发送 data_cleared 事件，因为数据结构保留
-            elif start_agent == "character_artist":
+            elif start_agent == "render":
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-            elif start_agent == "storyboard_artist":
-                await self._clear_shot_images(project_id)
+            elif start_agent == "compose":
                 await self._clear_shot_videos(project_id)
-            elif start_agent == "video_generator":
-                await self._clear_shot_videos(project_id)
-            elif start_agent == "video_merger":
-                pass
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
         else:
-            # 全量模式：原有逻辑
-            if start_agent in {"onboarding", "director", "scriptwriter"}:
-                # 从头开始：删除角色、镜头
+            if start_agent in {"plan"}:
                 await self._delete_project_shots(project_id)
                 await self._delete_project_characters(project_id)
                 cleared_types = ["characters", "shots"]
-            elif start_agent == "character_artist":
-                # 重新生成角色图片，并清空下游产物
+            elif start_agent == "render":
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-            elif start_agent == "storyboard_artist":
-                # 重新生成分镜首帧，并清空下游产物
-                await self._clear_shot_images(project_id)
+            elif start_agent == "compose":
                 await self._clear_shot_videos(project_id)
-            elif start_agent == "video_generator":
-                # 重新生成分镜视频，并清空下游产物
-                await self._clear_shot_videos(project_id)
-            elif start_agent == "video_merger":
-                # 重新拼接视频：保留现有最终视频，直到新的拼接成功覆盖它
-                pass
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
 
@@ -403,7 +348,7 @@ class GenerationOrchestrator:
         details = info.get("details", "")
         next_step = info.get("next", "继续下一步")
         question = info.get("question", "是否继续？")
-        current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "ideate")
+        current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "plan")
         next_stage = _next_phase2_stage(current_stage)
         recovery_summary = await build_recovery_summary(
             session=self.session,
@@ -559,7 +504,7 @@ class GenerationOrchestrator:
 
         payload: Any = initial_payload
         video_generation_skipped = False
-        final_stage = "merge"
+        final_stage = "compose"
         while True:
             logger.debug("[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__)
             result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
@@ -879,7 +824,7 @@ class GenerationOrchestrator:
                     if isinstance(m, str) and m.strip() in ("incremental", "full"):
                         mode = m.strip()
                 if not (isinstance(start_agent, str) and start_agent.strip()):
-                    start_agent = "scriptwriter"
+                    start_agent = "plan"
                 agent_name = start_agent.strip()
                 self._agent_index(agent_name)  # validate
                 ctx.rerun_mode = mode

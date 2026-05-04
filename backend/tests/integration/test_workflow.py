@@ -62,24 +62,9 @@ async def test_full_workflow(monkeypatch, test_session, test_settings):
     StubLLM.responses = [
         json.dumps(
             {
-                "story_breakdown": {"logline": "Test"},
-                "key_elements": {"characters": ["Hero"]},
-                "style_recommendation": {"primary": "anime"},
-                "project_update": {"title": "Workflow", "style": "anime"},
-            }
-        ),
-        json.dumps(
-            {
-                "project_update": {"style": "anime", "status": "planning"},
-                "director_notes": {"vision": "Focus"},
-                "scene_outline": [{"title": "Scene 1"}],
-            }
-        ),
-        json.dumps(
-            {
-                "project_update": {"status": "scripted"},
+                "project_update": {"title": "Workflow", "style": "anime", "status": "planning"},
                 "characters": [{"name": "Hero", "description": "Brave"}],
-                "shots": [{"order": 1, "description": "Shot 1", "video_prompt": "Action"}],
+                "shots": [{"order": 1, "description": "Shot 1", "scene": "Opening", "action": "Hero enters", "expression": "determined", "lighting": "dramatic", "dialogue": "Here I come!", "sfx": "wind"}],
             }
         ),
     ]

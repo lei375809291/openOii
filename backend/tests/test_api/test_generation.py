@@ -379,7 +379,7 @@ async def test_review_agent_routes_retry_merge_back_to_video_merger(test_session
             "suggested_changes": "重新拼接成片",
         },
         "routing": {
-            "start_agent": "scriptwriter",
+            "start_agent": "plan",
             "mode": "full",
             "reason": "模型误判",
         },
@@ -397,5 +397,5 @@ async def test_review_agent_routes_retry_merge_back_to_video_merger(test_session
     agent = ReviewAgent()
     routing = await agent.run(ctx)
 
-    assert routing["start_agent"] == "video_merger"
+    assert routing["start_agent"] == "compose"
     assert routing["mode"] == "incremental"

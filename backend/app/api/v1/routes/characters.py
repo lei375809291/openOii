@@ -198,7 +198,7 @@ async def regenerate_character(
             agent_plan=agent_plan,
             settings=settings,
             ws=ws,
-            default_final_stage="character",
+            default_final_stage="render",
         )
     )
     task_manager.register(project_id, task)

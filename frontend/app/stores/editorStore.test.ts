@@ -54,6 +54,7 @@ describe('useEditorStore review contract', () => {
       duration: 8.5,
       camera: 'wide',
       motion_note: 'slow pan in',
+      scene: null, action: null, expression: null, lighting: null, dialogue: null, sfx: null,
       character_ids: [1],
       approval_state: 'draft',
       approval_version: 0,
@@ -64,6 +65,8 @@ describe('useEditorStore review contract', () => {
       approved_duration: null,
       approved_camera: null,
       approved_motion_note: null,
+      approved_scene: null, approved_action: null, approved_expression: null,
+      approved_lighting: null, approved_dialogue: null, approved_sfx: null,
       approved_character_ids: [],
     };
 
@@ -80,6 +83,8 @@ describe('useEditorStore review contract', () => {
       approved_duration: 8.5,
       approved_camera: 'wide',
       approved_motion_note: 'slow pan in',
+      approved_scene: null, approved_action: null, approved_expression: null,
+      approved_lighting: null, approved_dialogue: null, approved_sfx: null,
       approved_character_ids: [1],
     };
 
