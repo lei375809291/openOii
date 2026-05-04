@@ -14,6 +14,8 @@ import { useEditorStore } from "~/stores/editorStore";
 import { applyWsEvent, useProjectWebSocket } from "~/hooks/useWebSocket";
 import type { WsEvent } from "~/types";
 
+const noopAutoConfirm = vi.fn();
+
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
   static OPEN = 1;
@@ -258,7 +260,8 @@ describe("useProjectWebSocket", () => {
           content: "director new message",
         },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(setMessagesSpy).toHaveBeenCalledTimes(1);
@@ -377,7 +380,8 @@ describe("useProjectWebSocket", () => {
 				},
 			},
 		} as never,
-		store
+		store,
+      noopAutoConfirm
 	);
 
 	expect(useEditorStore.getState().currentRunProviderSnapshot).toMatchObject({
@@ -409,7 +413,8 @@ describe("useProjectWebSocket", () => {
           recovery_summary: { test: true } as never,
         },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState()).toMatchObject({
@@ -440,7 +445,8 @@ describe("useProjectWebSocket", () => {
           recovery_summary: { updated: true } as never,
         },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().awaitingConfirm).toBe(false);
@@ -492,7 +498,8 @@ describe("useProjectWebSocket", () => {
           message: "视频未配置，已完成文本和图片生成",
         } as never,
       },
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState()).toMatchObject({
@@ -520,7 +527,8 @@ describe("useProjectWebSocket", () => {
         type: "run_failed",
         data: { error: "生成失败" } as never,
       },
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().isGenerating).toBe(false);
@@ -563,7 +571,8 @@ describe("useProjectWebSocket", () => {
         type: "run_cancelled",
         data: { run_id: 303 } as never,
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState()).toMatchObject({
@@ -600,7 +609,8 @@ describe("useProjectWebSocket", () => {
           character: { id: 1, name: "Alice", image_url: "alice.png" },
         },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
     applyWsEvent(
       {
@@ -609,14 +619,16 @@ describe("useProjectWebSocket", () => {
           character: { id: 1, name: "Alice v2", image_url: "alice_v2.png" },
         },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
     applyWsEvent(
       {
         type: "character_deleted",
         data: { character_id: 1 },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().characters).toHaveLength(0);
@@ -626,21 +638,24 @@ describe("useProjectWebSocket", () => {
         type: "shot_created",
         data: { shot: { id: 21, title: "Shot-1" } },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
     applyWsEvent(
       {
         type: "shot_updated",
         data: { shot: { id: 21, title: "Shot-1 v2" } },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
     applyWsEvent(
       {
         type: "shot_deleted",
         data: { shot_id: 21 },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().shots).toHaveLength(0);
@@ -651,14 +666,16 @@ describe("useProjectWebSocket", () => {
         type: "character_approved",
         data: { character: { id: 2, name: "Bob" } },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
     applyWsEvent(
       {
         type: "shot_approved",
         data: { shot: { id: 22, title: "Shot-2" } },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().characters).toHaveLength(0);
@@ -677,7 +694,8 @@ describe("useProjectWebSocket", () => {
         type: "data_cleared",
         data: { cleared_types: ["characters", "shots"] },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().characters).toHaveLength(0);
@@ -689,7 +707,8 @@ describe("useProjectWebSocket", () => {
         type: "project_updated",
         data: { project: { video_url: "http://cdn/video.mp4" } },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().projectVideoUrl).toBe("http://cdn/video.mp4");
@@ -726,7 +745,8 @@ describe("useProjectWebSocket", () => {
         type: "agent_handoff",
         data: { message: "正在切换 Agent" },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
@@ -740,7 +760,8 @@ describe("useProjectWebSocket", () => {
         type: "error",
         data: { message: "server error", code: "E_SERVER" },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     expect(toastMock.error).toHaveBeenCalledWith(
@@ -755,14 +776,13 @@ describe("useProjectWebSocket", () => {
 
     store.reset();
 
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
     applyWsEvent(
       {
         type: "connected",
         data: {},
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
     applyWsEvent(
@@ -775,14 +795,291 @@ describe("useProjectWebSocket", () => {
           recovery_summary: { step: "resume" },
         },
       } as never,
-      store
+      store,
+      noopAutoConfirm
     );
 
-    expect(consoleSpy).toHaveBeenCalled();
     expect(useEditorStore.getState().currentAgent).toBe("director");
     expect(useEditorStore.getState().progress).toBe(0.9);
     expect(useEditorStore.getState().recoverySummary).toMatchObject({ step: "resume" });
+  });
 
-    consoleSpy.mockRestore();
+  it("sets currentAgent from run_started event", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    applyWsEvent(
+      {
+        type: "run_started",
+        data: {
+          run_id: 500,
+          current_agent: "scriptwriter",
+          stage: "script",
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().currentAgent).toBe("scriptwriter");
+    expect(useEditorStore.getState().currentRunId).toBe(500);
+  });
+
+  it("recovers generating state from run_progress when not generating", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    expect(store.isGenerating).toBe(false);
+
+    applyWsEvent(
+      {
+        type: "run_progress",
+        data: {
+          run_id: 600,
+          current_agent: "director",
+          progress: 0.5,
+          stage: "storyboard",
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().isGenerating).toBe(true);
+    expect(useEditorStore.getState().currentRunId).toBe(600);
+    expect(useEditorStore.getState().currentAgent).toBe("director");
+  });
+
+  it("recovers generating state from run_awaiting_confirm when not generating", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    expect(store.isGenerating).toBe(false);
+
+    applyWsEvent(
+      {
+        type: "run_awaiting_confirm",
+        data: {
+          run_id: 700,
+          agent: "director",
+          message: "请确认",
+          stage: "storyboard",
+          recovery_summary: {},
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().isGenerating).toBe(true);
+    expect(useEditorStore.getState().currentRunId).toBe(700);
+  });
+
+  it("clears projectVideoUrl on data_cleared", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setProjectVideoUrl("http://cdn/old.mp4");
+
+    applyWsEvent(
+      {
+        type: "data_cleared",
+        data: { cleared_types: ["characters"] },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().projectVideoUrl).toBeNull();
+  });
+
+  it("handles project_updated with video_url null and undefined", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setProjectVideoUrl("http://cdn/old.mp4");
+
+    applyWsEvent(
+      {
+        type: "project_updated",
+        data: { project: { video_url: null } },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().projectVideoUrl).toBeNull();
+
+    store.setProjectVideoUrl("http://cdn/new.mp4");
+
+    applyWsEvent(
+      {
+        type: "project_updated",
+        data: { project: { title: "updated" } },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().projectVideoUrl).toBe("http://cdn/new.mp4");
+  });
+
+  it("reads current_stage from run_completed event data", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setGenerating(true);
+    store.setCurrentRunId(888);
+
+    applyWsEvent(
+      {
+        type: "run_completed",
+        data: {
+          run_id: 888,
+          current_stage: "clip",
+          message: "完成片段阶段",
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().isGenerating).toBe(false);
+    expect(useEditorStore.getState().currentStage).toBe("clip");
+  });
+
+  it("reads summary from run_message event", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    applyWsEvent(
+      {
+        type: "run_message",
+        data: {
+          agent: "scriptwriter",
+          role: "assistant",
+          content: "full content here",
+          summary: "brief summary",
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    const lastMsg = useEditorStore.getState().messages.at(-1);
+    expect(lastMsg).toMatchObject({
+      agent: "scriptwriter",
+      content: "full content here",
+      summary: "brief summary",
+    });
+  });
+
+  it("reads from_agent and to_agent from agent_handoff event", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    applyWsEvent(
+      {
+        type: "agent_handoff",
+        data: {
+          from_agent: "scriptwriter",
+          to_agent: "director",
+          message: "@scriptwriter 邀请 @director 加入了群聊",
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    const lastMsg = useEditorStore.getState().messages.at(-1);
+    expect(lastMsg).toMatchObject({
+      role: "handoff",
+      agent: "system",
+      content: "@scriptwriter 邀请 @director 加入了群聊",
+    });
+  });
+
+  it("handles run_cancelled with run_ids field", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setGenerating(true);
+    store.setCurrentRunId(100);
+
+    applyWsEvent(
+      {
+        type: "run_cancelled",
+        data: { run_ids: [100, 101], cancelled_count: 2 },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().isGenerating).toBe(false);
+    expect(useEditorStore.getState().currentRunId).toBeNull();
+  });
+
+  it("handles data_cleared with start_agent and mode fields", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setCharacters([{ id: 1, name: "A" }] as never);
+    store.setProjectVideoUrl("http://cdn/old.mp4");
+
+    applyWsEvent(
+      {
+        type: "data_cleared",
+        data: { cleared_types: ["characters"], start_agent: "scriptwriter", mode: "full" },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().characters).toHaveLength(0);
+    expect(useEditorStore.getState().projectVideoUrl).toBeNull();
+  });
+
+  it("recovers state from WS replay run_progress with current_stage and stage", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    applyWsEvent(
+      {
+        type: "run_progress",
+        data: {
+          run_id: 999,
+          current_agent: "animator",
+          current_stage: "clip",
+          stage: "clip",
+          progress: 0.75,
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState()).toMatchObject({
+      isGenerating: true,
+      currentRunId: 999,
+      currentAgent: "animator",
+      progress: 0.75,
+    });
+  });
+
+  it("reads current_stage from run_started event", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    applyWsEvent(
+      {
+        type: "run_started",
+        data: {
+          run_id: 501,
+          current_agent: "scriptwriter",
+          current_stage: "script",
+          stage: "script",
+          next_stage: "character",
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().currentStage).toBe("script");
   });
 });

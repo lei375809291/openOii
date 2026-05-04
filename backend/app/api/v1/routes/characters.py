@@ -93,7 +93,7 @@ async def _run_agent_plan(
 
             await ws.send_event(
                 project_id,
-                {"type": "run_started", "data": {"run_id": run_id, "project_id": project_id}},
+                {"type": "run_started", "data": {"run_id": run_id, "project_id": project_id, "current_agent": agent_plan[0].name if agent_plan else None}},
             )
 
             total_steps = max(len(agent_plan), 1)

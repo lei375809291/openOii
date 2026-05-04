@@ -165,7 +165,7 @@ export const projectsApi = {
   getMessages: (id: number) =>
     fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
 
-  generate: (id: number, data?: { seed?: number; notes?: string }) =>
+  generate: (id: number, data?: { seed?: number; notes?: string; auto_mode?: boolean }) =>
     fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
       method: "POST",
       body: JSON.stringify(data || {}),

@@ -61,13 +61,26 @@ def _run_alembic_upgrade() -> None:
 
 async def init_db() -> None:
     """Initialize database tables and cleanup stale runs."""
+    import logging
+    log = logging.getLogger("openOii.init_db")
     settings = get_settings()
     agent_run_table = SQLModel.metadata.tables["agentrun"]
     project_table = SQLModel.metadata.tables["project"]
 
-    loop = __import__("asyncio").get_running_loop()
-    await loop.run_in_executor(None, _run_alembic_upgrade)
+    import asyncio
+    loop = asyncio.get_running_loop()
+    try:
+        await asyncio.wait_for(
+            loop.run_in_executor(None, _run_alembic_upgrade),
+            timeout=30,
+        )
+        log.info("init_db: alembic upgrade done")
+    except asyncio.TimeoutError:
+        log.warning("init_db: alembic upgrade timed out, skipping")
+    except Exception as e:
+        log.warning("init_db: alembic upgrade failed (%s), skipping", e)
 
+    log.info("init_db: starting DB session cleanup")
     async with async_session_maker() as session:
         from app.services.config_service import ConfigService
         from app.models.agent_run import AgentRun

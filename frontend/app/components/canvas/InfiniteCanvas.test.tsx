@@ -6,8 +6,8 @@ import { InfiniteCanvas } from "./InfiniteCanvas";
 
 const useCanvasLayoutMock = vi.hoisted(() =>
   vi.fn((args: any) =>
-    (args.workspaceStatus?.sections ?? []).map((section: any, index: number) => ({
-      id: `shape:${section.key}`,
+    (args.visibleSections ?? []).map((key: string, index: number) => ({
+      id: `shape:${key}`,
       type: "mock-shape",
       x: 0,
       y: index * 100,
@@ -133,6 +133,8 @@ vi.mock("~/stores/editorStore", () => ({
       },
     ],
     projectVideoUrl: null,
+    currentStage: "storyboard",
+    recoverySummary: null,
   }),
 }));
 
@@ -151,7 +153,7 @@ describe("InfiniteCanvas", () => {
       expect(useCanvasLayoutMock).toHaveBeenCalled();
     });
 
-    expect(useCanvasLayoutMock.mock.calls[0]?.[0].workspaceStatus?.sections.map((section: any) => section.key)).toEqual([
+    expect(useCanvasLayoutMock.mock.calls[0]?.[0].visibleSections).toEqual([
       "script",
       "characters",
       "storyboards",

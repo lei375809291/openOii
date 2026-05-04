@@ -8,10 +8,6 @@ import {
 } from "tldraw";
 import { type ScriptSectionShape } from "./types";
 import { SectionShell } from "./SectionShell";
-import {
-  getWorkspaceSectionPlaceholderText,
-  getWorkspaceSectionStatusLabel,
-} from "~/utils/workspaceStatus";
 
 export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   static override type = "script-section" as const;
@@ -39,8 +35,8 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
       shots: [],
       sectionState: "draft",
       placeholder: true,
-      statusLabel: getWorkspaceSectionStatusLabel("draft"),
-      placeholderText: getWorkspaceSectionPlaceholderText("script"),
+      statusLabel: "待生成",
+      placeholderText: "等待剧本生成...",
     };
   }
 
@@ -58,7 +54,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   }
 
   component(shape: ScriptSectionShape) {
-    const { story, summary, characters, shots, placeholder, placeholderText, statusLabel, w } = shape.props;
+    const { story, summary, shots, characters, placeholder, placeholderText, statusLabel, w } = shape.props;
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
@@ -68,33 +64,57 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
           placeholder={placeholder}
           placeholderText={placeholderText}
         >
-          {story ? (
-            <div className="rounded-lg p-3 border-l-[3px] border-secondary bg-base-200">
-              <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{story}</p>
-              {summary && (
-                <p className="text-xs text-base-content/50 mt-2 pt-2 border-t border-base-content/10">{summary}</p>
-              )}
-            </div>
-          ) : summary ? (
-            <div className="rounded-lg p-3 border-l-[3px] border-secondary bg-base-200">
-              <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{summary}</p>
-            </div>
-          ) : characters.length > 0 || shots.length > 0 ? (
-            <div className="space-y-2">
-              {characters.length > 0 && (
-                <div className="text-xs text-base-content/60">
-                  <span className="font-medium text-base-content/80">角色：</span>
-                  {characters.map((c) => c.name).join("、")}
-                </div>
-              )}
-              {shots.length > 0 && (
-                <div className="text-xs text-base-content/60">
-                  <span className="font-medium text-base-content/80">分镜：</span>
-                  {shots.length} 个镜头
-                </div>
-              )}
-            </div>
-          ) : null}
+          <div className="space-y-3">
+            {story ? (
+              <div className="rounded-lg p-3 border-l-[3px] border-secondary bg-base-200">
+                <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{story}</p>
+                {summary && (
+                  <p className="text-xs text-base-content/50 mt-2 pt-2 border-t border-base-content/10">{summary}</p>
+                )}
+              </div>
+            ) : summary ? (
+              <div className="rounded-lg p-3 border-l-[3px] border-secondary bg-base-200">
+                <p className="text-sm text-base-content/80 whitespace-pre-wrap leading-relaxed">{summary}</p>
+              </div>
+            ) : null}
+            {shots.length > 0 && (
+              <div className="overflow-hidden rounded-lg border border-base-content/10">
+                <table className="w-full text-xs">
+                  <thead className="bg-base-200/80">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">描述</th>
+                      <th className="px-2 py-1.5 text-left font-semibold w-16">运镜</th>
+                      <th className="px-2 py-1.5 text-left font-semibold w-12">时长</th>
+                      <th className="px-2 py-1.5 text-left font-semibold w-20">角色</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shots.map((shot, i) => {
+                      const charNames = shot.character_ids
+                        ?.map((cid: number) => characters.find((c: any) => c.id === cid)?.name)
+                        .filter(Boolean);
+                      return (
+                        <tr key={shot.id} className={i % 2 === 0 ? "bg-base-100" : "bg-base-200/30"}>
+                          <td className="px-2 py-1.5 text-base-content/60 font-mono">{shot.order}</td>
+                          <td className="px-2 py-1.5 text-base-content/80">{shot.description}</td>
+                          <td className="px-2 py-1.5 text-base-content/60">{shot.camera || "—"}</td>
+                          <td className="px-2 py-1.5 text-base-content/60">{shot.duration ? `${shot.duration}s` : "—"}</td>
+                          <td className="px-2 py-1.5 text-base-content/60">{charNames?.length ? charNames.join("、") : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!story && !summary && shots.length === 0 && characters.length > 0 && (
+              <div className="text-xs text-base-content/60">
+                <span className="font-medium text-base-content/80">角色：</span>
+                {characters.map((c: any) => c.name).join("、")}
+              </div>
+            )}
+          </div>
         </SectionShell>
       </HTMLContainer>
     );

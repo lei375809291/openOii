@@ -10,37 +10,30 @@ import type {
   WorkflowStage,
 } from "~/types";
 
+export type RunMode = "manual" | "yolo";
+
 interface EditorState {
-  // Selection state
   selectedShotId: number | null;
   selectedCharacterId: number | null;
   highlightedMessageIndex: number | null;
-
-  // Agent state
   isGenerating: boolean;
   currentStage: WorkflowStage;
   currentAgent: string | null;
   progress: number;
   messages: AgentMessage[];
-
-  // Recovery state
   recoveryControl: RecoveryControlRead | null;
   recoverySummary: RecoverySummaryRead | null;
   recoveryGate: RunAwaitingConfirmEventData | null;
-
-  // 确认状态
   awaitingConfirm: boolean;
   awaitingAgent: string | null;
   currentRunId: number | null;
   currentRunProviderSnapshot: ProjectProviderSettings | null;
-
-  // Data cache
+  runMode: RunMode;
   characters: Character[];
   shots: Shot[];
-  projectVideoUrl: string | null;  // 最终拼接视频 URL
-  projectUpdatedAt: number | null; // 项目更新时间戳（用于触发刷新）
+  projectVideoUrl: string | null;
+  projectUpdatedAt: number | null;
 
-  // Actions
   setSelectedShot: (id: number | null) => void;
   setSelectedCharacter: (id: number | null) => void;
   setHighlightedMessage: (index: number | null) => void;
@@ -61,23 +54,19 @@ interface EditorState {
   setAwaitingConfirm: (awaiting: boolean, agent?: string | null, runId?: number | null) => void;
   setCurrentRunId: (runId: number | null) => void;
   setCurrentRunProviderSnapshot: (snapshot: ProjectProviderSettings | null) => void;
-  // 精细化控制 Actions
+  setRunMode: (mode: RunMode) => void;
   updateCharacter: (character: Character) => void;
   updateShot: (shot: Shot) => void;
   removeCharacter: (characterId: number) => void;
   removeShot: (shotId: number) => void;
+  resetRunState: () => void;
   reset: () => void;
 }
 
-const initialState = {
-  selectedShotId: null,
-  selectedCharacterId: null,
-  highlightedMessageIndex: null,
+const initialRunState = {
   isGenerating: false,
-  currentStage: "ideate" as WorkflowStage,
   currentAgent: null,
   progress: 0,
-  messages: [],
   recoveryControl: null,
   recoverySummary: null,
   recoveryGate: null,
@@ -85,10 +74,20 @@ const initialState = {
   awaitingAgent: null,
   currentRunId: null,
   currentRunProviderSnapshot: null,
+};
+
+const initialState = {
+  selectedShotId: null,
+  selectedCharacterId: null,
+  highlightedMessageIndex: null,
+  currentStage: "ideate" as WorkflowStage,
+  runMode: "manual" as RunMode,
+  messages: [],
   characters: [],
   shots: [],
   projectVideoUrl: null,
   projectUpdatedAt: null,
+  ...initialRunState,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -120,7 +119,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
   setCurrentRunId: (runId) => set({ currentRunId: runId }),
   setCurrentRunProviderSnapshot: (snapshot) => set({ currentRunProviderSnapshot: snapshot }),
-  // 精细化控制 Actions
+  setRunMode: (mode) => set({ runMode: mode }),
   updateCharacter: (character) =>
     set((state) => ({
       characters: state.characters.some((c) => c.id === character.id)
@@ -141,5 +140,6 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       shots: state.shots.filter((s) => s.id !== shotId),
     })),
+  resetRunState: () => set(initialRunState),
   reset: () => set(initialState),
 }));

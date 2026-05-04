@@ -8,23 +8,47 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from app.schemas.ws import (
+    AgentHandoffEventData,
+    CharacterCreatedEventData,
+    CharacterDeletedEventData,
     CharacterUpdatedEventData,
+    DataClearedEventData,
+    ErrorEventData,
     ProjectUpdatedEventData,
     RunAwaitingConfirmEventData,
+    RunCancelledEventData,
+    RunCompletedEventData,
     RunConfirmedEventData,
+    RunFailedEventData,
+    RunMessageEventData,
     RunProgressEventData,
+    RunStartedEventData,
+    ShotCreatedEventData,
+    ShotDeletedEventData,
     ShotUpdatedEventData,
     WsEvent,
 )
 
 
 _EVENT_DATA_MODELS: dict[str, type[Any]] = {
+    "run_started": RunStartedEventData,
     "run_progress": RunProgressEventData,
+    "run_message": RunMessageEventData,
+    "run_completed": RunCompletedEventData,
+    "run_failed": RunFailedEventData,
+    "run_cancelled": RunCancelledEventData,
     "run_awaiting_confirm": RunAwaitingConfirmEventData,
     "run_confirmed": RunConfirmedEventData,
+    "agent_handoff": AgentHandoffEventData,
+    "character_created": CharacterCreatedEventData,
     "character_updated": CharacterUpdatedEventData,
+    "character_deleted": CharacterDeletedEventData,
+    "shot_created": ShotCreatedEventData,
     "shot_updated": ShotUpdatedEventData,
+    "shot_deleted": ShotDeletedEventData,
     "project_updated": ProjectUpdatedEventData,
+    "data_cleared": DataClearedEventData,
+    "error": ErrorEventData,
 }
 
 

@@ -115,7 +115,7 @@ def create_app() -> FastAPI:
                 project_id, {"type": "connected", "data": {"project_id": project_id}}
             )
 
-            # 补发当前项目下任意 running run 的 awaiting payload，防止客户端错过事件
+            # 补发当前项目下任意 running run 的状态，防止客户端错过事件
             try:
                 from app.db.session import async_session_maker
                 from app.models.agent_run import AgentRun
@@ -135,8 +135,23 @@ def create_app() -> FastAPI:
                                 project_id,
                                 {"type": "run_awaiting_confirm", "data": payload},
                             )
+                        else:
+                            await ws_manager.send_event(
+                                project_id,
+                                {
+                                    "type": "run_progress",
+                                    "data": {
+                                        "run_id": run.id,
+                                        "project_id": project_id,
+                                        "current_agent": run.current_agent,
+                                        "current_stage": run.current_agent,
+                                        "stage": run.current_agent,
+                                        "progress": run.progress,
+                                    },
+                                },
+                            )
             except Exception as e:
-                logger.warning(f"Failed to replay awaiting payload for project {project_id}: {e}")
+                logger.warning(f"Failed to replay state for project {project_id}: {e}")
 
             while True:
                 try:

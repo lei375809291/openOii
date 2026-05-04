@@ -684,7 +684,7 @@ class GenerationOrchestrator:
             await self._set_run(
                 run,
                 status="running",
-                current_agent="orchestrator",
+                current_agent=_resume_agent_for_stage(resume_stage),
                 progress=workflow_progress_for_stage(resume_stage),
                 error=None,
             )
@@ -708,6 +708,7 @@ class GenerationOrchestrator:
                         "stage": resume_stage,
                         "next_stage": recovery.next_stage,
                         "progress": workflow_progress_for_stage(resume_stage),
+                        "current_agent": _resume_agent_for_stage(resume_stage),
                         "recovery_summary": recovery.model_dump(mode="json"),
                     },
                 },
@@ -798,7 +799,7 @@ class GenerationOrchestrator:
             await self._set_run(
                 run,
                 status="running",
-                current_agent="orchestrator",
+                current_agent=agent_name,
                 progress=workflow_progress_for_stage(GRAPH_STAGE_FOR_AGENT[agent_name]),
                 error=None,
             )
@@ -815,6 +816,7 @@ class GenerationOrchestrator:
                         "stage": initial_stage,
                         "next_stage": next_production_stage(initial_stage),
                         "progress": workflow_progress_for_stage(initial_stage),
+                        "current_agent": agent_name,
                     },
                 },
             )

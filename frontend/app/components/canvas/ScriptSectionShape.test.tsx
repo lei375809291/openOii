@@ -43,25 +43,29 @@ describe("ScriptSectionShape", () => {
   });
 
   it("renders summary alone when story is empty", () => {
-    render(shapeUtil.component(createShape({ story: "", summary: "仅摘要" })));
-    expect(screen.getByText("仅摘要")).toBeInTheDocument();
+    const { container } = render(shapeUtil.component(createShape({ story: "", summary: "仅摘要" })));
+    expect(container.textContent).toContain("仅摘要");
   });
 
-  it("renders character and shot counts when no story/summary", () => {
+  it("renders shot table when shots present", () => {
     const chars = [{ id: 1, name: "阿宁" }] as unknown as ReviewedCharacter[];
-    const shotsList = [{ id: 1 }, { id: 2 }, { id: 3 }] as unknown as ReviewedShot[];
+    const shotsList = [
+      { id: 1, order: 1, description: "开场镜头", camera: "wide", duration: 5, character_ids: [1] },
+      { id: 2, order: 2, description: "特写镜头", camera: "close", duration: 3, character_ids: [] },
+      { id: 3, order: 3, description: "全景镜头", camera: null, duration: null, character_ids: [1] },
+    ] as unknown as ReviewedShot[];
     render(
       shapeUtil.component(
         createShape({
-          story: "",
-          summary: "",
           characters: chars,
           shots: shotsList,
         })
       )
     );
-    expect(screen.getByText(/阿宁/)).toBeInTheDocument();
-    expect(screen.getByText(/3 个镜头/)).toBeInTheDocument();
+    expect(screen.getByText("开场镜头")).toBeInTheDocument();
+    expect(screen.getByText("特写镜头")).toBeInTheDocument();
+    expect(screen.getByText("wide")).toBeInTheDocument();
+    expect(screen.getByText(/5s/)).toBeInTheDocument();
   });
 
   it("renders placeholder when no content", () => {

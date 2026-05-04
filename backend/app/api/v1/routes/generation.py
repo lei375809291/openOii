@@ -250,7 +250,7 @@ async def cancel_project_run(
         project_id,
         {
             "type": "run_cancelled",
-            "data": {"project_id": project_id, "cancelled_count": cancelled_count},
+            "data": {"project_id": project_id, "cancelled_count": cancelled_count, "run_ids": [r.id for r in runs]},
         },
     )
 

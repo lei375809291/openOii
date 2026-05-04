@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -129,6 +129,9 @@ const storeState: {
   setRecoveryGate: ReturnType<typeof vi.fn>;
   setProjectUpdatedAt: ReturnType<typeof vi.fn>;
   addMessage: ReturnType<typeof vi.fn>;
+  resetRunState: ReturnType<typeof vi.fn>;
+  runMode: string;
+  setRunMode: ReturnType<typeof vi.fn>;
 } = {
   isGenerating: false,
   progress: 0,
@@ -167,6 +170,9 @@ const storeState: {
     storeState.projectUpdatedAt = timestamp;
   }),
   addMessage: vi.fn(),
+  resetRunState: vi.fn(),
+  runMode: 'manual' as string,
+  setRunMode: vi.fn(),
 };
 const mutateSpy = vi.fn();
 const sendMock = vi.fn();
@@ -272,35 +278,26 @@ vi.mock('~/services/api', () => ({
   },
 }));
 
-vi.mock('~/components/chat/ChatPanel', () => ({
-  ChatPanel: ({
+vi.mock('~/components/chat/ChatDrawer', () => ({
+  ChatDrawer: ({
     generateDisabled,
-    generateDisabledReason,
     isGenerating,
-    isPaused,
     onGenerate,
     onSendFeedback,
     onConfirm,
     onCancel,
-    onPause,
-    onResume,
   }: {
     generateDisabled?: boolean;
-    generateDisabledReason?: string;
     isGenerating?: boolean;
-    isPaused?: boolean;
     onGenerate?: () => void;
     onSendFeedback?: (content: string) => void;
     onConfirm?: (content?: string) => void;
     onCancel?: () => void;
-    onPause?: () => void;
-    onResume?: () => void;
   }) => (
     <div data-testid="chat-panel">
       <span data-testid="chat-generating-state">
         {isGenerating ? 'generating' : 'idle'}
       </span>
-      <span data-testid="chat-paused-state">{isPaused ? 'paused' : 'running'}</span>
       <button type="button" disabled={generateDisabled} onClick={onGenerate}>
         开始生成
       </button>
@@ -313,13 +310,6 @@ vi.mock('~/components/chat/ChatPanel', () => ({
       <button type="button" onClick={onCancel}>
         停止生成
       </button>
-      <button type="button" onClick={onPause}>
-        暂停自动继续
-      </button>
-      <button type="button" onClick={onResume}>
-        恢复自动继续
-      </button>
-      {generateDisabledReason ? <span>{generateDisabledReason}</span> : null}
     </div>
   ),
 }));
@@ -330,6 +320,15 @@ vi.mock('~/components/layout/Sidebar', () => ({
 
 vi.mock('~/components/layout/StageView', () => ({
   StageView: () => <div data-testid="stage-view" />,
+}));
+
+vi.mock('~/components/pipeline/StagePipeline', () => ({
+  StagePipeline: ({ onResume, onCancel }: { onResume?: () => void; onCancel?: () => void }) => (
+    <div data-testid="stage-pipeline">
+      <button type="button" onClick={onResume}>恢复运行</button>
+      <button type="button" onClick={onCancel}>取消运行</button>
+    </div>
+  ),
 }));
 
 vi.mock('~/components/settings/SettingsModal', () => ({
@@ -373,23 +372,20 @@ describe('ProjectPage live hydration', () => {
     } as never);
   });
 
-  it('hides provider warning when no provider exception exists', () => {
+  it('renders without provider UI when no provider exception exists', () => {
     render(<ProjectPage />);
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText('Provider 选择')).not.toBeInTheDocument();
   });
 
-  it('shows compact provider warning when provider exception exists', () => {
+  it('renders without provider warning UI when provider exception exists', () => {
     currentProjectData = projectDataWithTextProviderIssue;
 
     render(<ProjectPage />);
 
-    expect(screen.queryByText('Provider 选择')).not.toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Provider 需要关注');
-    expect(screen.getByRole('alert')).toHaveTextContent('1 项待处理');
-    expect(screen.getByRole('alert')).toHaveTextContent('文本：缺少 OpenAI 文本凭据');
-    expect(screen.getByRole('button', { name: '编辑 Provider' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('编辑 Provider')).not.toBeInTheDocument();
   });
 
 	it('renders run provider snapshot proof card from recoveryControl', () => {
@@ -439,9 +435,7 @@ describe('ProjectPage live hydration', () => {
 		render(<ProjectPage />);
 
 		expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-		expect(screen.getByText('Provider 需要关注')).toBeInTheDocument();
-		expect(screen.getByText('1 项待处理')).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: '编辑 Provider' })).toBeInTheDocument();
+		expect(screen.queryByText('编辑 Provider')).not.toBeInTheDocument();
 	});
 
 	it('prefers latest run snapshot proof card over project provider defaults and keeps minimal fields', () => {
@@ -517,9 +511,8 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Provider 需要关注');
-    expect(screen.getByRole('alert')).toHaveTextContent('文本：文本 Provider 流式不可用，已自动回退非流式生成。');
-    expect(screen.queryByText('缺少 OpenAI 文本凭据')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '开始生成' })).toBeEnabled();
   });
 
   it('keeps generate enabled when only the video provider is invalid', () => {
@@ -540,7 +533,7 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('视频：缺少 Doubao API Key');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始生成' })).toBeEnabled();
   });
 
@@ -620,12 +613,12 @@ describe('ProjectPage live hydration', () => {
     render(<ProjectPage />);
 
     await waitFor(() => {
-      expect(projectsApi.generate).toHaveBeenCalledWith(9);
+      expect(projectsApi.generate).toHaveBeenCalledWith(9, { auto_mode: false });
     });
     expect(setSearchParams).toHaveBeenCalledWith({}, { replace: true });
   });
 
-  it('still disables generate when a blocking text provider is invalid', () => {
+  it('keeps generate enabled even when text provider is invalid', () => {
     currentProjectData = {
       ...projectData,
       provider_settings: {
@@ -643,36 +636,7 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    expect(screen.getByRole('button', { name: '开始生成' })).toBeDisabled();
-  });
-
-  it('hydrates provider edit defaults from provider_settings overrides after refresh', async () => {
-    const user = userEvent.setup();
-    currentProjectData = projectDataWithTextProviderIssue;
-
-    render(<ProjectPage />);
-
-    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
-
-    const textFieldset = screen.getByText('文本').closest('fieldset');
-    const imageFieldset = screen.getByText('图像').closest('fieldset');
-    const videoFieldset = screen.getByText('视频').closest('fieldset');
-
-    expect(textFieldset).not.toBeNull();
-    expect(imageFieldset).not.toBeNull();
-    expect(videoFieldset).not.toBeNull();
-
-    expect(
-      within(textFieldset as HTMLElement).getByRole('radio', { name: 'OpenAI' })
-    ).toBeChecked();
-    expect(
-      within(imageFieldset as HTMLElement).getByRole('radio', {
-        name: '继承默认（当前：OpenAI）',
-      })
-    ).toBeChecked();
-    expect(
-      within(videoFieldset as HTMLElement).getByRole('radio', { name: 'Doubao' })
-    ).toBeChecked();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('invalidates project caches when projectUpdatedAt changes without clobbering live progress state', async () => {
@@ -689,37 +653,6 @@ describe('ProjectPage live hydration', () => {
     expect(storeState.isGenerating).toBe(true);
     expect(storeState.progress).toBe(0.35);
     expect(storeState.currentStage).toBe('storyboard');
-  });
-
-  it('saves provider overrides without resetting recovery and live progress state', async () => {
-    const user = userEvent.setup();
-    currentProjectData = projectDataWithTextProviderIssue;
-
-    render(<ProjectPage />);
-    vi.clearAllMocks();
-
-    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
-    const videoFieldset = screen.getByText('视频').closest('fieldset');
-    expect(videoFieldset).not.toBeNull();
-    await user.click(
-      within(videoFieldset as HTMLElement).getByRole('radio', {
-        name: '继承默认（当前：OpenAI）',
-      })
-    );
-    await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
-
-    expect(mutateSpy).toHaveBeenCalledWith({
-      text_provider_override: 'openai',
-      image_provider_override: null,
-      video_provider_override: null,
-    });
-
-    expect(storeState.setGenerating).not.toHaveBeenCalled();
-    expect(storeState.setProgress).not.toHaveBeenCalled();
-    expect(storeState.setRecoveryControl).not.toHaveBeenCalled();
-    expect(storeState.setRecoverySummary).not.toHaveBeenCalled();
-    expect(storeState.isGenerating).toBe(true);
-    expect(storeState.progress).toBe(0.35);
   });
 
   it('submits feedback through the API when no active run is in progress', async () => {
@@ -742,26 +675,7 @@ describe('ProjectPage live hydration', () => {
     );
   });
 
-  it('pauses and resumes auto-continue gates through the chat panel controls', async () => {
-    const user = userEvent.setup();
-    storeState.currentRunId = 42;
-    storeState.awaitingConfirm = true;
-    storeState.awaitingAgent = 'scriptwriter';
-
-    render(<ProjectPage />);
-
-    expect(screen.getByTestId('chat-paused-state')).toHaveTextContent('running');
-    await user.click(screen.getByRole('button', { name: '暂停自动继续' }));
-    expect(screen.getByTestId('chat-paused-state')).toHaveTextContent('paused');
-    await user.click(screen.getByRole('button', { name: '恢复自动继续' }));
-
-    expect(sendMock).toHaveBeenCalledWith({
-      type: 'confirm',
-      data: { run_id: 42 },
-    });
-  });
-
-  it('routes confirm feedback through websocket when an active run exists', async () => {
+  it('sends confirm through websocket when an active run exists', async () => {
     const user = userEvent.setup();
     storeState.currentRunId = 42;
 
@@ -868,11 +782,7 @@ describe('ProjectPage live hydration', () => {
     await waitFor(() => {
       expect(projectsApi.cancel).toHaveBeenCalledWith(9);
     });
-    expect(storeState.setGenerating).toHaveBeenCalledWith(false);
-    expect(storeState.setProgress).toHaveBeenCalledWith(0);
-    expect(storeState.setCurrentAgent).toHaveBeenCalledWith(null);
-    expect(storeState.setAwaitingConfirm).toHaveBeenCalledWith(false, null, null);
-    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(null);
+    expect(storeState.resetRunState).toHaveBeenCalled();
     expect(storeState.addMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'system',
@@ -881,7 +791,7 @@ describe('ProjectPage live hydration', () => {
     );
   });
 
-  it('shows a warning instead of auto-starting when a blocking provider is unresolved', async () => {
+  it('auto-starts generation even when text provider is invalid', async () => {
     currentSearchParams = new URLSearchParams('autoStart=true');
     currentProjectData = {
       ...projectData,
@@ -902,15 +812,11 @@ describe('ProjectPage live hydration', () => {
     render(<ProjectPage />);
 
     await waitFor(() => {
-      expect(toast.warning).toHaveBeenCalledWith({
-        title: '暂时无法自动开始',
-        message: '缺少 OpenAI 文本凭据',
-      });
+      expect(projectsApi.generate).toHaveBeenCalled();
     });
-    expect(projectsApi.generate).not.toHaveBeenCalled();
   });
 
-  it('shows a warning instead of auto-starting when the image provider is unresolved', async () => {
+  it('auto-starts generation even when image provider is invalid', async () => {
     currentSearchParams = new URLSearchParams('autoStart=true');
     currentProjectData = {
       ...projectData,
@@ -931,12 +837,8 @@ describe('ProjectPage live hydration', () => {
     render(<ProjectPage />);
 
     await waitFor(() => {
-      expect(toast.warning).toHaveBeenCalledWith({
-        title: '暂时无法自动开始',
-        message: '缺少 OpenAI 图像凭据',
-      });
+      expect(projectsApi.generate).toHaveBeenCalled();
     });
-    expect(projectsApi.generate).not.toHaveBeenCalled();
   });
 
   it('hydrates active run state immediately after generate succeeds', async () => {
@@ -949,7 +851,7 @@ describe('ProjectPage live hydration', () => {
     await user.click(screen.getByRole('button', { name: '开始生成' }));
 
     await waitFor(() => {
-      expect(projectsApi.generate).toHaveBeenCalledWith(9);
+      expect(projectsApi.generate).toHaveBeenCalledWith(9, { auto_mode: false });
     });
     expect(storeState.clearMessages).toHaveBeenCalled();
     expect(storeState.setCurrentStage).toHaveBeenCalledWith('ideate');
@@ -1209,11 +1111,7 @@ describe('ProjectPage live hydration', () => {
     await waitFor(() => {
       expect(projectsApi.cancel).toHaveBeenCalledWith(9);
     });
-    expect(storeState.setGenerating).toHaveBeenCalledWith(false);
-    expect(storeState.setProgress).toHaveBeenCalledWith(0);
-    expect(storeState.setCurrentAgent).toHaveBeenCalledWith(null);
-    expect(storeState.setAwaitingConfirm).toHaveBeenCalledWith(false, null, null);
-    expect(storeState.setCurrentRunId).toHaveBeenCalledWith(null);
+    expect(storeState.resetRunState).toHaveBeenCalled();
     expect(storeState.addMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'system',
@@ -1275,62 +1173,4 @@ describe('ProjectPage live hydration', () => {
     });
   });
 
-  it('saves provider overrides successfully and invalidates related caches', async () => {
-    const user = userEvent.setup();
-    currentProjectData = projectDataWithTextProviderIssue;
-
-    render(<ProjectPage />);
-
-    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
-    const videoFieldset = screen.getByText('视频').closest('fieldset');
-    await user.click(
-      within(videoFieldset as HTMLElement).getByRole('radio', {
-        name: '继承默认（当前：OpenAI）',
-      })
-    );
-    await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
-
-    await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Provider 已保存',
-        })
-      );
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project', 9] });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['projects'] });
-  });
-
-  it('shows toast when provider save fails', async () => {
-    const user = userEvent.setup();
-    currentProjectData = projectDataWithTextProviderIssue;
-
-    vi.mocked(projectsApi.update).mockRejectedValueOnce(
-      new ApiError({
-        code: 'provider_save',
-        message: '保存失败',
-        status: 500,
-      })
-    );
-
-    render(<ProjectPage />);
-
-    await user.click(screen.getByRole('button', { name: '编辑 Provider' }));
-    const videoFieldset = screen.getByText('视频').closest('fieldset');
-    await user.click(
-      within(videoFieldset as HTMLElement).getByRole('radio', {
-        name: '继承默认（当前：OpenAI）',
-      })
-    );
-    await user.click(screen.getByRole('button', { name: '保存 Provider 设置' }));
-
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: '保存失败',
-          message: '保存失败',
-        })
-      );
-    });
-  });
 });

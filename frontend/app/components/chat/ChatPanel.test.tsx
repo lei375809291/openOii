@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPanel } from './ChatPanel';
 import type { WorkflowStage } from '~/types';
+import type { RunMode } from '~/stores/editorStore';
 
 type ChatPanelStoreState = {
   messages: never[];
@@ -12,12 +13,15 @@ type ChatPanelStoreState = {
   awaitingAgent: string | null;
   currentStage: WorkflowStage;
   currentRunId: number | null;
+  runMode: RunMode;
+  setRunMode: (mode: RunMode) => void;
 };
 
 const onSendFeedback = vi.fn();
 const onConfirm = vi.fn();
 const onGenerate = vi.fn();
 const onCancel = vi.fn();
+const setRunMode = vi.fn();
 
 const storeState: ChatPanelStoreState = {
   messages: [] as never[],
@@ -26,6 +30,8 @@ const storeState: ChatPanelStoreState = {
   awaitingAgent: null,
   currentStage: 'ideate',
   currentRunId: null as number | null,
+  runMode: 'manual',
+  setRunMode,
 };
 
 vi.mock('~/stores/editorStore', () => ({
@@ -55,6 +61,7 @@ describe('ChatPanel', () => {
     storeState.awaitingAgent = null;
     storeState.currentStage = 'ideate';
     storeState.currentRunId = null;
+    storeState.runMode = 'manual';
   });
 
   it('shows the start button when there are no messages and generation has not started', () => {
@@ -141,11 +148,29 @@ describe('ChatPanel', () => {
     expect(onConfirm).toHaveBeenLastCalledWith('修改剧情节奏');
   });
 
-  it('shows pause button for auto-continue gates', async () => {
+  it('toggles between manual and YOLO mode', async () => {
     const user = userEvent.setup();
-    const onPause = vi.fn();
+    storeState.runMode = 'manual';
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating={false}
+      />
+    );
+
+    const toggleButton = screen.getByRole('button', { name: '切换YOLO模式' });
+    await user.click(toggleButton);
+    expect(setRunMode).toHaveBeenCalledWith('yolo');
+  });
+
+  it('hides manual confirm bar in YOLO mode', () => {
     storeState.awaitingConfirm = true;
-    storeState.awaitingAgent = 'scriptwriter';
+    storeState.awaitingAgent = 'director';
+    storeState.runMode = 'yolo';
 
     render(
       <ChatPanel
@@ -154,13 +179,10 @@ describe('ChatPanel', () => {
         onGenerate={onGenerate}
         onCancel={onCancel}
         isGenerating
-        isPaused={false}
-        onPause={onPause}
       />
     );
 
-    await user.click(screen.getByRole('button', { name: '暂停自动继续' }));
-    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('等待确认')).not.toBeInTheDocument();
   });
 
   it('sends feedback through onSendFeedback outside generating and confirm states', async () => {
@@ -181,6 +203,7 @@ describe('ChatPanel', () => {
 
     expect(onSendFeedback).toHaveBeenLastCalledWith('  这里有建议  ');
   });
+
   it('shows character stage icon when currentStage is character', () => {
     storeState.currentStage = 'character';
 
@@ -212,6 +235,7 @@ describe('ChatPanel', () => {
 
     expect(screen.getByText('分镜阶段')).toBeInTheDocument();
   });
+
   it('shows merge stage icon when currentStage is merge', () => {
     storeState.currentStage = 'merge';
 

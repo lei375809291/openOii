@@ -191,6 +191,7 @@ export type WsEventType =
   | "connected"
   | "pong"
   | "echo"
+  | "error"
   | "run_started"
   | "run_progress"
   | "run_message"
@@ -207,8 +208,7 @@ export type WsEventType =
   | "shot_updated"
   | "shot_deleted"
   | "project_updated"
-  | "data_cleared"
-  | "error";
+  | "data_cleared";
 
 export interface WsEvent {
   type: WsEventType;
@@ -229,7 +229,8 @@ export interface AgentMessage {
 
 export interface BlockingClip {
   shot_id: number;
-  shot_order: number;
+  order: number;
+  status: string;
   reason: string;
 }
 

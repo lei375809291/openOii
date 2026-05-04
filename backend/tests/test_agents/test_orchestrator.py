@@ -599,6 +599,7 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
     await orchestrator.resume_from_recovery(project_id=1, run_id=2)
 
     assert ws.events[0][1]["type"] == "run_started"
+    assert ws.events[0][1]["data"]["current_agent"] == "scriptwriter"
     assert ws.events[-1][1]["type"] == "run_completed"
 
 
@@ -636,6 +637,7 @@ async def test_run_from_agent_happy_path(monkeypatch):
     await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="scriptwriter")
 
     assert ws.events[0][1]["type"] == "run_started"
+    assert ws.events[0][1]["data"]["current_agent"] == "scriptwriter"
     assert ws.events[-1][1]["type"] == "run_completed"
 
 

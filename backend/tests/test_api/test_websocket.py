@@ -150,6 +150,59 @@ def test_websocket_connection_replays_awaiting_payload(ws_client, monkeypatch):
     assert replayed["data"]["gate"] == "director"
 
 
+def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_client, monkeypatch):
+    project_id = 2
+    run_id = 99
+
+    async def fake_get_awaiting_payload(candidate_run_id: int) -> dict[str, Any] | None:
+        return None
+
+    monkeypatch.setattr(orchestrator_module, "get_awaiting_payload", fake_get_awaiting_payload)
+
+    class _FakeResult:
+        def scalars(self) -> Any:
+            return self
+
+        def all(self) -> list[Any]:
+            return [
+                type("Run", (), {
+                    "id": run_id,
+                    "project_id": project_id,
+                    "current_agent": "storyboard_artist",
+                    "progress": 0.65,
+                })()
+            ]
+
+    class _FakeSession:
+        async def execute(self, _statement: Any) -> _FakeResult:
+            return _FakeResult()
+
+    class _SessionContext:
+        def __init__(self) -> None:
+            self._session = _FakeSession()
+
+        async def __aenter__(self) -> Any:
+            return self._session
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    monkeypatch.setattr(
+        "app.db.session.async_session_maker",
+        lambda: _SessionContext(),
+    )
+
+    with ws_client.websocket_connect(f"/ws/projects/{project_id}") as ws:
+        connected = ws.receive_json()
+        replayed = ws.receive_json()
+
+    assert connected["type"] == "connected"
+    assert replayed["type"] == "run_progress"
+    assert replayed["data"]["run_id"] == run_id
+    assert replayed["data"]["current_agent"] == "storyboard_artist"
+    assert replayed["data"]["progress"] == 0.65
+
+
 @pytest.mark.asyncio
 async def test_websocket_manager_scopes_project_updated_events_to_project_connections():
     fake_ws_1 = _FakeWebSocket()
