@@ -111,7 +111,7 @@ export function AssetDrawer({ open, onClose }: AssetDrawerProps) {
 						<div className="text-center text-xs text-base-content/40 py-8">
 							<SvgIcon name="layers" size={24} className="mx-auto mb-2 text-base-content/15" />
 							<p>还没有保存的资产</p>
-							<p className="text-base-content/25 mt-1">在画布角色卡片点击 ★ 可添加</p>
+							<p className="text-base-content/25 mt-1">在画布角色卡片点击 <SvgIcon name="star" size={10} className="inline" /> 可添加</p>
 						</div>
 					) : (
 						<div className="grid grid-cols-2 gap-2">

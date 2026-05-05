@@ -356,7 +356,7 @@ class GenerationOrchestrator:
         # 构建详细消息
         message_parts = [f"✅ {completed}"]
         if details:
-            message_parts.append(f"📋 {details}")
+            message_parts.append(f"{details}")
         message_parts.append(f"➡️ {next_step}")
         message_parts.append(f"❓ {question}")
 

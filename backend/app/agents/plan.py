@@ -230,9 +230,9 @@ class PlanAgent(BaseAgent):
     async def run(self, ctx: AgentContext) -> None:
         is_incremental = ctx.rerun_mode == "incremental"
         if is_incremental:
-            await self.send_message(ctx, "📋 正在增量更新规划...", progress=0.0, is_loading=True)
+            await self.send_message(ctx, "正在增量更新规划...", progress=0.0, is_loading=True)
         else:
-            await self.send_message(ctx, "📋 正在规划创作方案...", progress=0.0, is_loading=True)
+            await self.send_message(ctx, "正在规划创作方案...", progress=0.0, is_loading=True)
 
         payload: dict[str, Any] = {
             "project": {
@@ -308,7 +308,7 @@ class PlanAgent(BaseAgent):
         story_breakdown = data.get("story_breakdown") or {}
         logline = story_breakdown.get("logline")
         if logline:
-            lines.append(f"📖 故事概括：{logline}")
+            lines.append(f"故事概括：{logline}")
 
         genre = story_breakdown.get("genre") or []
         themes = story_breakdown.get("themes") or []
@@ -321,7 +321,7 @@ class PlanAgent(BaseAgent):
             lines.append(f"🎭 {' | '.join(parts)}")
 
         if visual_bible:
-            lines.append(f"🎨 视觉指南：{visual_bible[:80]}")
+            lines.append(f"视觉指南：{visual_bible[:80]}")
 
         if is_incremental:
             new_char_count, new_shot_count = await self._apply_incremental_changes(ctx, data, visual_bible)
@@ -343,7 +343,7 @@ class PlanAgent(BaseAgent):
             char_names = [c.name for c in final_chars]
             if char_names:
                 lines.append(f"👥 角色：{', '.join(char_names)}")
-            lines.append(f"🎬 {len(final_shots)} 个分镜")
+            lines.append(f"{len(final_shots)} 个分镜")
 
             summary = ctx.project.summary or f"增量更新：{len(final_chars)}个角色、{len(final_shots)}个分镜"
             await self.send_message(ctx, "\n".join(lines) if lines else "✅ 增量更新完成", summary=summary, progress=1.0)
@@ -427,7 +427,7 @@ class PlanAgent(BaseAgent):
         await ctx.session.commit()
 
         char_count = len(raw_characters) if isinstance(raw_characters, list) else 0
-        lines.append(f"🎬 {len(new_shots)} 个分镜")
+        lines.append(f"{len(new_shots)} 个分镜")
 
         summary = ctx.project.summary or f"{char_count}个角色，{len(new_shots)}个分镜"
         ctx.project.summary = summary

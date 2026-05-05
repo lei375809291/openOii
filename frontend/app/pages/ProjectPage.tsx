@@ -1,9 +1,10 @@
-import { StopIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, StopIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ChatDrawer } from "~/components/chat/ChatDrawer";
 import { TopBar } from "~/components/layout/TopBar";
+import { StagePipeline } from "~/components/layout/StagePipeline";
 import { StageView } from "~/components/layout/StageView";
 import { AssetDrawer } from "~/components/panels/AssetDrawer";
 import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
@@ -13,7 +14,6 @@ import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { useChatPanelStore } from "~/stores/chatPanelStore";
-import { useSettingsStore } from "~/stores/settingsStore";
 import type {
 	ProjectProviderSettings,
 	RecoveryControlRead,
@@ -44,8 +44,7 @@ export function ProjectPage() {
 	})));
 	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
 	const hasRecovery = Boolean(storeRecoveryControl);
-	const { isOpen: chatOpen, toggle: toggleChat } = useChatPanelStore();
-	const { openModal: openSettingsModal } = useSettingsStore();
+	const { toggle: toggleChat } = useChatPanelStore();
 	const [assetsOpen, setAssetsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const autoStartTriggered = useRef(false);
@@ -380,7 +379,7 @@ export function ProjectPage() {
 	if (projectLoading) {
 		return (
 			<div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base-100">
-				<div className="w-6 h-6 animate-pulse text-base-content/60">✦</div>
+				<ArrowPathIcon className="w-6 h-6 animate-pulse text-base-content/60" />
 				<p className="font-sketch text-2xl text-base-content/80">
 					正在加载项目...
 				</p>
@@ -404,22 +403,22 @@ export function ProjectPage() {
 	return (
 		<div className="h-screen flex flex-col bg-base-100 font-sans overflow-hidden">
 				<TopBar
+					onToggleAssets={() => setAssetsOpen((v) => !v)}
+					onToggleHistory={() => setHistoryOpen((v) => !v)}
+					assetsOpen={assetsOpen}
+					historyOpen={historyOpen}
+					projectId={projectId}
+				/>
+				<StagePipeline
 					currentStage={storeCurrentStage}
 					isGenerating={storeIsGenerating}
 					awaitingConfirm={storeAwaitingConfirm}
 					hasRecovery={hasRecovery}
 					onToggleChat={toggleChat}
-					onOpenSettings={openSettingsModal}
 					onResume={handleResume}
 					onCancel={handleCancel}
 					onGenerate={handleGenerate}
-					onToggleAssets={() => setAssetsOpen((v) => !v)}
-					onToggleHistory={() => setHistoryOpen((v) => !v)}
 					generateDisabled={false}
-					chatOpen={chatOpen}
-					assetsOpen={assetsOpen}
-					historyOpen={historyOpen}
-					projectId={projectId}
 				/>
 
 			<div className="flex-1 flex overflow-hidden">

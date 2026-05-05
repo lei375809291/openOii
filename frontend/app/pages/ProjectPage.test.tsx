@@ -324,24 +324,36 @@ vi.mock('~/components/chat/ChatDrawer', () => ({
 
 vi.mock('~/components/layout/TopBar', () => ({
   TopBar: ({
+    onToggleAssets,
+    onToggleHistory,
+  }: {
+    onToggleAssets?: () => void;
+    onToggleHistory?: () => void;
+  }) => (
+    <div data-testid="top-bar">
+      <button type="button" onClick={onToggleAssets}>资产</button>
+      <button type="button" onClick={onToggleHistory}>历史</button>
+    </div>
+  ),
+}));
+
+vi.mock('~/components/layout/StagePipeline', () => ({
+  StagePipeline: ({
     onGenerate,
     onCancel,
     onResume,
     onToggleChat,
-    onOpenSettings,
   }: {
     onGenerate?: () => void;
     onCancel?: () => void;
     onResume?: () => void;
     onToggleChat?: () => void;
-    onOpenSettings?: () => void;
   }) => (
-    <div data-testid="top-bar">
+    <div data-testid="stage-pipeline">
       <button type="button" onClick={onGenerate}>生成</button>
       <button type="button" onClick={onCancel}>取消</button>
       <button type="button" onClick={onResume}>恢复运行</button>
       <button type="button" onClick={onToggleChat}>对话</button>
-      <button type="button" onClick={onOpenSettings}>设置</button>
     </div>
   ),
 }));

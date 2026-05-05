@@ -59,7 +59,7 @@ class ComposeAgent(BaseAgent):
         total = len(shots)
         updated_count = 0
         mode_desc = "图生视频" if use_image_mode else "文生视频"
-        await self.send_message(ctx, f"🎬 开始为 {total} 个分镜生成视频（{mode_desc}）...", progress=0.0, is_loading=True)
+        await self.send_message(ctx, f"开始为 {total} 个分镜生成视频（{mode_desc}）...", progress=0.0, is_loading=True)
 
         for i, shot in enumerate(shots):
             try:
@@ -223,7 +223,7 @@ class ComposeAgent(BaseAgent):
             await self.send_message(ctx, f"视频拼接失败: {e}。您可以稍后手动拼接。", progress=1.0)
 
     async def run(self, ctx: AgentContext) -> None:
-        await self.send_message(ctx, "🎬 开始合成：先生成分镜视频，再拼接完整视频...", progress=0.0, is_loading=True)
+        await self.send_message(ctx, "开始合成：先生成分镜视频，再拼接完整视频...", progress=0.0, is_loading=True)
 
         video_count = await self._generate_videos(ctx)
 

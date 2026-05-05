@@ -67,7 +67,7 @@ class RenderAgent(BaseAgent):
             return 0
 
         total = len(characters)
-        await self.send_message(ctx, f"🎨 开始为 {total} 个角色生成形象图...", progress=0.0, is_loading=True)
+        await self.send_message(ctx, f"开始为 {total} 个角色生成形象图...", progress=0.0, is_loading=True)
 
         updated_count = 0
         style = ctx.project.style or ""

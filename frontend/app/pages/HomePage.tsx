@@ -8,12 +8,10 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   PaperAirplaneIcon,
-  Cog6ToothIcon,
-  MoonIcon,
-  SunIcon,
 } from "@heroicons/react/24/outline";
-import { useThemeStore } from "~/stores/themeStore";
-import { useSettingsStore } from "~/stores/settingsStore";
+import { TopBar } from "~/components/layout/TopBar";
+import { AssetDrawer } from "~/components/panels/AssetDrawer";
+import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 
 const CREATION_MODES = [
@@ -57,9 +55,6 @@ const DEFAULT_STYLE = "anime";
 export function HomePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { theme, toggleTheme } = useThemeStore();
-  const isDark = theme.endsWith("dark");
-  const { openModal: openSettingsModal } = useSettingsStore();
   const [story, setStory] = useState("");
   const [style, setStyle] = useState(DEFAULT_STYLE);
   const [creationMode, setCreationMode] = useState("story");
@@ -69,6 +64,8 @@ export function HomePage() {
   const [isComposing, setIsComposing] = useState(false);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [assetsOpen, setAssetsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createMutation = useMutation({
@@ -197,27 +194,14 @@ export function HomePage() {
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
-      <header className="flex items-center justify-between px-4 h-10 border-b border-base-content/10">
-        <span className="font-comic text-lg text-primary font-bold tracking-wider">openOii</span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="btn btn-ghost btn-xs !px-1 !min-h-0 !h-6"
-            aria-label={isDark ? "切换亮色" : "切换暗色"}
-          >
-            {isDark ? <SunIcon className="w-3.5 h-3.5" /> : <MoonIcon className="w-3.5 h-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={openSettingsModal}
-            className="btn btn-ghost btn-xs !px-1 !min-h-0 !h-6"
-            aria-label="设置"
-          >
-            <Cog6ToothIcon className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </header>
+      <TopBar
+        onToggleAssets={() => setAssetsOpen((v) => !v)}
+        onToggleHistory={() => setHistoryOpen((v) => !v)}
+        assetsOpen={assetsOpen}
+        historyOpen={historyOpen}
+      />
+      <AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
+      <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} projectId={undefined} />
       <div className="flex flex-col items-center justify-center p-4 sm:p-6 halftone-bg-accent min-h-[calc(100vh-40px)]">
         <main className="w-full max-w-2xl mx-auto">
           <div className="text-center mb-8 animate-doodle-pop">

@@ -84,7 +84,8 @@ describe('EditModal', () => {
     const user = userEvent.setup();
     render(<EditModal {...defaultProps} />);
     
-    await user.click(screen.getByRole('button', { name: '✕' }));
+    const closeBtn = document.querySelector('.btn-circle') as HTMLElement;
+    await user.click(closeBtn);
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
   
