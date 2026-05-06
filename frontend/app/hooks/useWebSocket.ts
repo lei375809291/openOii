@@ -294,20 +294,6 @@ export function applyWsEvent(
       break;
     }
 
-    case "agent_handoff": {
-      const handoffAgent = (event.data.from_agent as string) || (event.data.agent as string) || "";
-      clearLoadingStates(store);
-      if (handoffAgent) cleanupStaleMessages(store, handoffAgent);
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "handoff",
-        content: event.data.message as string,
-        timestamp: new Date().toISOString(),
-      });
-      break;
-    }
-
     case "run_awaiting_confirm": {
       clearLoadingStates(store);
       const gate = event.data as unknown as RunAwaitingConfirmEventData;
@@ -327,7 +313,7 @@ export function applyWsEvent(
         timestamp: new Date().toISOString(),
       });
 
-      if (shouldAutoConfirm(gate.agent, store.runMode)) {
+      if (!gate.auto_mode && shouldAutoConfirm(gate.agent, store.runMode)) {
         autoConfirm(gate.run_id);
       }
       break;
@@ -343,7 +329,7 @@ export function applyWsEvent(
         id: generateMessageId(),
         agent: "system",
         role: "info",
-        content: "已确认，继续执行...",
+        content: confirmed.auto_mode ? "自动确认，继续执行..." : "已确认，继续执行...",
         timestamp: new Date().toISOString(),
       });
       break;

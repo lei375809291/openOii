@@ -78,7 +78,7 @@ async def test_resume_from_recovery_uses_run_provider_snapshot(test_session, tes
             run_id=run.id or 0,
             thread_id=f"agent-run-{run.id}",
             current_stage="plan",
-            next_stage="render",
+            next_stage="character",
             preserved_stages=[],
             stage_history=[],
             resumable=True,
@@ -154,7 +154,7 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
             project_id=run.project_id,
             run_id=run.id or 0,
             thread_id=f"agent-run-{run.id}",
-            current_stage="render",
+            current_stage="character",
             next_stage="compose",
             preserved_stages=[],
             stage_history=[],
@@ -233,14 +233,14 @@ async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(
             SimpleNamespace(
                 values={
                     "current_stage": "review",
-                    "route_stage": "render",
+                    "route_stage": "character",
                     "stage_history": ["plan"],
                 }
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"plan": 2, "render": 0}
+        return {"plan": 2, "character": 0}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -252,7 +252,7 @@ async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(
     )
 
     assert summary.current_stage == "review"
-    assert summary.next_stage == "render"
+    assert summary.next_stage == "character"
     assert summary.preserved_stages == ["plan"]
 
 

@@ -41,8 +41,8 @@ def test_thread_id_pending():
 
 def test_stage_index_valid():
     assert _stage_index("plan") == 0
-    assert _stage_index("render") == 2
-    assert _stage_index("review") == 5
+    assert _stage_index("character") == 2
+    assert _stage_index("review") == 7
 
 
 def test_stage_index_unknown_returns_zero():
@@ -55,7 +55,7 @@ def test_stage_index_unknown_returns_zero():
 
 def test_next_stage_valid():
     assert _next_stage("plan") == "plan_approval"
-    assert _next_stage("render") == "render_approval"
+    assert _next_stage("character") == "character_approval"
     assert _next_stage("review") is None
 
 
@@ -88,13 +88,13 @@ def test_stage_from_snapshot_current_stage():
 
 
 def test_stage_from_snapshot_route_stage_fallback():
-    snapshot = SimpleNamespace(values={"route_stage": "render"})
-    assert _stage_from_snapshot(snapshot) == "render"
+    snapshot = SimpleNamespace(values={"route_stage": "character"})
+    assert _stage_from_snapshot(snapshot) == "character"
 
 
 def test_stage_from_snapshot_stage_history_fallback():
-    snapshot = SimpleNamespace(values={"stage_history": ["plan", "render"]})
-    assert _stage_from_snapshot(snapshot) == "render"
+    snapshot = SimpleNamespace(values={"stage_history": ["plan", "character"]})
+    assert _stage_from_snapshot(snapshot) == "character"
 
 
 def test_stage_from_snapshot_no_values():
@@ -113,7 +113,7 @@ def test_stage_from_snapshot_empty_history():
 
 
 def test_stage_from_snapshot_current_overrides_route():
-    snapshot = SimpleNamespace(values={"current_stage": "plan", "route_stage": "render"})
+    snapshot = SimpleNamespace(values={"current_stage": "plan", "route_stage": "character"})
     assert _stage_from_snapshot(snapshot) == "plan"
 
 
@@ -138,10 +138,10 @@ def test_snapshot_values_empty():
 # --- _normalize_stage_history ---
 
 def test_normalize_stage_history_filters_valid():
-    values = {"stage_history": ["plan", "render", "bogus"]}
+    values = {"stage_history": ["plan", "character", "bogus"]}
     result = _normalize_stage_history(values)
     assert "plan" in result
-    assert "render" in result
+    assert "character" in result
     assert "bogus" not in result
 
 
@@ -157,7 +157,7 @@ def test_normalize_stage_history_non_list():
 
 def test_production_stage_for_approval_valid():
     assert _production_stage_for_approval("plan_approval") == "plan"
-    assert _production_stage_for_approval("render_approval") == "render"
+    assert _production_stage_for_approval("character_approval") == "character"
 
 
 def test_production_stage_for_approval_non_approval():
@@ -168,8 +168,8 @@ def test_production_stage_for_approval_non_approval():
 # --- _resume_target_stage ---
 
 def test_resume_target_review_returns_route_stage():
-    values = {"route_stage": "render"}
-    assert _resume_target_stage("review", values=values, completed_stages=["plan"]) == "render"
+    values = {"route_stage": "character"}
+    assert _resume_target_stage("review", values=values, completed_stages=["plan"]) == "character"
 
 
 def test_resume_target_review_fallback_to_current():
@@ -192,8 +192,8 @@ def test_resume_target_not_completed_returns_current():
 # --- _infer_current_stage ---
 
 def test_infer_from_snapshot():
-    snapshot = SimpleNamespace(values={"current_stage": "render"})
-    assert _infer_current_stage(FakeRun(), [snapshot]) == "render"
+    snapshot = SimpleNamespace(values={"current_stage": "character"})
+    assert _infer_current_stage(FakeRun(), [snapshot]) == "character"
 
 
 def test_infer_from_agent():
@@ -208,13 +208,13 @@ def test_infer_default_plan():
 
 def test_agent_to_stage_coverage():
     assert AGENT_TO_STAGE["plan"] == "plan"
-    assert AGENT_TO_STAGE["render"] == "render"
+    assert AGENT_TO_STAGE["character"] == "character"
     assert AGENT_TO_STAGE["compose"] == "compose"
     assert AGENT_TO_STAGE["review"] == "review"
 
 
 def test_phase2_stage_order_length():
-    assert len(PHASE2_STAGE_ORDER) == 6
+    assert len(PHASE2_STAGE_ORDER) == 8
     assert PHASE2_STAGE_ORDER[0] == "plan"
     assert PHASE2_STAGE_ORDER[-1] == "review"
 
@@ -223,7 +223,7 @@ def test_phase2_stage_order_length():
 
 
 def test_snapshot_next_stage_returns_first():
-    snapshot = SimpleNamespace(next=("plan", "render"))
+    snapshot = SimpleNamespace(next=("plan", "character"))
     assert _snapshot_next_stage([snapshot]) == "plan"
 
 

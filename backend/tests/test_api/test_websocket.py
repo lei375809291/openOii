@@ -168,7 +168,7 @@ def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_clien
                 type("Run", (), {
                     "id": run_id,
                     "project_id": project_id,
-                    "current_agent": "render",
+                    "current_agent": "character",
                     "progress": 0.65,
                 })()
             ]
@@ -199,7 +199,7 @@ def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_clien
     assert connected["type"] == "connected"
     assert replayed["type"] == "run_progress"
     assert replayed["data"]["run_id"] == run_id
-    assert replayed["data"]["current_agent"] == "render"
+    assert replayed["data"]["current_agent"] == "character"
     assert replayed["data"]["progress"] == 0.65
 
 

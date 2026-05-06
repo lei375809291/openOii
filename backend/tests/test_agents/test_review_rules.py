@@ -122,11 +122,11 @@ async def test_review_render_feedback_type(test_session, test_settings):
     run = await create_run(test_session, project_id=project.id)
     ctx = await make_context(test_session, test_settings, project=project, run=run)
     ctx.user_feedback = "fix the image"
-    ctx.feedback_type = "render"
+    ctx.feedback_type = "character"
 
     result = await ReviewRuleEngine().run(ctx)
 
-    assert result["start_agent"] == "render"
+    assert result["start_agent"] == "character"
 
 
 @pytest.mark.asyncio
@@ -153,7 +153,7 @@ async def test_review_per_entity_character(test_session, test_settings):
 
     result = await ReviewRuleEngine().run(ctx)
 
-    assert result["start_agent"] == "render"
+    assert result["start_agent"] == "character"
     assert result["mode"] == "incremental"
 
 
@@ -168,7 +168,7 @@ async def test_review_per_entity_shot(test_session, test_settings):
 
     result = await ReviewRuleEngine().run(ctx)
 
-    assert result["start_agent"] == "render"
+    assert result["start_agent"] == "shot"
     assert result["mode"] == "incremental"
 
 
@@ -227,7 +227,7 @@ async def test_review_story_feedback_type_maps_to_plan(test_session, test_settin
 
 
 @pytest.mark.asyncio
-async def test_review_character_feedback_type_maps_to_render(test_session, test_settings):
+async def test_review_character_feedback_type_maps_to_character(test_session, test_settings):
     project = await create_project(test_session)
     run = await create_run(test_session, project_id=project.id)
     ctx = await make_context(test_session, test_settings, project=project, run=run)
@@ -236,7 +236,7 @@ async def test_review_character_feedback_type_maps_to_render(test_session, test_
 
     result = await ReviewRuleEngine().run(ctx)
 
-    assert result["start_agent"] == "render"
+    assert result["start_agent"] == "character"
 
 
 @pytest.mark.asyncio
@@ -253,7 +253,7 @@ async def test_review_video_feedback_type_maps_to_compose(test_session, test_set
 
 
 def test_allowed_start_agents():
-    assert ALLOWED_START_AGENTS == {"plan", "render", "compose"}
+    assert ALLOWED_START_AGENTS == {"plan", "character", "shot", "compose"}
 
 
 @pytest.mark.asyncio

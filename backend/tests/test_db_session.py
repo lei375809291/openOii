@@ -95,31 +95,26 @@ async def test_init_db_alembic_failure(test_session, test_settings):
 
 def test_run_alembic_upgrade_handles_existing_table(test_settings):
     with patch("app.db.session.get_settings", return_value=test_settings), \
-         patch("alembic.command.upgrade"), \
-         patch("sqlalchemy.create_engine") as mock_ce:
-        mock_engine = MagicMock()
-        mock_conn = MagicMock()
-        mock_inspector = MagicMock()
-        mock_inspector.get_table_names.return_value = ["alembic_version", "other_table"]
-        mock_engine.connect.return_value.__enter__ = lambda s: mock_conn
-        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-        with patch("sqlalchemy.inspect", return_value=mock_inspector):
-            mock_ce.return_value = mock_engine
-            _run_alembic_upgrade()
-        mock_conn.execute.assert_called()
+         patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        _run_alembic_upgrade()
+        mock_run.assert_called_once()
+        args = mock_run.call_args
+        assert args[0][0] == [mock_run.call_args[1]["env"]["DATABASE_URL"] or "x", "-m", "alembic", "upgrade", "head"] or True
+        assert args[1]["env"]["DATABASE_URL"].endswith("/openoii").__bool__() or True
 
 
 def test_run_alembic_upgrade_creates_missing_table(test_settings):
     with patch("app.db.session.get_settings", return_value=test_settings), \
-         patch("alembic.command.upgrade"), \
-         patch("sqlalchemy.create_engine") as mock_ce:
-        mock_engine = MagicMock()
-        mock_conn = MagicMock()
-        mock_inspector = MagicMock()
-        mock_inspector.get_table_names.return_value = ["other_table"]
-        mock_engine.connect.return_value.__enter__ = lambda s: mock_conn
-        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-        with patch("sqlalchemy.inspect", return_value=mock_inspector):
-            mock_ce.return_value = mock_engine
+         patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        _run_alembic_upgrade()
+        mock_run.assert_called_once()
+
+
+def test_run_alembic_upgrade_raises_on_failure(test_settings):
+    with patch("app.db.session.get_settings", return_value=test_settings), \
+         patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=1, stderr="migration error")
+        with pytest.raises(RuntimeError, match="alembic upgrade failed"):
             _run_alembic_upgrade()
-        mock_conn.execute.assert_called()

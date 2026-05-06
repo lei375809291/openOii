@@ -16,19 +16,22 @@ from .state import (
 
 _STAGE_ARTIFACT_KEYS: dict[str, str] = {
     "plan": "stage:plan",
-    "render": "stage:render",
+    "character": "stage:character",
+    "shot": "stage:shot",
     "compose": "stage:compose",
 }
 
 _STAGE_TO_AGENTS: dict[str, tuple[str, ...]] = {
     "plan": ("plan",),
-    "render": ("render",),
+    "character": ("character",),
+    "shot": ("shot",),
     "compose": ("compose",),
 }
 
 _START_AGENT_TO_STAGE: dict[str, str] = {
     "plan": "plan",
-    "render": "render",
+    "character": "character",
+    "shot": "shot",
     "compose": "compose",
 }
 
@@ -199,30 +202,75 @@ async def plan_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) 
 async def plan_approval_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:
+    agent_ctx = runtime.context.agent_context
+    ci = agent_ctx.completion_info
+    message = ""
+    if ci:
+        parts = [ci.completed]
+        if ci.details:
+            parts.append(ci.details)
+        if ci.next:
+            parts.append(ci.next)
+        if ci.question:
+            parts.append(ci.question)
+        message = "\n".join(parts)
+    if not message:
+        message = "创作方案已规划（含角色和分镜），请确认是否继续进入角色渲染阶段。"
     return await _manual_approval_node(
         runtime,
         approval_stage="plan_approval",
         history_key="plan",
         gate="plan",
-        message="创作方案已规划（含角色和分镜），请确认是否继续进入渲染阶段。",
-        next_stage="render",
+        message=message,
+        next_stage="character",
     )
 
 
-async def render_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
-    return await _run_agent_sequence(state, runtime, stage="render")
+async def character_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
+    return await _run_agent_sequence(state, runtime, stage="character")
 
 
-async def render_approval_node(
+async def character_approval_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    agent_ctx = runtime.context.agent_context
+    ci = agent_ctx.completion_info
+    message = ""
+    if ci:
+        parts = [ci.completed]
+        if ci.details:
+            parts.append(ci.details)
+        if ci.next:
+            parts.append(ci.next)
+        if ci.question:
+            parts.append(ci.question)
+        message = "\n".join(parts)
+    if not message:
+        message = "角色形象图已生成，请确认是否继续生成分镜首帧图。"
+    return await _manual_approval_node(
+        runtime,
+        approval_stage="character_approval",
+        history_key="character",
+        gate="character",
+        message=message,
+        next_stage="shot",
+    )
+
+
+async def shot_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]) -> dict[str, Any]:
+    return await _run_agent_sequence(state, runtime, stage="shot")
+
+
+async def shot_approval_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:
     agent_ctx = runtime.context.agent_context
     if _is_video_provider_invalid(_get_run_provider_snapshot(agent_ctx)):
         orchestrator = runtime.context.orchestrator
-        approval_progress = workflow_progress_for_stage("render_approval")
+        approval_progress = workflow_progress_for_stage("shot_approval")
         await orchestrator._set_run(  # noqa: SLF001
             agent_ctx.run,
-            current_agent="render",
+            current_agent="shot",
             progress=approval_progress,
         )
         await orchestrator.ws.send_event(
@@ -231,33 +279,45 @@ async def render_approval_node(
                 "type": "run_progress",
                 "data": {
                     "run_id": agent_ctx.run.id,
-                    "current_agent": "render",
-                    "current_stage": "render_approval",
-                    "stage": "render_approval",
+                    "current_agent": "shot",
+                    "current_stage": "shot_approval",
+                    "stage": "shot_approval",
                     "next_stage": "compose",
                     "progress": approval_progress,
                 },
             },
         )
         return _auto_approval_result(
-            approval_stage="render_approval",
-            history_key="render",
+            approval_stage="shot_approval",
+            history_key="shot",
             next_stage="compose",
         )
 
     if runtime.context.auto_mode:
         return _auto_approval_result(
-            approval_stage="render_approval",
-            history_key="render",
+            approval_stage="shot_approval",
+            history_key="shot",
             next_stage="compose",
         )
 
+    agent_ctx = runtime.context.agent_context
+    ci = agent_ctx.completion_info
+    shot_msg = ""
+    if ci:
+        parts = [ci.completed]
+        if ci.details:
+            parts.append(ci.details)
+        if ci.question:
+            parts.append(ci.question)
+        shot_msg = "\n".join(parts)
+    if not shot_msg:
+        shot_msg = "分镜首帧图已生成，请确认是否继续进入视频合成阶段。"
     return await _manual_approval_node(
         runtime,
-        approval_stage="render_approval",
-        history_key="render",
-        gate="render",
-        message="角色形象图和分镜首帧图已生成，请确认是否继续进入视频合成阶段。",
+        approval_stage="shot_approval",
+        history_key="shot",
+        gate="shot",
+        message=shot_msg,
         next_stage="compose",
     )
 
@@ -317,10 +377,14 @@ def route_from_start(state: Phase2State) -> str:
 
 
 def route_after_plan_approval(state: Phase2State) -> str:
-    return state.get("route_stage") or ("review" if state.get("review_requested") else "render")
+    return state.get("route_stage") or ("review" if state.get("review_requested") else "character")
 
 
-def route_after_render_approval(state: Phase2State) -> str:
+def route_after_character_approval(state: Phase2State) -> str:
+    return state.get("route_stage") or ("review" if state.get("review_requested") else "shot")
+
+
+def route_after_shot_approval(state: Phase2State) -> str:
     return state.get("route_stage") or ("review" if state.get("review_requested") else "compose")
 
 

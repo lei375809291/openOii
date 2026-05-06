@@ -60,8 +60,9 @@ const baseInput: WorkspaceProjectionInput = {
 describe("buildWorkspaceStatus", () => {
   it.each([
     ["plan", ["plan"]],
-    ["render", ["plan", "render"]],
-    ["compose", ["plan", "render", "compose"]],
+    ["character", ["plan", "character"]],
+    ["shot", ["plan", "character", "shot"]],
+    ["compose", ["plan", "character", "shot", "compose"]],
   ] as const)("reveals only sections available at %s", (currentStage, expectedKeys) => {
     const result = buildWorkspaceStatus({
       ...baseInput,
@@ -88,7 +89,7 @@ describe("buildWorkspaceStatus", () => {
   it("keeps visible sections' status semantics intact after reveal", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
-      currentStage: "render",
+      currentStage: "character",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",
@@ -103,18 +104,18 @@ describe("buildWorkspaceStatus", () => {
           state: "generating",
         }),
         expect.objectContaining({
-          key: "render",
+          key: "character",
           placeholder: true,
-          state: "blocked",
+          state: "generating",
         }),
       ])
     );
   });
 
-  it("marks partially generated sections without hiding the missing ones once render generation has started", () => {
+  it("marks partially generated sections without hiding the missing ones once character generation has started", () => {
     const result = buildWorkspaceStatus({
       ...baseInput,
-      currentStage: "render",
+      currentStage: "character",
       project: {
         ...baseInput.project,
         summary: "一个侦探在雨夜寻找失踪线索",
@@ -144,8 +145,8 @@ describe("buildWorkspaceStatus", () => {
           state: "generating",
         }),
         expect.objectContaining({
-          key: "render",
-          placeholder: true,
+          key: "character",
+          placeholder: false,
           state: "generating",
         }),
       ])
@@ -212,7 +213,7 @@ describe("buildWorkspaceStatus", () => {
     expect(result.stageLabel).toBe("superseded");
     expect(result.sections).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: "render", state: "complete" }),
+        expect.objectContaining({ key: "character", state: "complete" }),
       ])
     );
   });

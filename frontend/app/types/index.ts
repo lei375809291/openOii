@@ -201,6 +201,7 @@ export interface RunAwaitingConfirmEventData {
   completed?: string | null;
   next_step?: string | null;
   question?: string | null;
+  auto_mode?: boolean;
 }
 
 export interface RunConfirmedEventData {
@@ -212,6 +213,7 @@ export interface RunConfirmedEventData {
   stage?: string | null;
   next_stage?: string | null;
   recovery_summary?: RecoverySummaryRead | null;
+  auto_mode?: boolean;
 }
 
 // WebSocket event types
@@ -228,7 +230,6 @@ export type WsEventType =
   | "run_awaiting_confirm"
   | "run_confirmed"
   | "run_cancelled"
-  | "agent_handoff"
   | "character_created"
   | "character_updated"
   | "character_deleted"
@@ -294,8 +295,10 @@ export interface Message {
 export type WorkflowStage =
   | "plan"
   | "plan_approval"
-  | "render"
-  | "render_approval"
+  | "character"
+  | "character_approval"
+  | "shot"
+  | "shot_approval"
   | "compose"
   | "review";
 
@@ -321,7 +324,8 @@ export type AppConfig = ConfigItem[];
 
 export const AGENT_NAME_MAP: Record<string, string> = {
   plan: "规划",
-  render: "渲染",
+  character: "角色",
+  shot: "分镜",
   compose: "合成",
   review: "审查",
 };

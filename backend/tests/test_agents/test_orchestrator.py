@@ -134,9 +134,10 @@ class TestAgentIndex:
 
     def test_valid_agent_indices(self, orchestrator):
         assert orchestrator._agent_index("plan") == 0
-        assert orchestrator._agent_index("render") == 1
-        assert orchestrator._agent_index("compose") == 2
-        assert orchestrator._agent_index("review") == 3
+        assert orchestrator._agent_index("character") == 1
+        assert orchestrator._agent_index("shot") == 2
+        assert orchestrator._agent_index("compose") == 3
+        assert orchestrator._agent_index("review") == 4
 
     def test_invalid_agent_raises(self, orchestrator):
         with pytest.raises(ValueError, match="Unknown agent"):
@@ -393,7 +394,7 @@ async def test_cleanup_for_rerun_incremental_branch(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "render", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "character", mode="incremental")
 
     assert called == [("clear_chars", 1), ("clear_shots", 1), ("clear_videos", 1)]
     assert session.commits == 1
@@ -474,7 +475,7 @@ async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch)
         session=session,
     )
 
-    async def fake_wait_for_confirm(project_id, run_obj, agent_name):
+    async def fake_wait_for_confirm(project_id, run_obj, agent_name, agent_ctx=None):
         return "好的"
 
     monkeypatch.setattr(orchestrator, "_wait_for_confirm", fake_wait_for_confirm)
@@ -681,7 +682,7 @@ async def test_run_from_agent_review_branch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_incremental_render(monkeypatch):
+async def test_cleanup_for_rerun_incremental_character(monkeypatch):
     """Incremental mode: render clears character+shot images/videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
@@ -699,7 +700,7 @@ async def test_cleanup_for_rerun_incremental_render(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "render", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "character", mode="incremental")
 
     assert cleared == ["chars", "shots", "videos"]
 
@@ -739,7 +740,7 @@ async def test_cleanup_for_rerun_incremental_unknown_raises():
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_full_render(monkeypatch):
+async def test_cleanup_for_rerun_full_character(monkeypatch):
     """Full mode: render clears character+shot images/videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
@@ -757,7 +758,7 @@ async def test_cleanup_for_rerun_full_render(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "render", mode="full")
+    await orchestrator._cleanup_for_rerun(1, "character", mode="full")
 
     assert cleared == ["chars", "shots", "videos"]
 
@@ -784,7 +785,7 @@ async def test_cleanup_for_rerun_full_compose(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
-    """Auto mode: _wait_for_confirm is never called; interrupts are auto-resumed."""
+    """Auto mode: _wait_for_confirm is never called; _send_auto_approval_events fires instead."""
     project = SimpleNamespace(id=1, status="draft")
     run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
@@ -802,6 +803,13 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
         return "ok"
 
     monkeypatch.setattr(orchestrator, "_wait_for_confirm", fake_wait_for_confirm)
+
+    auto_approval_called = False
+    async def fake_send_auto_approval(*args, **kwargs):
+        nonlocal auto_approval_called
+        auto_approval_called = True
+
+    monkeypatch.setattr(orchestrator, "_send_auto_approval_events", fake_send_auto_approval)
 
     compiled_graph = FakeCompiledGraph(
         [
@@ -822,7 +830,51 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
     )
 
     assert not confirm_called
+    assert auto_approval_called
     assert result == (False, "compose")
+
+
+@pytest.mark.asyncio
+async def test_send_auto_approval_events_emits_awaiting_and_confirmed(monkeypatch):
+    """_send_auto_approval_events sends run_awaiting_confirm + run_confirmed with auto_mode=True."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2, thread_id=None)
+    session = FakeSession(project=project, run=run)
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=ws,
+        session=session,
+    )
+
+    fake_summary = SimpleNamespace(
+        model_dump=lambda *, mode=None: {"current_stage": "plan", "preserved_stages": []},
+        preserved_stages=[],
+    )
+    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", lambda **kw: _async_return(fake_summary))
+
+    agent_ctx = SimpleNamespace(
+        completion_info=SimpleNamespace(completed="plan done", details=None, next="next step", question="ok?"),
+    )
+
+    await orchestrator._send_auto_approval_events(1, run, "plan", agent_ctx)
+
+    events = ws.events
+    awaiting_evt = [e for e in events if e[1].get("type") == "run_awaiting_confirm"]
+    confirmed_evt = [e for e in events if e[1].get("type") == "run_confirmed"]
+    assert len(awaiting_evt) == 1
+    assert len(confirmed_evt) == 1
+    assert awaiting_evt[0][1]["data"]["auto_mode"] is True
+    assert awaiting_evt[0][1]["data"]["current_stage"] == "plan"
+    assert confirmed_evt[0][1]["data"]["auto_mode"] is True
+    assert confirmed_evt[0][1]["data"]["stage"] == "character"
+
+
+def _async_return(val):
+    import asyncio
+    f = asyncio.Future()
+    f.set_result(val)
+    return f
 
 
 @pytest.mark.asyncio
@@ -1076,3 +1128,53 @@ async def test_wait_for_confirm_no_feedback_returns_none(monkeypatch):
     result = await orchestrator._wait_for_confirm(1, run, "director")
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_wait_for_confirm_confirmed_uses_refreshed_recovery(monkeypatch):
+    """run_confirmed event contains rebuilt recovery_summary and next_stage as current_stage."""
+    project = SimpleNamespace(id=1, status="draft")
+    run = SimpleNamespace(id=2, thread_id=None)
+    session = FakeSession(project=project, run=run, scalars_result=[])
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        ws=ws,
+        session=session,
+    )
+
+    call_count = 0
+
+    async def fake_recovery(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        return SimpleNamespace(
+            model_dump=lambda *, mode=None: {"call": call_count},
+            preserved_stages=[],
+        )
+
+    async def noop(*args, **kwargs):
+        pass
+
+    async def fake_wait_confirm(run_id, timeout=1800):
+        return True
+
+    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
+    monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop)
+    monkeypatch.setattr("app.agents.orchestrator.store_awaiting_payload", noop)
+    monkeypatch.setattr("app.agents.orchestrator.wait_for_confirm_redis", fake_wait_confirm)
+    monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop)
+
+    await orchestrator._wait_for_confirm(1, run, "plan", agent_ctx=SimpleNamespace(
+        completion_info=SimpleNamespace(completed="done", details=None, next="next", question="?"),
+    ))
+
+    events = ws.events
+    awaiting_evt = [e for e in events if e[1].get("type") == "run_awaiting_confirm"]
+    confirmed_evt = [e for e in events if e[1].get("type") == "run_confirmed"]
+    assert len(awaiting_evt) == 1
+    assert len(confirmed_evt) == 1
+    assert awaiting_evt[0][1]["data"]["recovery_summary"]["call"] == 1
+    assert confirmed_evt[0][1]["data"]["recovery_summary"]["call"] == 2
+    assert confirmed_evt[0][1]["data"]["current_stage"] == "character"
+    assert confirmed_evt[0][1]["data"]["stage"] == "character"

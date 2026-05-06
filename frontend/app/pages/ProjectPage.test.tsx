@@ -189,6 +189,7 @@ vi.mock('react-router-dom', async () => {
     Link: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     useParams: () => ({ id: '9' }),
     useSearchParams: () => [currentSearchParams, setSearchParams],
+    useNavigate: () => vi.fn(),
   };
 });
 

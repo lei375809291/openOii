@@ -208,7 +208,7 @@ describe('ChatPanel', () => {
   });
 
   it('shows character stage icon when currentStage is character', () => {
-    storeState.currentStage = 'render';
+    storeState.currentStage = 'character';
 
     render(
       <ChatPanel
@@ -220,11 +220,11 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('渲染阶段')).toBeInTheDocument();
+    expect(screen.getByText('角色渲染阶段')).toBeInTheDocument();
   });
 
-  it('shows storyboard stage icon when currentStage is storyboard', () => {
-    storeState.currentStage = 'render';
+  it('shows shot stage icon when currentStage is shot', () => {
+    storeState.currentStage = 'shot';
 
     render(
       <ChatPanel
@@ -236,7 +236,7 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('渲染阶段')).toBeInTheDocument();
+    expect(screen.getByText('分镜渲染阶段')).toBeInTheDocument();
   });
 
   it('shows merge stage icon when currentStage is merge', () => {

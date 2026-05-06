@@ -5,21 +5,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InfiniteCanvas } from "./InfiniteCanvas";
 
 const useCanvasLayoutMock = vi.hoisted(() =>
-  vi.fn((args: any) =>
-    (args.visibleSections ?? []).map((key: string, index: number) => ({
+  vi.fn((args: any) => ({
+    shapes: (args.visibleSections ?? []).map((key: string, index: number) => ({
       id: `shape:${key}`,
       type: "mock-shape",
       x: 0,
       y: index * 100,
       props: { w: 100, h: 100 },
-    }))
-  )
+    })),
+    bindings: [],
+  }))
 );
 
 const mockEditor = vi.hoisted(() => {
-  let shapes: Array<{ id: string }> = [];
+  let shapes: Array<{ id: string; type?: string }> = [];
 
   const editor: any = {
+    run: vi.fn((fn: () => void) => fn()),
     createShapes: vi.fn((nextShapes: Array<{ id: string }>) => {
       shapes = nextShapes.map((shape) => ({ ...shape }));
     }),
@@ -29,17 +31,41 @@ const mockEditor = vi.hoisted(() => {
       }
     }),
     deleteShapes: vi.fn((ids: string[]) => {
-      shapes = shapes.filter((shape) => !ids.includes(shape.id));
+      shapes = shapes.filter((s) => !ids.includes(s.id));
     }),
     getCurrentPageShapes: vi.fn(() => shapes.map((shape) => ({ ...shape }))),
+    getBindingsFromShape: vi.fn(() => []),
+    createBindings: vi.fn(),
+    deleteBindings: vi.fn(),
+    getShape: vi.fn((id: string) => shapes.find((s) => s.id === id) ?? null),
+    getShapeGeometry: vi.fn(() => ({ bounds: { x: 0, y: 0, w: 100, h: 100 } })),
+    zoomToBounds: vi.fn(),
+    getZoomLevel: vi.fn(() => 1),
+    store: { listen: vi.fn(() => vi.fn()) },
     zoomToFit: vi.fn(),
+    animateShape: vi.fn(),
+    sideEffects: {
+      registerBeforeChangeHandler: vi.fn(() => vi.fn()),
+      registerAfterChangeHandler: vi.fn(() => vi.fn()),
+    },
     reset() {
       shapes = [];
       editor.createShapes.mockClear();
       editor.updateShapes.mockClear();
       editor.deleteShapes.mockClear();
       editor.getCurrentPageShapes.mockClear();
+      editor.getBindingsFromShape.mockClear();
+      editor.createBindings.mockClear();
+      editor.deleteBindings.mockClear();
+      editor.getShape.mockClear();
+      editor.getShapeGeometry.mockClear();
+      editor.zoomToBounds.mockClear();
+      editor.getZoomLevel.mockClear();
       editor.zoomToFit.mockClear();
+      editor.animateShape.mockClear();
+      editor.store.listen.mockClear();
+      editor.sideEffects.registerBeforeChangeHandler.mockClear();
+      editor.sideEffects.registerAfterChangeHandler.mockClear();
     },
   };
 
@@ -62,15 +88,19 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 
-vi.mock("tldraw", () => ({
-  Tldraw: ({ children, onMount }: { children: React.ReactNode; onMount: (editor: any) => void }) => {
-    useEffect(() => {
-      onMount(mockEditor);
-    }, [onMount]);
+vi.mock("tldraw", async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    Tldraw: ({ children, onMount }: { children: React.ReactNode; onMount: (editor: any) => void }) => {
+      useEffect(() => {
+        onMount(mockEditor);
+      }, [onMount]);
 
-    return <div>{children}</div>;
-  },
-}));
+      return <div>{children}</div>;
+    },
+  };
+});
 
 vi.mock("./CanvasToolbar", () => ({
   CanvasToolbar: () => <div data-testid="canvas-toolbar" />,
@@ -80,13 +110,21 @@ vi.mock("./ShapeContextMenu", () => ({
   ShapeContextMenu: () => <div data-testid="shape-context-menu" />,
 }));
 
-vi.mock("./shapes", () => ({
-  customShapeUtils: [],
-}));
+vi.mock("./shapes", async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    customShapeUtils: [],
+  };
+});
 
-vi.mock("~/hooks/useCanvasLayout", () => ({
-  useCanvasLayout: useCanvasLayoutMock,
-}));
+vi.mock("~/hooks/useCanvasLayout", async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    useCanvasLayout: useCanvasLayoutMock,
+  };
+});
 
 beforeEach(() => {
   mockEditor.reset();
@@ -140,7 +178,7 @@ vi.mock("~/stores/editorStore", () => ({
       },
     ],
     projectVideoUrl: null,
-    currentStage: "render",
+    currentStage: "character",
     recoverySummary: null,
   }),
   useShallow: (selector: any) => {
@@ -190,7 +228,7 @@ vi.mock("~/stores/editorStore", () => ({
         },
       ],
       projectVideoUrl: null,
-      currentStage: "render",
+      currentStage: "character",
       recoverySummary: null,
     };
     const result = selector(state);
@@ -215,11 +253,13 @@ describe("InfiniteCanvas", () => {
 
     expect(useCanvasLayoutMock.mock.calls[0]?.[0].visibleSections).toEqual([
       "plan",
-      "render",
+      "character",
+      "shot",
     ]);
     expect(mockEditor.createShapes).toHaveBeenCalledWith([
       expect.objectContaining({ id: "shape:plan" }),
-      expect.objectContaining({ id: "shape:render" }),
+      expect.objectContaining({ id: "shape:character" }),
+      expect.objectContaining({ id: "shape:shot" }),
     ]);
   });
 

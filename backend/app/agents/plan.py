@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.agents.base import AgentContext, BaseAgent
+from app.agents.base import AgentContext, BaseAgent, CompletionInfo
 from app.agents.prompts.plan import SYSTEM_PROMPT
 from app.agents.utils import extract_json
 from app.db.utils import utcnow
@@ -243,6 +243,7 @@ class PlanAgent(BaseAgent):
                 "status": ctx.project.status,
                 "creation_mode": getattr(ctx.project, "creation_mode", None),
                 "target_shot_count": getattr(ctx.project, "target_shot_count", None),
+                "character_hints": getattr(ctx.project, "character_hints", None) or None,
             },
             "mode": ctx.rerun_mode,
         }
@@ -258,6 +259,7 @@ class PlanAgent(BaseAgent):
         resp = await self.call_llm(ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096)
         data = extract_json(resp.text)
 
+        user_message = data.get("user_message") or ""
         visual_bible = data.get("visual_bible") or ""
 
         project_update = data.get("project_update") or {}
@@ -318,7 +320,7 @@ class PlanAgent(BaseAgent):
                 parts.append(f"类型：{', '.join(genre)}")
             if themes:
                 parts.append(f"主题：{', '.join(themes)}")
-            lines.append(f"🎭 {' | '.join(parts)}")
+            lines.append(f"{' | '.join(parts)}")
 
         if visual_bible:
             lines.append(f"视觉指南：{visual_bible[:80]}")
@@ -342,11 +344,17 @@ class PlanAgent(BaseAgent):
 
             char_names = [c.name for c in final_chars]
             if char_names:
-                lines.append(f"👥 角色：{', '.join(char_names)}")
+                lines.append(f"角色：{', '.join(char_names)}")
             lines.append(f"{len(final_shots)} 个分镜")
 
             summary = ctx.project.summary or f"增量更新：{len(final_chars)}个角色、{len(final_shots)}个分镜"
-            await self.send_message(ctx, "\n".join(lines) if lines else "✅ 增量更新完成", summary=summary, progress=1.0)
+            ctx.completion_info = CompletionInfo(
+                completed=user_message or "已完成创作方案增量更新",
+                details=f"更新后共 {len(final_chars)} 个角色、{len(final_shots)} 个分镜",
+                next="接下来将为角色和分镜生成参考图片",
+                question="增量更新后的方案是否符合预期？如需调整，请告诉我具体的修改意见。",
+            )
+            await self.send_message(ctx, user_message or "\n".join(lines) or "增量更新完成", summary=summary, progress=1.0)
             return
 
         raw_characters = data.get("characters") or []
@@ -373,7 +381,7 @@ class PlanAgent(BaseAgent):
                 await ctx.session.flush()
                 for character in new_characters:
                     await self.send_character_event(ctx, character, "character_created")
-                lines.append(f"👥 角色：{', '.join(char_names)}")
+                lines.append(f"角色：{', '.join(char_names)}")
 
         raw_shots = data.get("shots") or []
         if not isinstance(raw_shots, list) or not raw_shots:
@@ -434,4 +442,10 @@ class PlanAgent(BaseAgent):
         ctx.project.updated_at = utcnow()
         ctx.session.add(ctx.project)
 
-        await self.send_message(ctx, "\n".join(lines) if lines else "✅ 规划完成", summary=summary, progress=1.0)
+        ctx.completion_info = CompletionInfo(
+            completed=user_message or "已完成创作方案规划",
+            details=f"生成了 {char_count} 个角色设定和 {len(new_shots)} 个分镜脚本",
+            next="接下来将为角色和分镜生成参考图片",
+            question="创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
+        )
+        await self.send_message(ctx, user_message or "\n".join(lines) or "规划完成", summary=summary, progress=1.0)

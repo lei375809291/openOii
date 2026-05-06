@@ -67,7 +67,6 @@ async def test_run_agent_plan_empty_plan(fake_ws, fake_settings):
             agent_plan=[],
             settings=fake_settings,
             ws=fake_ws,
-            default_final_stage="plan",
         )
 
     assert run.status == "succeeded"
@@ -111,7 +110,6 @@ async def test_run_agent_plan_cancelled(fake_ws, fake_settings):
                 agent_plan=[_CancelAgent()],
                 settings=fake_settings,
                 ws=fake_ws,
-                default_final_stage="plan",
             )
 
     assert cancel_run.status == "cancelled"
@@ -154,7 +152,6 @@ async def test_run_agent_plan_failure(fake_ws, fake_settings):
             agent_plan=[_FailAgent()],
             settings=fake_settings,
             ws=fake_ws,
-            default_final_stage="plan",
         )
 
     assert fail_run.status == "failed"

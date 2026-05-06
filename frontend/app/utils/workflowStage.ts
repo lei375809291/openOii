@@ -3,8 +3,10 @@ import type { WorkflowStage } from "~/types";
 export const WORKFLOW_STAGE_SEQUENCE: WorkflowStage[] = [
   "plan",
   "plan_approval",
-  "render",
-  "render_approval",
+  "character",
+  "character_approval",
+  "shot",
+  "shot_approval",
   "compose",
   "review",
 ];
@@ -14,9 +16,11 @@ const WORKFLOW_STAGE_SET = new Set<WorkflowStage>(WORKFLOW_STAGE_SEQUENCE);
 const WORKFLOW_STAGE_UNLOCK_RANK: Record<WorkflowStage, number> = {
   plan: 0,
   plan_approval: 0,
-  render: 1,
-  render_approval: 1,
-  compose: 2,
+  character: 1,
+  character_approval: 1,
+  shot: 2,
+  shot_approval: 2,
+  compose: 3,
   review: -1,
 };
 
@@ -43,11 +47,17 @@ export function getWorkflowStageInfo(stage: WorkflowStage): {
         title: "规划阶段",
         description: "正在生成剧本、角色与镜头规划",
       };
-    case "render":
-    case "render_approval":
+    case "character":
+    case "character_approval":
       return {
-        title: "渲染阶段",
-        description: "正在生成角色图与分镜画面",
+        title: "角色渲染阶段",
+        description: "正在生成角色形象图",
+      };
+    case "shot":
+    case "shot_approval":
+      return {
+        title: "分镜渲染阶段",
+        description: "正在使用角色参考图生成分镜首帧图",
       };
     case "compose":
       return {

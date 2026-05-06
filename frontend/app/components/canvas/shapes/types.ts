@@ -46,7 +46,6 @@ export const SHAPE_TYPES = {
   CHARACTER_SECTION: "character-section",
   STORYBOARD_SECTION: "storyboard-section",
   VIDEO_SECTION: "video-section",
-  CONNECTOR: "connector",
 } as const;
 
 // 剧本区域 Shape (包含故事原文、摘要、角色列表文字版、分镜描述)
@@ -69,6 +68,7 @@ export type CharacterSectionShape = TLBaseShape<
     w: number;
     h: number;
     characters: ReviewedCharacter[];
+    sectionTitle: string;
   } & CanvasSectionStatusProps
 >;
 
@@ -104,15 +104,6 @@ export type VideoSectionShape = TLBaseShape<
   } & CanvasSectionStatusProps
 >;
 
-// 连接线 Shape
-export type ConnectorShape = TLBaseShape<
-  typeof SHAPE_TYPES.CONNECTOR,
-  {
-    fromId: string;
-    toId: string;
-  }
->;
-
 // 扩展 tldraw 全局类型
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
@@ -120,6 +111,5 @@ declare module "tldraw" {
     [SHAPE_TYPES.CHARACTER_SECTION]: CharacterSectionShape["props"];
     [SHAPE_TYPES.STORYBOARD_SECTION]: StoryboardSectionShape["props"];
     [SHAPE_TYPES.VIDEO_SECTION]: VideoSectionShape["props"];
-    [SHAPE_TYPES.CONNECTOR]: ConnectorShape["props"];
   }
 }

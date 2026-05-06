@@ -25,3 +25,4 @@ backend/coverage.json
 .opencode
 .planning/
 backend/.coverage
+dump.rdb

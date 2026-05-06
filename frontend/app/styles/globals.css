@@ -97,7 +97,7 @@
   }
 
   .btn-doodle {
-    @apply border-3 border-base-content/30 rounded-lg font-bold uppercase tracking-wide transition-all duration-150;
+    @apply border-3 border-base-content/30 rounded-lg font-bold uppercase tracking-wide transition-all duration-150 flex items-center whitespace-nowrap gap-1;
     box-shadow: 4px 4px 0px 0px oklch(var(--bc) / 0.3);
   }
   .btn-doodle:hover:not(:disabled) {

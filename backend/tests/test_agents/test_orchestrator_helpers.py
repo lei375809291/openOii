@@ -34,8 +34,8 @@ from tests.factories import create_project, create_run
 class TestPureHelpers:
     def test_next_phase2_stage_known(self):
         assert _next_phase2_stage("plan") == "plan_approval"
-        assert _next_phase2_stage("plan_approval") == "render"
-        assert _next_phase2_stage("render") == "render_approval"
+        assert _next_phase2_stage("plan_approval") == "character"
+        assert _next_phase2_stage("character") == "character_approval"
 
     def test_next_phase2_stage_unknown_returns_none(self):
         assert _next_phase2_stage("not-a-stage") is None
@@ -43,7 +43,8 @@ class TestPureHelpers:
 
     def test_resume_agent_for_stage_known(self):
         assert _resume_agent_for_stage("plan") == "plan"
-        assert _resume_agent_for_stage("render") == "render"
+        assert _resume_agent_for_stage("character") == "character"
+        assert _resume_agent_for_stage("shot") == "shot"
         assert _resume_agent_for_stage("compose") == "compose"
 
     def test_resume_agent_for_unknown_stage_falls_back(self):
@@ -304,7 +305,7 @@ async def test_cleanup_full_mode_plan_deletes_all(test_session, orch_with_sessio
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_render_clears_images(
+async def test_cleanup_full_mode_character_clears_images(
     test_session, orch_with_session, monkeypatch
 ):
     orch, ws = orch_with_session
@@ -315,7 +316,7 @@ async def test_cleanup_full_mode_render_clears_images(
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "render", mode="full")
+    await orch._cleanup_for_rerun(project.id, "character", mode="full")
 
     await test_session.refresh(char)
     await test_session.refresh(shot)
@@ -327,14 +328,14 @@ async def test_cleanup_full_mode_render_clears_images(
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_render_clears_shot_assets(test_session, orch_with_session):
+async def test_cleanup_full_mode_shot_clears_assets(test_session, orch_with_session):
     orch, _ws = orch_with_session
     project = await create_project(test_session)
     shot = Shot(project_id=project.id, order=0, description="s", image_url="i", video_url="v")
     test_session.add(shot)
     await test_session.commit()
 
-    await orch._cleanup_for_rerun(project.id, "render", mode="full")
+    await orch._cleanup_for_rerun(project.id, "character", mode="full")
 
     await test_session.refresh(shot)
     assert shot.image_url is None

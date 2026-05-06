@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.utils import utcnow
 from app.agents.base import AgentContext
 from app.agents.plan import PlanAgent
-from app.agents.render import RenderAgent
+from app.agents.character import CharacterAgent
+from app.agents.shot import ShotAgent
 from app.agents.compose import ComposeAgent
 from app.agents.review_rules import ReviewRuleEngine
 from app.config import Settings
@@ -49,7 +50,11 @@ def _next_phase2_stage(stage: str | None) -> str | None:
 
 STAGE_AGENT_MAP = {
     "plan": "plan",
-    "render": "render",
+    "plan_approval": "plan",
+    "character": "character",
+    "character_approval": "character",
+    "shot": "shot",
+    "shot_approval": "shot",
     "compose": "compose",
     "review": "review",
 }
@@ -76,13 +81,18 @@ AGENT_COMPLETION_INFO = {
     "plan": {
         "completed": "已完成创作方案规划",
         "details": "生成了角色设定和分镜脚本",
-        "next": "接下来将为角色和分镜生成参考图片",
+        "next": "接下来将为角色生成参考图片",
         "question": "创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
     },
-    "render": {
-        "completed": "已完成角色形象和分镜首帧图生成",
+    "character": {
+        "completed": "已完成角色形象图生成",
+        "next": "接下来将为分镜生成首帧图",
+        "question": "角色形象是否满意？如果需要重新生成，请告诉我。",
+    },
+    "shot": {
+        "completed": "已完成分镜首帧图生成",
         "next": "接下来将根据分镜生成视频片段并合成",
-        "question": "角色形象和分镜画面是否满意？如果需要重新生成，请告诉我。",
+        "question": "分镜画面是否满意？如果需要重新生成，请告诉我。",
     },
     "compose": {
         "completed": "已完成视频合成",
@@ -213,7 +223,8 @@ class GenerationOrchestrator:
         self._last_user_feedback_id: int | None = None
         self.agents = [
             PlanAgent(),
-            RenderAgent(),
+            CharacterAgent(),
+            ShotAgent(),
             ComposeAgent(),
             ReviewRuleEngine(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
         ]
@@ -282,8 +293,11 @@ class GenerationOrchestrator:
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-            elif start_agent == "render":
+            elif start_agent == "character":
                 await self._clear_character_images(project_id)
+                await self._clear_shot_images(project_id)
+                await self._clear_shot_videos(project_id)
+            elif start_agent == "shot":
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
             elif start_agent == "compose":
@@ -295,8 +309,11 @@ class GenerationOrchestrator:
                 await self._delete_project_shots(project_id)
                 await self._delete_project_characters(project_id)
                 cleared_types = ["characters", "shots"]
-            elif start_agent == "render":
+            elif start_agent == "character":
                 await self._clear_character_images(project_id)
+                await self._clear_shot_images(project_id)
+                await self._clear_shot_videos(project_id)
+            elif start_agent == "shot":
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
             elif start_agent == "compose":
@@ -336,14 +353,8 @@ class GenerationOrchestrator:
         await self.session.commit()
 
     async def _wait_for_confirm(
-        self, project_id: int, run: AgentRun, agent_name: str
+        self, project_id: int, run: AgentRun, agent_name: str, agent_ctx: AgentContext | None = None
     ) -> str | None:
-        # 获取 agent 完成信息
-        info = AGENT_COMPLETION_INFO.get(agent_name, {})
-        completed = info.get("completed", f"「{agent_name}」已完成")
-        details = info.get("details", "")
-        next_step = info.get("next", "继续下一步")
-        question = info.get("question", "是否继续？")
         current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "plan")
         next_stage = _next_phase2_stage(current_stage)
         recovery_summary = await build_recovery_summary(
@@ -353,12 +364,24 @@ class GenerationOrchestrator:
         )
         run_pk = run.id or 0
 
+        if agent_ctx and agent_ctx.completion_info:
+            completed = agent_ctx.completion_info.completed or f"「{agent_name}」已完成"
+            details = agent_ctx.completion_info.details
+            next_step = agent_ctx.completion_info.next or "继续下一步"
+            question = agent_ctx.completion_info.question or "是否继续？"
+        else:
+            info = AGENT_COMPLETION_INFO.get(agent_name, {})
+            completed = info.get("completed", f"「{agent_name}」已完成")
+            details = info.get("details", "")
+            next_step = info.get("next", "继续下一步")
+            question = info.get("question", "是否继续？")
+
         # 构建详细消息
-        message_parts = [f"✅ {completed}"]
+        message_parts = [completed]
         if details:
             message_parts.append(f"{details}")
-        message_parts.append(f"➡️ {next_step}")
-        message_parts.append(f"❓ {question}")
+        message_parts.append(next_step)
+        message_parts.append(question)
 
         full_message = "\n".join(message_parts)
 
@@ -402,6 +425,14 @@ class GenerationOrchestrator:
 
         await clear_awaiting_payload(run_pk)
 
+        confirmed_recovery = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+
+        post_approval_stage = _next_phase2_stage(next_stage)
+
         await self.ws.send_event(
             project_id,
             {
@@ -411,10 +442,10 @@ class GenerationOrchestrator:
                     "project_id": project_id,
                     "agent": agent_name,
                     "gate": agent_name,
-                    "current_stage": current_stage,
-                    "stage": current_stage,
-                    "next_stage": next_stage,
-                    "recovery_summary": recovery_summary.model_dump(mode="json"),
+                    "current_stage": post_approval_stage,
+                    "stage": post_approval_stage,
+                    "next_stage": _next_phase2_stage(post_approval_stage) if post_approval_stage else None,
+                    "recovery_summary": confirmed_recovery.model_dump(mode="json"),
                 },
             },
         )
@@ -436,6 +467,79 @@ class GenerationOrchestrator:
             return msg.content.strip()
 
         return None
+
+    async def _send_auto_approval_events(
+        self, project_id: int, run: AgentRun, agent_name: str, agent_ctx: AgentContext | None = None
+    ) -> None:
+        current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "plan")
+        approval_stage = _next_phase2_stage(current_stage)
+        post_approval_stage = _next_phase2_stage(approval_stage) if approval_stage else None
+        recovery_summary = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+        run_pk = run.id or 0
+
+        if agent_ctx and agent_ctx.completion_info:
+            completed = agent_ctx.completion_info.completed or f"「{agent_name}」已完成"
+            next_step = agent_ctx.completion_info.next or "继续下一步"
+            question = agent_ctx.completion_info.question or "是否继续？"
+        else:
+            info = AGENT_COMPLETION_INFO.get(agent_name, {})
+            completed = info.get("completed", f"「{agent_name}」已完成")
+            next_step = info.get("next", "继续下一步")
+            question = info.get("question", "是否继续？")
+
+        message_parts = [completed, next_step, question, "[auto]"]
+        full_message = "\n".join(message_parts)
+
+        await self.ws.send_event(
+            project_id,
+            {
+                "type": "run_awaiting_confirm",
+                "data": {
+                    "run_id": run_pk,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": current_stage,
+                    "stage": current_stage,
+                    "next_stage": approval_stage,
+                    "recovery_summary": recovery_summary.model_dump(mode="json"),
+                    "preserved_stages": recovery_summary.preserved_stages,
+                    "message": full_message,
+                    "completed": completed,
+                    "next_step": next_step,
+                    "question": question,
+                    "auto_mode": True,
+                },
+            },
+        )
+
+        confirmed_recovery = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+
+        await self.ws.send_event(
+            project_id,
+            {
+                "type": "run_confirmed",
+                "data": {
+                    "run_id": run_pk,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": post_approval_stage,
+                    "stage": post_approval_stage,
+                    "next_stage": _next_phase2_stage(post_approval_stage) if post_approval_stage else None,
+                    "recovery_summary": confirmed_recovery.model_dump(mode="json"),
+                    "auto_mode": True,
+                },
+            },
+        )
 
     def _build_agent_context(
         self,
@@ -537,7 +641,9 @@ class GenerationOrchestrator:
             feedback = ""
             action = "approve"
             if not auto_mode:
-                feedback = await self._wait_for_confirm(project_pk, run, gate_agent.strip()) or ""
+                feedback = await self._wait_for_confirm(project_pk, run, gate_agent.strip(), agent_ctx=ctx) or ""
+            else:
+                await self._send_auto_approval_events(project_pk, run, gate_agent.strip(), agent_ctx=ctx)
             logger.debug("[graph] run=%s resume with feedback=%r action=%s", run_pk, feedback, action)
             if feedback:
                 action = "feedback"

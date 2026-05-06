@@ -15,6 +15,7 @@ import {
 } from "~/utils/workspaceStatus";
 import { canvasEvents } from "../canvasEvents";
 import { SvgIcon } from "~/components/ui/SvgIcon";
+import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
 
 function CharacterCard({ char }: { char: ReviewedCharacter }) {
   const isApproved = char.approval_state === "approved";
@@ -30,7 +31,7 @@ function CharacterCard({ char }: { char: ReviewedCharacter }) {
       action,
       entityType: "character",
       entityId: char.id,
-      feedbackType: "render",
+      feedbackType: "character",
     });
   };
 
@@ -106,36 +107,42 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
     placeholder: T.boolean,
     statusLabel: T.string,
     placeholderText: T.string,
+    sectionTitle: T.string,
   };
 
   getDefaultProps(): CharacterSectionShape["props"] {
     return {
       w: 800,
-      h: 400,
+      h: 200,
       characters: [],
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("render"),
+      placeholderText: getWorkspaceSectionPlaceholderText("character"),
+      sectionTitle: "角色",
     };
   }
 
   override canEdit() { return true; }
   override canResize() { return false; }
+  override canCull() { return false; }
 
   getGeometry(shape: CharacterSectionShape): Geometry2d {
+    const size = this.editor ? getShapeSize(this.editor, shape.id) : undefined;
     return new Rectangle2d({
       width: shape.props.w,
-      height: shape.props.h,
+      height: size?.height ?? shape.props.h,
       isFilled: true,
     });
   }
 
   component(shape: CharacterSectionShape) {
     const { characters, placeholder, placeholderText, statusLabel, w } = shape.props;
+    const ref = useDomSize(shape, this.editor ?? null);
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
+        <div ref={ref} style={{ width: w }}>
         <SectionShell
           sectionTitle="角色"
           statusLabel={statusLabel}
@@ -148,6 +155,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
             ))}
           </div>
         </SectionShell>
+        </div>
       </HTMLContainer>
     );
   }

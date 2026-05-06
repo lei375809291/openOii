@@ -310,7 +310,7 @@ describe("useProjectWebSocket", () => {
       data: {
         current_agent: "plan",
         progress: 0.42,
-        stage: "render",
+        stage: "character",
       },
     };
 
@@ -409,7 +409,7 @@ describe("useProjectWebSocket", () => {
           agent: "plan",
           run_id: 202,
           message: "请确认",
-          stage: "render",
+          stage: "character",
           recovery_summary: { test: true } as never,
         },
       } as never,
@@ -425,7 +425,7 @@ describe("useProjectWebSocket", () => {
         agent: "plan",
         run_id: 202,
       },
-      currentStage: "render",
+      currentStage: "character",
     });
 
     expect(useEditorStore.getState().recoverySummary).toMatchObject({ test: true });
@@ -456,6 +456,53 @@ describe("useProjectWebSocket", () => {
     expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
       role: "info",
       content: "已确认，继续执行...",
+    });
+  });
+
+  it("auto_mode awaiting_confirm skips autoConfirm callback", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    const autoConfirmSpy = vi.fn();
+
+    applyWsEvent(
+      {
+        type: "run_awaiting_confirm",
+        data: {
+          agent: "plan",
+          run_id: 303,
+          message: "auto confirm",
+          stage: "character",
+          recovery_summary: { test: true } as never,
+          auto_mode: true,
+        },
+      } as never,
+      store,
+      autoConfirmSpy
+    );
+
+    expect(autoConfirmSpy).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().awaitingConfirm).toBe(true);
+    expect(useEditorStore.getState().currentStage).toBe("character");
+
+    applyWsEvent(
+      {
+        type: "run_confirmed",
+        data: {
+          agent: "plan",
+          run_id: 303,
+          stage: "shot",
+          auto_mode: true,
+        },
+      } as never,
+      store,
+      autoConfirmSpy
+    );
+
+    expect(useEditorStore.getState().awaitingConfirm).toBe(false);
+    expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
+      role: "info",
+      content: "自动确认，继续执行...",
     });
   });
 
@@ -735,25 +782,10 @@ describe("useProjectWebSocket", () => {
     expect(toastMock.warning).not.toHaveBeenCalled();
   });
 
-  it("handles handoff and server-error events", () => {
+  it("handles server-error events", () => {
     const store = useEditorStore.getState();
 
     store.reset();
-
-    applyWsEvent(
-      {
-        type: "agent_handoff",
-        data: { message: "正在切换 Agent" },
-      } as never,
-      store,
-      noopAutoConfirm
-    );
-
-    expect(useEditorStore.getState().messages.at(-1)).toMatchObject({
-      role: "handoff",
-      agent: "system",
-      content: "正在切换 Agent",
-    });
 
     applyWsEvent(
       {
@@ -838,7 +870,7 @@ describe("useProjectWebSocket", () => {
           run_id: 600,
           current_agent: "plan",
           progress: 0.5,
-          stage: "render",
+          stage: "character",
         },
       } as never,
       store,
@@ -863,7 +895,7 @@ describe("useProjectWebSocket", () => {
           run_id: 700,
           agent: "plan",
           message: "请确认",
-          stage: "render",
+          stage: "character",
           recovery_summary: {},
         },
       } as never,
@@ -1005,31 +1037,6 @@ describe("useProjectWebSocket", () => {
     });
   });
 
-  it("reads from_agent and to_agent from agent_handoff event", () => {
-    const store = useEditorStore.getState();
-    store.reset();
-
-    applyWsEvent(
-      {
-        type: "agent_handoff",
-        data: {
-          from_agent: "plan",
-          to_agent: "plan",
-          message: "@plan 邀请 @render 加入了群聊",
-        },
-      } as never,
-      store,
-      noopAutoConfirm
-    );
-
-    const lastMsg = useEditorStore.getState().messages.at(-1);
-    expect(lastMsg).toMatchObject({
-      role: "handoff",
-      agent: "system",
-      content: "@plan 邀请 @render 加入了群聊",
-    });
-  });
-
   it("handles run_cancelled with run_ids field", () => {
     const store = useEditorStore.getState();
     store.reset();
@@ -1107,7 +1114,7 @@ describe("useProjectWebSocket", () => {
           current_agent: "plan",
           current_stage: "plan",
           stage: "plan",
-          next_stage: "render",
+          next_stage: "character",
         },
       } as never,
       store,

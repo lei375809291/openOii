@@ -1,7 +1,7 @@
 import { ArrowPathIcon, StopIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChatDrawer } from "~/components/chat/ChatDrawer";
 import { TopBar } from "~/components/layout/TopBar";
 import { StagePipeline } from "~/components/layout/StagePipeline";
@@ -13,7 +13,6 @@ import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
-import { useChatPanelStore } from "~/stores/chatPanelStore";
 import type {
 	ProjectProviderSettings,
 	RecoveryControlRead,
@@ -24,6 +23,7 @@ import { isWorkflowStage } from "~/utils/workflowStage";
 
 export function ProjectPage() {
 	const { id } = useParams<{ id: string }>();
+	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const projectId = parseInt(id || "0", 10);
 	const queryClient = useQueryClient();
@@ -44,7 +44,6 @@ export function ProjectPage() {
 	})));
 	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
 	const hasRecovery = Boolean(storeRecoveryControl);
-	const { toggle: toggleChat } = useChatPanelStore();
 	const [assetsOpen, setAssetsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const autoStartTriggered = useRef(false);
@@ -218,8 +217,10 @@ export function ProjectPage() {
 		},
 	});
 
+	const storeCurrentAgent = useEditorStore((s) => s.currentAgent);
+
 	const feedbackMutation = useMutation({
-		mutationFn: (content: string) => projectsApi.feedback(projectId, content, undefined, "plan"),
+		mutationFn: (content: string) => projectsApi.feedback(projectId, content, undefined, storeCurrentAgent ?? "plan"),
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
 			const isConflict =
@@ -414,11 +415,8 @@ export function ProjectPage() {
 					isGenerating={storeIsGenerating}
 					awaitingConfirm={storeAwaitingConfirm}
 					hasRecovery={hasRecovery}
-					onToggleChat={toggleChat}
 					onResume={handleResume}
 					onCancel={handleCancel}
-					onGenerate={handleGenerate}
-					generateDisabled={false}
 				/>
 
 			<div className="flex-1 flex overflow-hidden">
@@ -438,7 +436,7 @@ export function ProjectPage() {
 			</div>
 
 			<AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
-			<HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} projectId={projectId} />
+			<HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} onNavigate={(id) => navigate(`/projects/${id}`)} />
 		</div>
 	);
 }

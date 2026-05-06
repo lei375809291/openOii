@@ -16,14 +16,16 @@ import {
 } from "~/utils/workspaceStatus";
 import { canvasEvents } from "../canvasEvents";
 import { SvgIcon } from "~/components/ui/SvgIcon";
+import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
 
-function ShotCard({ shot }: { shot: ReviewedShot }) {
+function ShotCard({
+  shot,
+}: {
+  shot: ReviewedShot;
+}) {
   const isApproved = shot.approval_state === "approved";
   const imageUrl = getStaticUrl(shot.image_url);
   const videoUrl = getStaticUrl(shot.video_url);
-  const hasDialogue = Boolean(shot.dialogue);
-  const hasAction = Boolean(shot.action);
-  const hasSfx = Boolean(shot.sfx);
   const [isEditing, setIsEditing] = useState(false);
   const [editDialogue, setEditDialogue] = useState(shot.dialogue || "");
   const [editAction, setEditAction] = useState(shot.action || "");
@@ -40,7 +42,7 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
       action,
       entityType: "shot",
       entityId: shot.id,
-      feedbackType: "render",
+      feedbackType: "shot",
     });
   };
 
@@ -55,7 +57,7 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
         action: "edit",
         entityType: "shot",
         entityId: shot.id,
-        feedbackType: "render",
+        feedbackType: "shot",
       });
     }
   };
@@ -69,9 +71,13 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
       {imageUrl ? (
         <figure className="relative">
           <img src={imageUrl} alt={`Shot ${shot.order}`} className="w-full object-cover" />
-          <span className="badge badge-xs absolute top-1 right-1 bg-base-100/80">{shot.duration}s</span>
+          <span className="badge badge-xs absolute top-1 right-1 bg-base-100/80">
+            {shot.duration ? `${shot.duration}s` : "—"}
+          </span>
           {shot.expression && (
-            <span className="badge badge-xs badge-primary absolute bottom-1 left-1">{shot.expression}</span>
+            <span className="badge badge-xs badge-primary absolute bottom-1 left-1">
+              {shot.expression}
+            </span>
           )}
           <div className="absolute inset-0 bg-base-content/0 group-hover:bg-base-content/20 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
             <button
@@ -95,7 +101,12 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
                 type="button"
                 className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30"
                 title="预览片段"
-                onClick={() => canvasEvents.emit("preview-video", { src: videoUrl, title: `镜头 ${shot.order}` })}
+                onClick={() =>
+                  canvasEvents.emit("preview-video", {
+                    src: videoUrl,
+                    title: `镜头 ${shot.order}`,
+                  })
+                }
               >
                 <SvgIcon name="play" size={12} />
               </button>
@@ -117,22 +128,26 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
           <span className="text-xs opacity-40">生成中...</span>
         </div>
       )}
-      <div className="card-body p-2 gap-1">
+      <div className="card-body p-2 gap-0.5">
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isApproved ? "bg-success" : "bg-warning"}`} />
+          <span
+            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              isApproved ? "bg-success" : "bg-warning"
+            }`}
+          />
           <span className="text-xs font-medium">镜头 {shot.order}</span>
           {shot.camera && (
             <span className="badge badge-ghost badge-xs ml-auto">{shot.camera}</span>
           )}
         </div>
         {shot.scene && (
-          <p className="text-xs text-base-content/60 font-medium">{shot.scene}</p>
+          <p className="text-xs text-base-content/70 font-semibold">{shot.scene}</p>
         )}
         {shot.description && (
-          <p className="text-xs text-base-content/40 line-clamp-2">{shot.description}</p>
+          <p className="text-xs text-base-content/50 line-clamp-2">{shot.description}</p>
         )}
         {isEditing ? (
-          <div className="space-y-1">
+          <div className="space-y-1 mt-1">
             <input
               type="text"
               className="input input-bordered input-xs bg-base-100/80 w-full text-xs"
@@ -149,23 +164,44 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
               onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
             />
             <div className="flex gap-1">
-              <button type="button" className="btn btn-xs btn-primary btn-sm" onClick={handleSaveEdit}>保存</button>
-              <button type="button" className="btn btn-xs btn-ghost btn-sm" onClick={() => setIsEditing(false)}>取消</button>
+              <button type="button" className="btn btn-xs btn-primary btn-sm" onClick={handleSaveEdit}>
+                保存
+              </button>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost btn-sm"
+                onClick={() => setIsEditing(false)}
+              >
+                取消
+              </button>
             </div>
           </div>
         ) : (
           <>
-            {hasAction && (
-              <p className="text-xs text-accent/70 flex items-center gap-0.5"><SvgIcon name="chevron-right" size={10} />{shot.action}</p>
+            {shot.action && (
+              <p className="text-xs text-accent/70 flex items-center gap-0.5">
+                <SvgIcon name="chevron-right" size={10} />
+                {shot.action}
+              </p>
             )}
-            {hasDialogue && (
+            {shot.dialogue && (
               <p className="text-xs text-primary/80 italic">"{shot.dialogue}"</p>
             )}
           </>
         )}
         <div className="flex flex-wrap gap-0.5 mt-0.5">
-          {shot.lighting && <span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5"><SvgIcon name="lightbulb" size={10} />{shot.lighting}</span>}
-          {hasSfx && <span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5"><SvgIcon name="volume-2" size={10} />{shot.sfx}</span>}
+          {shot.lighting && (
+            <span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5">
+              <SvgIcon name="lightbulb" size={10} />
+              {shot.lighting}
+            </span>
+          )}
+          {shot.sfx && (
+            <span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5">
+              <SvgIcon name="volume-2" size={10} />
+              {shot.sfx}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -189,44 +225,61 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
   getDefaultProps(): StoryboardSectionShape["props"] {
     return {
       w: 800,
-      h: 500,
+      h: 200,
       shots: [],
-      sectionTitle: "分镜",
+      sectionTitle: "分镜画面",
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("render"),
+      placeholderText: getWorkspaceSectionPlaceholderText("shot"),
     };
   }
 
-  override canEdit() { return true; }
-  override canResize() { return false; }
+  override canEdit() {
+    return true;
+  }
+  override canResize() {
+    return false;
+  }
+  override canCull() { return false; }
 
   getGeometry(shape: StoryboardSectionShape): Geometry2d {
+    const size = this.editor ? getShapeSize(this.editor, shape.id) : undefined;
     return new Rectangle2d({
       width: shape.props.w,
-      height: shape.props.h,
+      height: size?.height ?? shape.props.h,
       isFilled: true,
     });
   }
 
   component(shape: StoryboardSectionShape) {
-    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, w } = shape.props;
+    const { shots, sectionTitle, placeholder, placeholderText, statusLabel, w } =
+      shape.props;
+    const typedShots = (shots ?? []) as ReviewedShot[];
+    const ref = useDomSize(shape, this.editor ?? null);
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
+        <div ref={ref} style={{ width: w }}>
         <SectionShell
           sectionTitle={sectionTitle}
           statusLabel={statusLabel}
           placeholder={placeholder}
           placeholderText={placeholderText}
         >
-          <div className="grid grid-cols-4 gap-2">
-            {(shots as ReviewedShot[]).map((shot) => (
-              <ShotCard key={shot.id} shot={shot} />
-            ))}
-          </div>
+          {!placeholder && (
+            <div>
+              {typedShots.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {typedShots.map((shot) => (
+                    <ShotCard key={shot.id} shot={shot} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </SectionShell>
+        </div>
       </HTMLContainer>
     );
   }

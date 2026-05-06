@@ -8,6 +8,11 @@ vi.mock("~/services/api", () => ({
   getStaticUrl: (path: string | null | undefined) => path,
 }));
 
+vi.mock("~/hooks/useDomSize", () => ({
+  useDomSize: () => ({ current: null }),
+  getShapeSize: () => undefined,
+}));
+
 describe("StoryboardSectionShape", () => {
   const shapeUtil = new StoryboardSectionShapeUtil({} as never);
 
@@ -47,16 +52,17 @@ describe("StoryboardSectionShape", () => {
             approved_scene: null, approved_action: null, approved_expression: null,
             approved_lighting: null, approved_dialogue: null, approved_sfx: null,
             approved_character_ids: [1, 2],
+            seed: null,
           },
         ],
-        sectionTitle: "分镜",
+        sectionTitle: "分镜画面",
         sectionState: "complete",
         placeholder: false,
         statusLabel: "已完成",
         placeholderText: "等待分镜生成...",
         ...props,
       },
-    }) as StoryboardSectionShape;
+    }) as unknown as StoryboardSectionShape;
 
   it("shows shot info, duration badge, and description", () => {
     render(shapeUtil.component(createShape()));
@@ -64,6 +70,12 @@ describe("StoryboardSectionShape", () => {
     expect(screen.getByText(/阿宁走进雨夜街道/)).toBeInTheDocument();
     expect(screen.getByText("镜头 1")).toBeInTheDocument();
     expect(screen.getByText("wide")).toBeInTheDocument();
+  });
+
+  it("does not duplicate character cards in shot section", () => {
+    render(shapeUtil.component(createShape()));
+    expect(screen.queryByText("角色")).not.toBeInTheDocument();
+    expect(screen.queryByText("阿宁、老王")).not.toBeInTheDocument();
   });
 
   it("shows placeholder for shots without image", () => {

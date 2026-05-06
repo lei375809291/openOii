@@ -58,7 +58,7 @@ export function HomePage() {
   const [story, setStory] = useState("");
   const [style, setStyle] = useState(DEFAULT_STYLE);
   const [creationMode, setCreationMode] = useState("story");
-  const [shotCount, setShotCount] = useState(8);
+  const [shotCount, setShotCount] = useState<number | undefined>(undefined);
   const [characterHints, setCharacterHints] = useState<string[]>([""]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
@@ -201,7 +201,7 @@ export function HomePage() {
         historyOpen={historyOpen}
       />
       <AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
-      <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} projectId={undefined} />
+      <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} onNavigate={(id) => navigate(`/projects/${id}`)} />
       <div className="flex flex-col items-center justify-center p-4 sm:p-6 halftone-bg-accent min-h-[calc(100vh-40px)]">
         <main className="w-full max-w-2xl mx-auto">
           <div className="text-center mb-8 animate-doodle-pop">
@@ -217,12 +217,12 @@ export function HomePage() {
             <div className="space-y-4">
               {/* Creation Mode Selector */}
               <div>
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {CREATION_MODES.map((mode) => (
                     <button
                       key={mode.value}
                       type="button"
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 text-xs font-bold transition-all duration-150 ${
+                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border-2 text-xs font-bold transition-all duration-150 ${
                         creationMode === mode.value
                           ? "border-primary bg-primary/10 text-primary -translate-y-0.5 shadow-comic"
                           : "border-base-content/10 bg-base-200/50 text-base-content/60 hover:border-primary/30 hover:-translate-y-0.5"
@@ -231,7 +231,6 @@ export function HomePage() {
                     >
                       <SvgIcon name={mode.icon} size={14} />
                       <span>{mode.label}</span>
-                      <span className="text-base-content/30 hidden sm:inline">{mode.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -337,30 +336,37 @@ export function HomePage() {
               />
 
               {/* Style Selector */}
-              <div>
-                <div className="flex gap-1 flex-wrap items-center">
-                  {STYLE_CATEGORIES.map((category) => (
-                    <span key={category.group} className="contents">
+              <div className="space-y-1.5">
+                {STYLE_CATEGORIES.map((category, ci) => (
+                  <div key={category.group} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-base-content/30 font-bold uppercase tracking-wider w-14 flex-shrink-0">
+                      {category.group}
+                    </span>
+                    <div className="flex gap-1 flex-wrap items-center">
                       {category.styles.map((opt) => (
                         <button
                           key={opt.value}
                           type="button"
-                          className={`btn btn-sm border-3 font-bold text-xs transition-all duration-150 ${
+                          className={`px-2 py-0.5 rounded-full border-2 text-[11px] font-bold transition-all duration-150 ${
                             style === opt.value
-                              ? "btn-primary shadow-comic border-primary-content/20 -translate-y-0.5"
-                              : "btn-ghost border-base-content/15 hover:border-primary/40 hover:-translate-y-0.5"
+                              ? "border-primary bg-primary/10 text-primary -translate-y-0.5 shadow-comic"
+                              : "border-base-content/10 bg-base-200/50 text-base-content/50 hover:border-primary/30 hover:-translate-y-0.5"
                           }`}
                           onClick={() => setStyle(opt.value)}
                         >
                           {opt.label}
                         </button>
                       ))}
-                    </span>
-                  ))}
-
+                    </div>
+                    {ci < STYLE_CATEGORIES.length - 1 && (
+                      <div className="hidden sm:block flex-1 border-b border-base-content/5" />
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center justify-end">
                   <button
                     type="button"
-                    className="flex items-center gap-0.5 text-xs text-base-content/30 hover:text-primary transition-colors px-1.5 ml-auto"
+                    className="flex items-center gap-0.5 text-xs text-base-content/30 hover:text-primary transition-colors px-1.5"
                     onClick={() => setShowAdvanced(!showAdvanced)}
                     aria-expanded={showAdvanced}
                   >
@@ -374,14 +380,14 @@ export function HomePage() {
                 <div className="space-y-2 border-t border-base-content/10 pt-2">
                   <div>
                     <label htmlFor="shot-count" className="text-xs text-base-content/40 mb-0.5 block font-comic uppercase tracking-wide">
-                      镜头数 {shotCount}
+                      镜头数 {shotCount ?? "自动"}
                     </label>
                     <input
                       id="shot-count"
                       type="range"
-                      min={3}
+                      min={1}
                       max={20}
-                      value={shotCount}
+                      value={shotCount ?? 6}
                       onChange={(e) => setShotCount(Number(e.target.value))}
                       className="range range-xs range-primary"
                     />

@@ -11,7 +11,7 @@ const defaultProps = {
   shots: [],
   videoUrl: null,
   videoTitle: "Video",
-  visibleSections: ["plan", "render"] as SectionKey[],
+  visibleSections: ["plan", "character"] as SectionKey[],
   isGenerating: false,
   awaitingConfirm: false,
   currentRunId: null,
@@ -19,33 +19,32 @@ const defaultProps = {
 };
 
 describe("useCanvasLayout", () => {
-  it("returns shapes array", () => {
+  it("returns layout with shapes and bindings", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    expect(Array.isArray(result.current)).toBe(true);
-    expect(result.current.length).toBeGreaterThan(0);
+    expect(result.current.shapes.length).toBeGreaterThan(0);
   });
 
   it("includes plan shape", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const planShape = result.current.find((s) => (s.id as string).includes("plan"));
+    const planShape = result.current.shapes.find((s) => (s.id as string).includes("plan"));
     expect(planShape).toBeDefined();
   });
 
-  it("includes render shape when visible", () => {
+  it("includes character shape when visible", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const renderShape = result.current.find((s) => (s.id as string).includes("render"));
-    expect(renderShape).toBeDefined();
+    const characterShape = result.current.shapes.find((s) => (s.id as string).includes("character"));
+    expect(characterShape).toBeDefined();
   });
 
-  it("includes connector shapes between sections", () => {
+  it("creates section shapes without arrows", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const connectors = result.current.filter((s) => (s.id as string).includes("connector"));
-    expect(connectors.length).toBeGreaterThan(0);
+    const arrows = result.current.shapes.filter((s) => s.type === "arrow");
+    expect(arrows.length).toBe(0);
   });
 
   it("omits sections not in visibleSections", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const composeShape = result.current.find((s) => (s.id as string).includes("compose"));
+    const composeShape = result.current.shapes.find((s) => (s.id as string).includes("compose"));
     expect(composeShape).toBeUndefined();
   });
 
@@ -59,7 +58,7 @@ describe("useCanvasLayout", () => {
         visibleSections: ["plan"] as SectionKey[],
       }),
     );
-    const planShape = result.current.find((s) => (s.id as string).includes("plan"));
+    const planShape = result.current.shapes.find((s) => (s.id as string).includes("plan"));
     expect((planShape?.props as any).sectionState).toBe("generating");
   });
 
@@ -72,7 +71,7 @@ describe("useCanvasLayout", () => {
         visibleSections: ["plan"] as SectionKey[],
       }),
     );
-    const planShape = result.current.find((s) => (s.id as string).includes("plan"));
+    const planShape = result.current.shapes.find((s) => (s.id as string).includes("plan"));
     expect((planShape?.props as any).sectionState).toBe("complete");
   });
 });

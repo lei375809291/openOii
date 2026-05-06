@@ -5,7 +5,7 @@ from typing import cast
 from sqlalchemy import select
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.agents.base import AgentContext, BaseAgent
+from app.agents.base import AgentContext, BaseAgent, CompletionInfo
 from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
 from app.orchestration.state import workflow_progress_for_stage
@@ -193,7 +193,7 @@ class ComposeAgent(BaseAgent):
             return
 
         try:
-            await self.send_message(ctx, f"🎞️ 开始拼接 {len(video_urls)} 个分镜视频...", progress=0.0, is_loading=True)
+            await self.send_message(ctx, f"开始拼接 {len(video_urls)} 个分镜视频...", progress=0.0, is_loading=True)
             merged_url = await ctx.video.merge_urls(video_urls)
 
             ctx.project.video_url = merged_url
@@ -218,7 +218,14 @@ class ComposeAgent(BaseAgent):
             )
 
             summary = f"将{len(video_urls)}个分镜拼接为完整视频"
-            await self.send_message(ctx, f"🎉 漫剧制作完成！已将 {len(video_urls)} 个分镜拼接为完整视频。", summary=summary, progress=1.0)
+            first_shot = shots[0] if shots else None
+            shot_hint = f"「{first_shot.description[:15]}…」" if first_shot and first_shot.description else ""
+            ctx.completion_info = CompletionInfo(
+                completed=f"已将 {len(video_urls)} 个分镜拼接为完整视频",
+                next="您的漫剧已经准备就绪！可以下载或分享了。",
+                question="最终视频效果满意吗？",
+            )
+            await self.send_message(ctx, f"漫剧制作完成！{shot_hint}等 {len(video_urls)} 个分镜已拼接为完整视频。", summary=summary, progress=1.0)
         except Exception as e:
             await self.send_message(ctx, f"视频拼接失败: {e}。您可以稍后手动拼接。", progress=1.0)
 
@@ -230,4 +237,4 @@ class ComposeAgent(BaseAgent):
         if video_count > 0:
             await self._merge_videos(ctx)
         else:
-            await self.send_message(ctx, "❌ 无视频可合成。", progress=1.0)
+            await self.send_message(ctx, "无视频可合成。", progress=1.0)

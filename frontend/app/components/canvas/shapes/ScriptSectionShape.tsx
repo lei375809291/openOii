@@ -8,6 +8,7 @@ import {
 } from "tldraw";
 import { type ScriptSectionShape } from "./types";
 import { SectionShell } from "./SectionShell";
+import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
 
 export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   static override type = "script-section" as const;
@@ -28,7 +29,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
   getDefaultProps(): ScriptSectionShape["props"] {
     return {
       w: 800,
-      h: 600,
+      h: 200,
       story: "",
       summary: "",
       characters: [],
@@ -42,20 +43,24 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
 
   override canEdit() { return true; }
   override canResize() { return false; }
+  override canCull() { return false; }
 
   getGeometry(shape: ScriptSectionShape): Geometry2d {
+    const size = this.editor ? getShapeSize(this.editor, shape.id) : undefined;
     return new Rectangle2d({
       width: shape.props.w,
-      height: shape.props.h,
+      height: size?.height ?? shape.props.h,
       isFilled: true,
     });
   }
 
   component(shape: ScriptSectionShape) {
     const { story, summary, shots, characters, placeholder, placeholderText, statusLabel, w } = shape.props;
+    const ref = useDomSize(shape, this.editor ?? null);
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
+        <div ref={ref} style={{ width: w }}>
         <SectionShell
           sectionTitle="编剧"
           statusLabel={statusLabel}
@@ -88,7 +93,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
                     </tr>
                   </thead>
                   <tbody>
-                    {shots.map((shot, i) => {
+                    {shots.map((shot: any, i: number) => {
                       const charNames = shot.character_ids
                         ?.map((cid: number) => characters.find((c: any) => c.id === cid)?.name)
                         .filter(Boolean);
@@ -114,6 +119,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
             )}
           </div>
         </SectionShell>
+        </div>
       </HTMLContainer>
     );
   }

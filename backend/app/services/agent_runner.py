@@ -23,6 +23,11 @@ def _next_stage(stage: str) -> str | None:
     return next_production_stage(stage)
 
 
+def _final_stage_for_agents(agent_plan: list[Any], fallback: str = "plan") -> str:
+    last_name = getattr(agent_plan[-1], "name", None) if agent_plan else None
+    return AGENT_STAGE_MAP.get(last_name or "", fallback)
+
+
 async def run_agent_plan(
     *,
     project_id: int,
@@ -31,8 +36,8 @@ async def run_agent_plan(
     settings: Settings,
     ws: ConnectionManager,
     target_ids: TargetIds | None = None,
-    default_final_stage: str = "plan",
 ) -> None:
+    final_stage = _final_stage_for_agents(agent_plan)
     try:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
@@ -52,6 +57,8 @@ async def run_agent_plan(
                 target_ids=target_ids,
             )
 
+            first_agent_name = agent_plan[0].name if agent_plan else None
+            first_stage = AGENT_STAGE_MAP.get(first_agent_name or "", final_stage)
             await ws.send_event(
                 project_id,
                 {
@@ -59,7 +66,11 @@ async def run_agent_plan(
                     "data": {
                         "run_id": run_id,
                         "project_id": project_id,
-                        "current_agent": agent_plan[0].name if agent_plan else None,
+                        "current_agent": first_agent_name,
+                        "current_stage": first_stage,
+                        "stage": first_stage,
+                        "next_stage": _next_stage(first_stage),
+                        "progress": 0.0,
                     },
                 },
             )
@@ -67,7 +78,7 @@ async def run_agent_plan(
             total_steps = max(len(agent_plan), 1)
             for idx, agent in enumerate(agent_plan):
                 agent_name = getattr(agent, "name", None)
-                stage = AGENT_STAGE_MAP.get(agent_name or "", default_final_stage)
+                stage = AGENT_STAGE_MAP.get(agent_name or "", final_stage)
                 within = idx / total_steps
                 progress = workflow_progress_for_stage(stage, within_stage=within)
                 run.status = "running"
@@ -104,7 +115,7 @@ async def run_agent_plan(
             await session.commit()
 
             last_agent_name = getattr(agent_plan[-1], "name", None) if agent_plan else None
-            final_stage = AGENT_STAGE_MAP.get(last_agent_name or "", default_final_stage)
+            final_stage = AGENT_STAGE_MAP.get(last_agent_name or "", final_stage)
             await ws.send_event(
                 project_id,
                 {

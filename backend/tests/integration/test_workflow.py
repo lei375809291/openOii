@@ -65,8 +65,11 @@ async def test_full_workflow(monkeypatch, test_session, test_settings):
                 "project_update": {"title": "Workflow", "style": "anime", "status": "planning"},
                 "characters": [{"name": "Hero", "description": "Brave"}],
                 "shots": [{"order": 1, "description": "Shot 1", "scene": "Opening", "action": "Hero enters", "expression": "determined", "lighting": "dramatic", "dialogue": "Here I come!", "sfx": "wind"}],
+                "user_message": "Plan done",
             }
         ),
+        json.dumps({"user_message": "Character images done"}),
+        json.dumps({"user_message": "Shot images done"}),
     ]
 
     async def _noop_clear(_: int) -> None:

@@ -9,6 +9,8 @@ import "tldraw/tldraw.css";
 import { useQuery } from "@tanstack/react-query";
 import { useCanvasLayout } from "~/hooks/useCanvasLayout";
 import type { SectionKey } from "~/hooks/useCanvasLayout";
+import { SECTION_ORDER } from "~/hooks/useCanvasLayout";
+import { registerCollisionSystem, layoutAllSections } from "~/hooks/useCollisionSystem";
 import { getStaticUrl, projectsApi, assetsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { CanvasToolbar } from "./CanvasToolbar";
@@ -43,8 +45,6 @@ const components: TLComponents = {
 	ZoomMenu: null,
 	ContextMenu: null,
 };
-
-const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
 
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const editorRef = useRef<Editor | null>(null);
@@ -106,13 +106,14 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 		return SECTION_ORDER.filter((section) => {
 		if (section === "plan") return true;
-		if (section === "render") return characters.length > 0 || shots.length > 0 || sectionIndex >= 1;
-		if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 2;
+		if (section === "character") return characters.length > 0 || sectionIndex >= 1;
+		if (section === "shot") return shots.length > 0 || sectionIndex >= 2;
+		if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 3;
 		return false;
-	});
+		});
 	}, [characters, shots, finalVideoUrl, currentStageIndex, recoverySummary]);
 
-	const shapes = useCanvasLayout({
+	const layout = useCanvasLayout({
 		projectId,
 		story: project?.story || null,
 		summary: project?.summary || null,
@@ -127,8 +128,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		currentStage,
 	});
 
-	const shapesSignature = useMemo(() => JSON.stringify(shapes), [shapes]);
-	shapesRef.current = shapes;
+	const shapesSignature = useMemo(() => JSON.stringify(layout), [layout]);
+	shapesRef.current = layout.shapes;
 	shapesSignatureRef.current = shapesSignature;
 
 	const handleShapeAction = useCallback((data: CanvasEvents["shape-action"]) => {
@@ -162,11 +163,35 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 	const handleMount = useCallback((editor: Editor) => {
 		editorRef.current = editor;
+
+		if (typeof indexedDB !== "undefined" && indexedDB.databases) {
+			indexedDB.databases().then((dbs) => {
+				for (const db of dbs) {
+					if (db.name && db.name.startsWith("TLDRAW_")) {
+						indexedDB.deleteDatabase(db.name);
+					}
+				}
+			});
+		}
+
+		const allShapes = editor.getCurrentPageShapes();
+		const staleTypes = new Set(["connector", "ConnectorShape", "arrow"]);
+		const staleShapeIds = allShapes
+			.filter((s) => staleTypes.has(s.type))
+			.map((s) => s.id);
+		if (staleShapeIds.length > 0) {
+			editor.deleteShapes(staleShapeIds);
+		}
+
+		registerCollisionSystem(editor);
+
 		const currentShapes = shapesRef.current;
 		const currentSignature = shapesSignatureRef.current;
 
 		if (currentShapes.length > 0) {
-			editor.createShapes(currentShapes);
+			editor.run(() => {
+				editor.createShapes(currentShapes);
+			});
 			lastAppliedShapesSignatureRef.current = currentSignature;
 			setTimeout(() => {
 				editor.zoomToFit({ animation: { duration: 300 } });
@@ -183,29 +208,30 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		if (!editor || !isInitialized) return;
 		if (lastAppliedShapesSignatureRef.current === shapesSignature) return;
 
+		const sectionShapes = layout.shapes;
 		const currentShapes = editor.getCurrentPageShapes();
 		const currentIds = new Set(currentShapes.map((s) => s.id));
-		const newIds = new Set(shapes.map((s) => s.id));
+		const newSectionIds = new Set(sectionShapes.map((s) => s.id));
 
-		const toDelete = currentShapes.filter((s) => !newIds.has(s.id));
-		if (toDelete.length > 0) {
-			editor.deleteShapes(toDelete.map((s) => s.id));
-		}
-
-		const toUpdate: TLShapePartial[] = [];
-		const toCreate: TLShapePartial[] = [];
-		shapes.forEach((shape) => {
-			if (currentIds.has(shape.id)) {
-				toUpdate.push(shape);
-			} else {
-				toCreate.push(shape);
+		editor.run(() => {
+			const toDelete = currentShapes.filter((s) => !newSectionIds.has(s.id));
+			if (toDelete.length > 0) {
+				editor.deleteShapes(toDelete.map((s) => s.id));
 			}
+
+			for (const shape of sectionShapes) {
+				if (currentIds.has(shape.id)) {
+					const { h: _h, ...propsWithoutH } = shape.props as any;
+					editor.updateShape({ id: shape.id, type: shape.type, props: propsWithoutH } as any);
+				} else {
+					editor.createShapes([shape]);
+				}
+			}
+
+			layoutAllSections(editor, false);
 		});
 
-		if (toUpdate.length > 0) editor.updateShapes(toUpdate);
-		if (toCreate.length > 0) editor.createShapes(toCreate);
-
-		const newlyCreated = shapes.filter((s) => !currentIds.has(s.id));
+		const newlyCreated = sectionShapes.filter((s) => !currentIds.has(s.id));
 		if (newlyCreated.length > 0) {
 			const lastShape = newlyCreated[newlyCreated.length - 1];
 			if (lastShape.id) {
@@ -221,7 +247,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		}
 
 		lastAppliedShapesSignatureRef.current = shapesSignature;
-	}, [shapes, shapesSignature, isInitialized]);
+	}, [layout, shapesSignature, isInitialized]);
 
 	return (
 		<>
@@ -230,7 +256,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					persistenceKey="openoii-canvas"
+					persistenceKey="openoii-canvas-v8"
 				>
 					<CanvasToolbar />
 					<ShapeContextMenu />

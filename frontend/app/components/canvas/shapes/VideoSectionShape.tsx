@@ -14,6 +14,7 @@ import {
 } from "~/utils/workspaceStatus";
 import { getStaticUrl } from "~/services/api";
 import { SvgIcon } from "~/components/ui/SvgIcon";
+import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
 
 const PLACEHOLDER_ICON = (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 opacity-40">
@@ -48,7 +49,7 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
   getDefaultProps(): VideoSectionShape["props"] {
     return {
       w: 600,
-      h: 450,
+      h: 300,
       projectId: 0,
       videoUrl: "",
       title: "最终视频",
@@ -70,11 +71,13 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
 
   override canEdit() { return true; }
   override canResize() { return false; }
+  override canCull() { return false; }
 
   getGeometry(shape: VideoSectionShape): Geometry2d {
+    const size = this.editor ? getShapeSize(this.editor, shape.id) : undefined;
     return new Rectangle2d({
       width: shape.props.w,
-      height: shape.props.h,
+      height: size?.height ?? shape.props.h,
       isFilled: true,
     });
   }
@@ -85,9 +88,11 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       placeholder, placeholderText, statusLabel,
       w,
     } = shape.props;
+    const ref = useDomSize(shape, this.editor ?? null);
 
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
+        <div ref={ref} style={{ width: w }}>
         <SectionShell
           sectionTitle="最终输出"
           statusLabel={statusLabel}
@@ -123,6 +128,7 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
             </div>
           ) : null}
         </SectionShell>
+        </div>
       </HTMLContainer>
     );
   }

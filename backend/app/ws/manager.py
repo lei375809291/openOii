@@ -8,7 +8,6 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from app.schemas.ws import (
-    AgentHandoffEventData,
     CharacterCreatedEventData,
     CharacterDeletedEventData,
     CharacterUpdatedEventData,
@@ -39,7 +38,6 @@ _EVENT_DATA_MODELS: dict[str, type[Any]] = {
     "run_cancelled": RunCancelledEventData,
     "run_awaiting_confirm": RunAwaitingConfirmEventData,
     "run_confirmed": RunConfirmedEventData,
-    "agent_handoff": AgentHandoffEventData,
     "character_created": CharacterCreatedEventData,
     "character_updated": CharacterUpdatedEventData,
     "character_deleted": CharacterDeletedEventData,

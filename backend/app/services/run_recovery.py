@@ -25,15 +25,18 @@ from app.schemas.project import (
 PHASE2_STAGE_ORDER: tuple[str, ...] = (
     "plan",
     "plan_approval",
-    "render",
-    "render_approval",
+    "character",
+    "character_approval",
+    "shot",
+    "shot_approval",
     "compose",
     "review",
 )
 
 AGENT_TO_STAGE: dict[str, str] = {
     "plan": "plan",
-    "render": "render",
+    "character": "character",
+    "shot": "shot",
     "compose": "compose",
     "review": "review",
 }

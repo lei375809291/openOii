@@ -68,6 +68,12 @@ const LUCIDE_PATHS: Record<string, string[]> = {
     "M10 12h4",
   ],
   "clock-3": ["M12 6v6l4 2", "M12 22a10 10 0 1 0 0-20a10 10 0 0 0 0 20z"],
+  "trash-2": [
+    "M3 6h18",
+    "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
+    "M10 11v6",
+    "M14 11v6",
+  ],
 };
 
 export type IconName = keyof typeof LUCIDE_PATHS;

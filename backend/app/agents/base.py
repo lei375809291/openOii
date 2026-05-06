@@ -32,6 +32,15 @@ class TargetIds:
 
 
 @dataclass
+class CompletionInfo:
+    """Agent 完成时的确认信息，由 agent 在 run() 结束时设置"""
+    completed: str = ""
+    details: str = ""
+    next: str = ""
+    question: str = ""
+
+
+@dataclass
 class AgentContext:
     settings: Settings
     session: AsyncSession
@@ -42,11 +51,12 @@ class AgentContext:
     image: ImageService
     video: VideoServiceProtocol
     user_feedback: str | None = None
-    feedback_type: str | None = None  # "plan" | "render" | "compose"
+    feedback_type: str | None = None  # "plan" | "character" | "shot" | "compose"
     entity_type: str | None = None  # "character" | "shot"
     entity_id: int | None = None    # per-entity feedback target
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID
+    completion_info: CompletionInfo | None = None
 
 
 class BaseAgent:

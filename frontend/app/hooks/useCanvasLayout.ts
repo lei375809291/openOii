@@ -3,7 +3,7 @@ import type { TLShapePartial } from "tldraw";
 import { SHAPE_TYPES } from "~/components/canvas/shapes";
 import type { Character, Shot, WorkflowStage } from "~/types";
 
-type SectionKey = "plan" | "render" | "compose";
+type SectionKey = "plan" | "character" | "shot" | "compose";
 type SectionState = "draft" | "generating" | "blocked" | "complete";
 
 interface LayoutConfig {
@@ -11,38 +11,35 @@ interface LayoutConfig {
   startY: number;
   sectionWidth: number;
   sectionGap: number;
-  shotCardWidth: number;
-  shotCardHeight: number;
-  shotCardGap: number;
 }
 
 const DEFAULT_CONFIG: LayoutConfig = {
   startX: 100,
   startY: 100,
   sectionWidth: 800,
-  sectionGap: 96,
-  shotCardWidth: 180,
-  shotCardHeight: 320,
-  shotCardGap: 16,
+  sectionGap: 40,
 };
 
-const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
+const SECTION_ORDER: SectionKey[] = ["plan", "character", "shot", "compose"];
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   plan: "规划",
-  render: "渲染",
+  character: "角色",
+  shot: "分镜",
   compose: "合成",
 };
 
 const SECTION_PLACEHOLDER_TEXT: Record<SectionKey, string> = {
   plan: "等待规划生成...",
-  render: "等待角色与分镜生成...",
+  character: "等待角色形象图生成...",
+  shot: "等待分镜首帧图生成...",
   compose: "等待视频合成...",
 };
 
 const SECTION_SHAPE_TYPES: Record<SectionKey, string> = {
   plan: SHAPE_TYPES.SCRIPT_SECTION,
-  render: SHAPE_TYPES.STORYBOARD_SECTION,
+  character: SHAPE_TYPES.CHARACTER_SECTION,
+  shot: SHAPE_TYPES.STORYBOARD_SECTION,
   compose: SHAPE_TYPES.VIDEO_SECTION,
 };
 
@@ -51,6 +48,13 @@ const SECTION_STATUS_LABELS: Record<SectionState, string> = {
   generating: "生成中",
   blocked: "待生成",
   complete: "已完成",
+};
+
+const SECTION_FALLBACK_H: Record<SectionKey, number> = {
+  plan: 200,
+  character: 200,
+  shot: 200,
+  compose: 300,
 };
 
 interface UseCanvasLayoutProps {
@@ -84,20 +88,22 @@ function deriveSectionState(
 ): SectionState {
   const isActive = data.isGenerating || data.awaitingConfirm || Boolean(data.currentRunId);
   const hasContent = Boolean(data.story) || Boolean(data.summary);
-  const hasApprovedChar = data.characters.some((c) => c.approval_state === "approved");
+  const hasCharImages = data.characters.some((c) => Boolean(c.image_url));
   const hasStoryboardImg = data.shots.some((s) => Boolean(s.image_url));
 
   switch (key) {
     case "plan":
       return isActive && !hasContent ? "generating" : hasContent ? "complete" : "draft";
-    case "render":
-      return data.characters.length === 0
-        ? "blocked"
-        : hasApprovedChar && hasStoryboardImg
-          ? "complete"
-          : isActive
-            ? "generating"
-            : "draft";
+    case "character":
+      if (data.characters.length === 0) return "blocked";
+      if (hasCharImages) return "complete";
+      if (isActive) return "generating";
+      return "draft";
+    case "shot":
+      if (data.shots.length === 0) return "blocked";
+      if (hasStoryboardImg) return "complete";
+      if (isActive) return "generating";
+      return "draft";
     case "compose":
       return data.videoUrl ? "complete" : data.shots.length === 0 ? "blocked" : isActive ? "generating" : "draft";
   }
@@ -113,39 +119,17 @@ function isPlaceholder(key: SectionKey, data: {
   switch (key) {
     case "plan":
       return !data.story && !data.summary;
-    case "render":
-      return data.characters.length === 0 || !data.shots.some((s) => Boolean(s.image_url));
+    case "character":
+      return data.characters.length === 0;
+    case "shot":
+      return data.shots.length === 0;
     case "compose":
       return !data.videoUrl;
   }
 }
 
-function calculatePlanHeight(story: string | null, summary: string | null, shotCount: number): number {
-  let height = 80;
-  const text = story || summary || "";
-  if (text) {
-    const lines = Math.ceil(text.length / 30);
-    height += 20 + lines * 22 + 32;
-  }
-  if (shotCount > 0) {
-    height += 32 + shotCount * 36 + 8;
-  }
-  return Math.max(height, 200);
-}
-
-function calculateRenderHeight(characters: Character[], shots: Shot[], config: LayoutConfig): number {
-  const charRows = characters.length > 0 ? Math.ceil(characters.length / 2) : 0;
-  const shotRows = shots.length > 0 ? Math.ceil(shots.length / 4) : 0;
-  const charHeight = charRows > 0 ? 70 + charRows * 360 + 16 : 0;
-  const shotHeight = shotRows > 0 ? 80 + shotRows * (config.shotCardHeight + config.shotCardGap) + 16 : 0;
-  const gap = (charHeight > 0 && shotHeight > 0) ? 32 : 0;
-  return Math.max(charHeight + gap + shotHeight, 250);
-}
-
-function calculateComposeHeight(shots: Shot[], config: LayoutConfig): number {
-  if (shots.length === 0) return 250;
-  const rows = Math.ceil(shots.length / 4);
-  return 80 + rows * (config.shotCardHeight + config.shotCardGap) + 200 + 16;
+export interface CanvasLayoutResult {
+  shapes: TLShapePartial[];
 }
 
 export function useCanvasLayout({
@@ -173,21 +157,9 @@ export function useCanvasLayout({
     [story, summary, characters, shots, videoUrl, isGenerating, awaitingConfirm, currentRunId],
   );
 
-  const shapes = useMemo(() => {
-    const result: TLShapePartial[] = [];
+  const result = useMemo(() => {
+    const shapes: TLShapePartial[] = [];
     let currentY = config.startY;
-
-    const heights: Record<SectionKey, number> = {
-      plan: calculatePlanHeight(story, summary, shots.length),
-      render: calculateRenderHeight(characters, shots, config),
-      compose: calculateComposeHeight(shots, config),
-    };
-
-    const widths: Record<SectionKey, number> = {
-      plan: config.sectionWidth,
-      render: config.sectionWidth,
-      compose: config.sectionWidth,
-    };
 
     const contentBySection: Record<SectionKey, Record<string, unknown>> = {
       plan: {
@@ -196,7 +168,8 @@ export function useCanvasLayout({
         characters,
         shots,
       },
-      render: { shots, sectionTitle: "角色与分镜" },
+      character: { characters, sectionTitle: "角色形象" },
+      shot: { shots, sectionTitle: "分镜画面" },
       compose: {
         projectId,
         videoUrl: videoUrl || "",
@@ -214,24 +187,20 @@ export function useCanvasLayout({
     };
 
     const visibleSet = new Set(visibleSections);
-    let visibleIndex = 0;
+    const visibleList = SECTION_ORDER.filter((s) => visibleSet.has(s));
 
-    for (const section of SECTION_ORDER) {
-      if (!visibleSet.has(section)) continue;
-
+    for (const section of visibleList) {
       const state = deriveSectionState(section, sectionData);
       const placeholder = isPlaceholder(section, sectionData);
-      const width = widths[section];
-      const height = heights[section];
 
-      result.push({
+      shapes.push({
         id: `shape:${section}` as any,
         type: SECTION_SHAPE_TYPES[section] as (typeof SHAPE_TYPES)[keyof typeof SHAPE_TYPES],
         x: config.startX,
         y: currentY,
         props: {
-          w: width,
-          h: height,
+          w: config.sectionWidth,
+          h: SECTION_FALLBACK_H[section],
           ...contentBySection[section],
           sectionState: state,
           placeholder,
@@ -240,25 +209,10 @@ export function useCanvasLayout({
         },
       } as TLShapePartial);
 
-      if (visibleIndex > 0) {
-        const prevSection = SECTION_ORDER.filter((s) => visibleSet.has(s))[visibleIndex - 1];
-        result.push({
-          id: `shape:connector-${visibleIndex}` as any,
-          type: SHAPE_TYPES.CONNECTOR,
-          x: 0,
-          y: 0,
-          props: {
-            fromId: `shape:${prevSection}`,
-            toId: `shape:${section}`,
-          },
-        });
-      }
-
-      currentY += height + config.sectionGap;
-      visibleIndex++;
+      currentY += SECTION_FALLBACK_H[section] + config.sectionGap;
     }
 
-    return result;
+    return { shapes };
   }, [
     story,
     summary,
@@ -272,8 +226,8 @@ export function useCanvasLayout({
     projectId,
   ]);
 
-  return shapes;
+  return result;
 }
 
 export type { SectionKey, SectionState };
-export { SECTION_ORDER, SECTION_LABELS, SECTION_PLACEHOLDER_TEXT, SECTION_STATUS_LABELS };
+export { SECTION_ORDER, SECTION_LABELS, SECTION_PLACEHOLDER_TEXT, SECTION_STATUS_LABELS, SECTION_FALLBACK_H };

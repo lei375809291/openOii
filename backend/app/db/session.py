@@ -3,8 +3,6 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from alembic import command as alembic_command
-from alembic.config import Config as AlembicConfig
 from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -34,29 +32,22 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 
 def _run_alembic_upgrade() -> None:
+    import subprocess
+    import sys
+    import os
     settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    cfg = AlembicConfig(str(ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(ALEMBIC_DIR))
-    cfg.set_main_option("sqlalchemy.url", sync_url)
-    # alembic default version_num varchar(32) is too short for our revision IDs
-    from sqlalchemy import create_engine, inspect as sa_inspect, text
-    sync_engine = create_engine(sync_url)
-    try:
-        inspector = sa_inspect(sync_engine)
-        if "alembic_version" not in inspector.get_table_names():
-            with sync_engine.connect() as conn:
-                conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(128) NOT NULL)"))
-                conn.commit()
-        else:
-            with sync_engine.connect() as conn:
-                conn.execute(text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"))
-                conn.commit()
-    except Exception:
-        pass
-    finally:
-        sync_engine.dispose()
-    alembic_command.upgrade(cfg, "head")
+    env = os.environ.copy()
+    env["DATABASE_URL"] = settings.database_url.replace("+asyncpg", "+psycopg2")
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=str(ALEMBIC_INI.parent),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"alembic upgrade failed: {result.stderr}")
 
 
 async def init_db() -> None:
@@ -67,16 +58,9 @@ async def init_db() -> None:
     agent_run_table = SQLModel.metadata.tables["agentrun"]
     project_table = SQLModel.metadata.tables["project"]
 
-    import asyncio
-    loop = asyncio.get_running_loop()
     try:
-        await asyncio.wait_for(
-            loop.run_in_executor(None, _run_alembic_upgrade),
-            timeout=30,
-        )
+        _run_alembic_upgrade()
         log.info("init_db: alembic upgrade done")
-    except asyncio.TimeoutError:
-        log.warning("init_db: alembic upgrade timed out, skipping")
     except Exception as e:
         log.warning("init_db: alembic upgrade failed (%s), skipping", e)
 

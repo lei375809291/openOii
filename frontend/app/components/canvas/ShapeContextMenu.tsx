@@ -35,8 +35,8 @@ const ACTIONS: Record<string, { label: string; action: string }[]> = {
 
 const SHAPE_TO_ENTITY: Record<string, { entityType: string; feedbackType: string }> = {
   "script-section": { entityType: "script", feedbackType: "plan" },
-  "character-section": { entityType: "character", feedbackType: "render" },
-  "storyboard-section": { entityType: "shot", feedbackType: "render" },
+  "character-section": { entityType: "character", feedbackType: "character" },
+  "storyboard-section": { entityType: "shot", feedbackType: "shot" },
   "video-section": { entityType: "video", feedbackType: "compose" },
 };
 

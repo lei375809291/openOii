@@ -20,7 +20,6 @@ WsEventType = Literal[
     "run_awaiting_confirm",
     "run_confirmed",
     "run_cancelled",
-    "agent_handoff",
     "character_created",
     "character_updated",
     "character_deleted",
@@ -89,12 +88,6 @@ class RunCancelledEventData(BaseModel):
     cancelled_count: int | None = None
 
 
-class AgentHandoffEventData(BaseModel):
-    from_agent: str
-    to_agent: str
-    message: str | None = None
-
-
 class DataClearedEventData(BaseModel):
     cleared_types: list[str] = Field(default_factory=list)
     start_agent: str | None = None
@@ -136,6 +129,7 @@ class RunAwaitingConfirmEventData(BaseModel):
     completed: str | None = None
     next_step: str | None = None
     question: str | None = None
+    auto_mode: bool | None = None
 
 
 class RunConfirmedEventData(BaseModel):
@@ -147,6 +141,7 @@ class RunConfirmedEventData(BaseModel):
     stage: str | None = None
     next_stage: str | None = None
     recovery_summary: RecoverySummaryRead | None = None
+    auto_mode: bool | None = None
 
 
 class CharacterUpdatedEventData(BaseModel):

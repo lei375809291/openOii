@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from app.schemas.ws import (
-    AgentHandoffEventData,
     CharacterCreatedEventData,
     CharacterDeletedEventData,
     DataClearedEventData,
@@ -48,7 +47,7 @@ SHOT_DATA = {
 RECOVERY_SUMMARY_DATA = {
     "project_id": 1, "run_id": 1, "thread_id": "t1", "current_stage": "plan",
     "active_run": {"id": 1, "status": "running", "current_agent": "plan", "current_stage": "plan", "progress": 0.5, "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T00:00:00Z"},
-    "preserved_stages": ["plan"], "next_stage": "render", "completed_stages": ["plan"],
+    "preserved_stages": ["plan"], "next_stage": "character", "completed_stages": ["plan"],
 }
 
 
@@ -71,7 +70,7 @@ class TestRunStartedEventData:
             "provider_snapshot": {"text": "openai"},
             "current_stage": "plan",
             "stage": "plan",
-            "next_stage": "render",
+            "next_stage": "character",
             "progress": 0.1,
             "current_agent": "plan",
         })
@@ -102,7 +101,7 @@ class TestRunProgressEventData:
     def test_valid(self):
         d = RunProgressEventData.model_validate({
             "run_id": 1, "progress": 0.5, "current_agent": "plan",
-            "current_stage": "render", "stage": "render",
+            "current_stage": "character", "stage": "character",
         })
         assert d.progress == 0.5
 
@@ -142,7 +141,7 @@ class TestRunFailedEventData:
     def test_valid(self):
         d = RunFailedEventData.model_validate({
             "run_id": 1, "error": "boom", "agent": "plan",
-            "current_stage": "render",
+            "current_stage": "character",
         })
         assert d.error == "boom"
 
@@ -164,21 +163,6 @@ class TestRunCancelledEventData:
         assert d.run_ids is None
 
 
-class TestAgentHandoffEventData:
-    def test_valid(self):
-        d = AgentHandoffEventData.model_validate({
-            "from_agent": "plan", "to_agent": "render",
-            "message": "@plan invited @render",
-        })
-        assert d.from_agent == "plan"
-
-    def test_message_optional(self):
-        d = AgentHandoffEventData.model_validate({
-            "from_agent": "a", "to_agent": "b",
-        })
-        assert d.message is None
-
-
 class TestDataClearedEventData:
     def test_with_cleared_types(self):
         d = DataClearedEventData.model_validate({
@@ -190,7 +174,7 @@ class TestDataClearedEventData:
 
     def test_cleared_types_default_empty(self):
         d = DataClearedEventData.model_validate({
-            "start_agent": "render", "mode": "incremental",
+            "start_agent": "character", "mode": "incremental",
         })
         assert d.cleared_types == []
 
@@ -224,6 +208,16 @@ class TestRunAwaitingConfirmEventData:
         })
         assert d.agent == "director"
         assert d.recovery_summary is not None
+        assert d.auto_mode is None
+
+    def test_auto_mode_true(self):
+        d = RunAwaitingConfirmEventData.model_validate({
+            "run_id": 1,
+            "agent": "plan",
+            "recovery_summary": RECOVERY_SUMMARY_DATA,
+            "auto_mode": True,
+        })
+        assert d.auto_mode is True
 
 
 class TestRunConfirmedEventData:
@@ -232,10 +226,17 @@ class TestRunConfirmedEventData:
             "run_id": 1, "agent": "director",
         })
         assert d.agent == "director"
+        assert d.auto_mode is None
 
     def test_minimal_with_run_id(self):
         d = RunConfirmedEventData.model_validate({"run_id": 1, "agent": "x"})
         assert d.recovery_summary is None
+
+    def test_auto_mode_true(self):
+        d = RunConfirmedEventData.model_validate({
+            "run_id": 1, "agent": "plan", "auto_mode": True,
+        })
+        assert d.auto_mode is True
 
 
 class TestCharacterCreatedEventData:
@@ -296,13 +297,6 @@ class TestWsEventValidation:
         model = _EVENT_DATA_MODELS["run_message"]
         d = model.model_validate(validated.data)
         assert d.summary == "s"
-
-    def test_send_event_validates_agent_handoff(self):
-        event = {"type": "agent_handoff", "data": {"from_agent": "a", "to_agent": "b"}}
-        validated = WsEvent.model_validate(event)
-        model = _EVENT_DATA_MODELS["agent_handoff"]
-        d = model.model_validate(validated.data)
-        assert d.from_agent == "a"
 
     def test_send_event_validates_data_cleared(self):
         event = {"type": "data_cleared", "data": {"cleared_types": ["shots"], "start_agent": "x"}}

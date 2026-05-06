@@ -3,7 +3,8 @@ import { getWorkflowStageUnlockRank } from "~/utils/workflowStage";
 
 export type WorkspaceSectionKey =
   | "plan"
-  | "render"
+  | "character"
+  | "shot"
   | "compose";
 
 export type WorkspaceSectionState =
@@ -84,7 +85,8 @@ export interface WorkspaceFinalOutputMeta {
 
 export const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
   { key: "plan", title: "规划" },
-  { key: "render", title: "渲染" },
+  { key: "character", title: "角色" },
+  { key: "shot", title: "分镜" },
   { key: "compose", title: "合成" },
 ];
 
@@ -100,14 +102,16 @@ const SECTION_STATUS_LABELS: Record<WorkspaceSectionState, string> = {
 
 const SECTION_PLACEHOLDERS: Record<WorkspaceSectionKey, string> = {
   plan: "等待规划生成...",
-  render: "等待角色与分镜生成...",
+  character: "等待角色生成...",
+  shot: "等待分镜生成...",
   compose: "等待视频合成...",
 };
 
 const SECTION_STAGE_ORDER: Record<WorkspaceSectionKey, number> = {
   plan: 0,
-  render: 1,
-  compose: 2,
+  character: 1,
+  shot: 2,
+  compose: 3,
 };
 
 function getPreservedUnlockRank(recoverySummary?: RecoverySummaryRead | null) {
@@ -162,13 +166,25 @@ function resolveSectionState(input: WorkspaceProjectionInput, key: WorkspaceSect
     return isAtOrPastStage(input, SECTION_STAGE_ORDER[key]) ? "generating" : "draft";
   }
 
-  if (key === "render") {
+  if (key === "character") {
     if (characters.length === 0) {
-      return "blocked";
+      return isAtOrPastStage(input, SECTION_STAGE_ORDER[key]) ? "generating" : "blocked";
     }
 
     if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
-      return hasApprovedContent(characters) && hasStoryboardContent(shots) ? "complete" : "generating";
+      return hasApprovedContent(characters) ? "complete" : "generating";
+    }
+
+    return "draft";
+  }
+
+  if (key === "shot") {
+    if (shots.length === 0) {
+      return isAtOrPastStage(input, SECTION_STAGE_ORDER[key]) ? "generating" : "blocked";
+    }
+
+    if (isAtOrPastStage(input, SECTION_STAGE_ORDER[key])) {
+      return hasStoryboardContent(shots) ? "complete" : "generating";
     }
 
     return "draft";
@@ -244,7 +260,8 @@ export function buildWorkspaceStatus(input: WorkspaceProjectionInput): Workspace
     const state = resolveSectionState(input, section.key);
     const placeholder =
       (section.key === "plan" && !input.project.summary) ||
-      (section.key === "render" && (input.characters.length === 0 || !hasStoryboardContent(input.shots))) ||
+      (section.key === "character" && input.characters.length === 0) ||
+      (section.key === "shot" && !hasStoryboardContent(input.shots)) ||
       (section.key === "compose" && !input.project.video_url);
 
     return {
@@ -273,7 +290,11 @@ function isSectionVisible(
   }
 
   if (input) {
-    if (key === "render" && (input.characters.length > 0 || input.shots.length > 0)) {
+    if (key === "character" && input.characters.length > 0) {
+      return true;
+    }
+
+    if (key === "shot" && input.shots.length > 0) {
       return true;
     }
 

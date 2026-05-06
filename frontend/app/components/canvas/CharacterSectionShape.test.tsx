@@ -8,6 +8,11 @@ vi.mock("~/services/api", () => ({
   getStaticUrl: (path: string | null | undefined) => path,
 }));
 
+vi.mock("~/hooks/useDomSize", () => ({
+  useDomSize: () => ({ current: null }),
+  getShapeSize: () => undefined,
+}));
+
 describe("CharacterSectionShape", () => {
   const shapeUtil = new CharacterSectionShapeUtil({} as never);
 
