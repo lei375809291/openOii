@@ -4,7 +4,7 @@ import { SHAPE_TYPES } from "~/components/canvas/shapes";
 import type { StoryboardBoardShape } from "~/components/canvas/shapes";
 import type { Character, Shot, WorkflowStage } from "~/types";
 
-type SectionKey = "plan" | "character" | "shot" | "compose";
+type SectionKey = "plan" | "render" | "compose";
 type SectionState = "draft" | "generating" | "blocked" | "complete";
 
 interface LayoutConfig {
@@ -19,19 +19,17 @@ const DEFAULT_CONFIG: LayoutConfig = {
   boardWidth: Math.min(920, (typeof window !== "undefined" ? window.innerWidth : 960) - 40),
 };
 
-const SECTION_ORDER: SectionKey[] = ["plan", "character", "shot", "compose"];
+const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   plan: "规划",
-  character: "角色",
-  shot: "分镜",
+  render: "渲染",
   compose: "合成",
 };
 
 const SECTION_PLACEHOLDER_TEXT: Record<SectionKey, string> = {
   plan: "等待规划生成...",
-  character: "等待角色形象图生成...",
-  shot: "等待分镜首帧图生成...",
+  render: "等待角色和分镜渲染生成...",
   compose: "等待视频合成...",
 };
 
@@ -79,14 +77,9 @@ function deriveSectionState(
   switch (key) {
     case "plan":
       return isActive && !hasContent ? "generating" : hasContent ? "complete" : "draft";
-    case "character":
-      if (data.characters.length === 0) return "blocked";
-      if (hasCharImages) return "complete";
-      if (isActive) return "generating";
-      return "draft";
-    case "shot":
-      if (data.shots.length === 0) return "blocked";
-      if (hasStoryboardImg) return "complete";
+    case "render":
+      if (data.characters.length === 0 && data.shots.length === 0) return "blocked";
+      if (hasCharImages && hasStoryboardImg) return "complete";
       if (isActive) return "generating";
       return "draft";
     case "compose":
@@ -104,10 +97,8 @@ function isPlaceholder(key: SectionKey, data: {
   switch (key) {
     case "plan":
       return !data.story && !data.summary;
-    case "character":
-      return data.characters.length === 0;
-    case "shot":
-      return data.shots.length === 0;
+    case "render":
+      return data.characters.length === 0 && data.shots.length === 0;
     case "compose":
       return !data.videoUrl;
   }

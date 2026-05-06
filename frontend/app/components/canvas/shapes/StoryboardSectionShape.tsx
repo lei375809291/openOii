@@ -43,7 +43,7 @@ function ShotCard({
       action,
       entityType: "shot",
       entityId: shot.id,
-      feedbackType: "shot",
+      feedbackType: "render",
     });
   };
 
@@ -58,7 +58,7 @@ function ShotCard({
         action: "edit",
         entityType: "shot",
         entityId: shot.id,
-        feedbackType: "shot",
+        feedbackType: "render",
         shotPatch: {
           action: editAction || null,
           dialogue: editDialogue || null,
@@ -236,7 +236,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("shot"),
+      placeholderText: getWorkspaceSectionPlaceholderText("render"),
     };
   }
 
@@ -267,7 +267,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
         <SectionShell
-          sectionKey="shot"
+          sectionKey="render"
           sectionTitle={sectionTitle}
           statusLabel={statusLabel}
           placeholder={placeholder}

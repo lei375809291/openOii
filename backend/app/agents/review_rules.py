@@ -5,16 +5,17 @@ from typing import Any
 from app.agents.base import AgentContext, BaseAgent
 from app.services.creative_control import infer_feedback_targets
 
-ALLOWED_START_AGENTS = {"plan", "character", "shot", "compose"}
+ALLOWED_START_AGENTS = {"plan", "render", "compose"}
 
 _FEEDBACK_TYPE_MAP = {
     "plan": "plan",
     "story": "plan",
     "script": "plan",
     "global": "plan",
-    "character": "character",
-    "shot": "shot",
-    "storyboard": "shot",
+    "render": "render",
+    "character": "render",
+    "shot": "render",
+    "storyboard": "render",
     "compose": "compose",
     "video": "compose",
     "merge": "compose",
@@ -74,8 +75,8 @@ class ReviewRuleEngine(BaseAgent):
 
         if ctx.entity_type and ctx.entity_id:
             entity_map = {
-                "character": "character",
-                "shot": "shot",
+                "character": "render",
+                "shot": "render",
                 "video": "compose",
             }
             start_agent = entity_map.get(ctx.entity_type, "character")

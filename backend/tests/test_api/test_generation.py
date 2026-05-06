@@ -397,5 +397,5 @@ async def test_review_rule_engine_routes_shot_feedback_to_render(test_session, t
     engine = ReviewRuleEngine()
     routing = await engine.run(ctx)
 
-    assert routing["start_agent"] == "shot"
+    assert routing["start_agent"] == "render"
     assert routing["mode"] == "incremental"

@@ -32,7 +32,7 @@ function CharacterCard({ char }: { char: ReviewedCharacter }) {
       action,
       entityType: "character",
       entityId: char.id,
-      feedbackType: "character",
+      feedbackType: "render",
     });
   };
 
@@ -119,7 +119,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
       sectionState: "blocked",
       placeholder: true,
       statusLabel: getWorkspaceSectionStatusLabel("blocked"),
-      placeholderText: getWorkspaceSectionPlaceholderText("character"),
+      placeholderText: getWorkspaceSectionPlaceholderText("render"),
       sectionTitle: "角色",
     };
   }
@@ -145,7 +145,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
         <SectionShell
-          sectionKey="character"
+          sectionKey="render"
           sectionTitle="角色"
           statusLabel={statusLabel}
           placeholder={placeholder}

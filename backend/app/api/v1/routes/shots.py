@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.base import TargetIds
-from app.agents.shot import ShotAgent
+from app.agents.render import RenderAgent
 from app.agents.compose import ComposeAgent
 from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
 from app.config import Settings
@@ -231,7 +231,7 @@ async def regenerate_shot(
             },
         )
 
-        agent_plan = [ShotAgent()]
+        agent_plan = [RenderAgent()]
     else:
         await invalidate_shot_clip_output(session, project)
         await session.commit()

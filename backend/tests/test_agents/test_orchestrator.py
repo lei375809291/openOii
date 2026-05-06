@@ -134,10 +134,9 @@ class TestAgentIndex:
 
     def test_valid_agent_indices(self, orchestrator):
         assert orchestrator._agent_index("plan") == 0
-        assert orchestrator._agent_index("character") == 1
-        assert orchestrator._agent_index("shot") == 2
-        assert orchestrator._agent_index("compose") == 3
-        assert orchestrator._agent_index("review") == 4
+        assert orchestrator._agent_index("render") == 1
+        assert orchestrator._agent_index("compose") == 2
+        assert orchestrator._agent_index("review") == 3
 
     def test_invalid_agent_raises(self, orchestrator):
         with pytest.raises(ValueError, match="Unknown agent"):
@@ -394,7 +393,7 @@ async def test_cleanup_for_rerun_incremental_branch(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "character", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "render", mode="incremental")
 
     assert called == [("clear_chars", 1), ("clear_shots", 1), ("clear_videos", 1)]
     assert session.commits == 1
@@ -682,7 +681,7 @@ async def test_run_from_agent_review_branch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_incremental_character(monkeypatch):
+async def test_cleanup_for_rerun_incremental_render(monkeypatch):
     """Incremental mode: render clears character+shot images/videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
@@ -700,7 +699,7 @@ async def test_cleanup_for_rerun_incremental_character(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "character", mode="incremental")
+    await orchestrator._cleanup_for_rerun(1, "render", mode="incremental")
 
     assert cleared == ["chars", "shots", "videos"]
 
@@ -740,7 +739,7 @@ async def test_cleanup_for_rerun_incremental_unknown_raises():
 
 
 @pytest.mark.asyncio
-async def test_cleanup_for_rerun_full_character(monkeypatch):
+async def test_cleanup_for_rerun_full_render(monkeypatch):
     """Full mode: render clears character+shot images/videos."""
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
@@ -758,7 +757,7 @@ async def test_cleanup_for_rerun_full_character(monkeypatch):
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
-    await orchestrator._cleanup_for_rerun(1, "character", mode="full")
+    await orchestrator._cleanup_for_rerun(1, "render", mode="full")
 
     assert cleared == ["chars", "shots", "videos"]
 
@@ -867,7 +866,7 @@ async def test_send_auto_approval_events_emits_awaiting_and_confirmed(monkeypatc
     assert awaiting_evt[0][1]["data"]["auto_mode"] is True
     assert awaiting_evt[0][1]["data"]["current_stage"] == "plan"
     assert confirmed_evt[0][1]["data"]["auto_mode"] is True
-    assert confirmed_evt[0][1]["data"]["stage"] == "character"
+    assert confirmed_evt[0][1]["data"]["stage"] == "render"
 
 
 def _async_return(val):
@@ -1176,5 +1175,5 @@ async def test_wait_for_confirm_confirmed_uses_refreshed_recovery(monkeypatch):
     assert len(confirmed_evt) == 1
     assert awaiting_evt[0][1]["data"]["recovery_summary"]["call"] == 1
     assert confirmed_evt[0][1]["data"]["recovery_summary"]["call"] == 2
-    assert confirmed_evt[0][1]["data"]["current_stage"] == "character"
-    assert confirmed_evt[0][1]["data"]["stage"] == "character"
+    assert confirmed_evt[0][1]["data"]["current_stage"] == "render"
+    assert confirmed_evt[0][1]["data"]["stage"] == "render"

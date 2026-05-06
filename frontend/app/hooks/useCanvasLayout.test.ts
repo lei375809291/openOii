@@ -11,7 +11,7 @@ const defaultProps = {
   shots: [],
   videoUrl: null,
   videoTitle: "Video",
-  visibleSections: ["plan", "character"] as SectionKey[],
+  visibleSections: ["plan", "render"] as SectionKey[],
   isGenerating: false,
   awaitingConfirm: false,
   currentRunId: null,
@@ -33,7 +33,7 @@ describe("useCanvasLayout", () => {
 
   it("stores visible sections on the board", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    expect(getBoardProps(result.current).visibleSections).toEqual(["plan", "character"]);
+    expect(getBoardProps(result.current).visibleSections).toEqual(["plan", "render"]);
   });
 
   it("keeps the layout as a single board shape", () => {

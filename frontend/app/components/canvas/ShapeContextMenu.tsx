@@ -14,7 +14,7 @@ interface MenuPosition {
 interface ShapeContext {
   shapeType: string;
   shapeId: string;
-  feedbackType: "plan" | "compose";
+  feedbackType: "plan" | "render" | "compose";
 }
 
 const ACTIONS: Record<string, { label: string; action: string }[]> = {
@@ -31,7 +31,7 @@ const ACTIONS: Record<string, { label: string; action: string }[]> = {
   ],
 };
 
-const SHAPE_TO_ENTITY: Record<string, { feedbackType: "plan" | "compose" }> = {
+const SHAPE_TO_ENTITY: Record<string, { feedbackType: "plan" | "render" | "compose" }> = {
   [SHAPE_TYPES.STORYBOARD_BOARD]: { feedbackType: "plan" },
   [SHAPE_TYPES.SCRIPT_SECTION]: { feedbackType: "plan" },
   [SHAPE_TYPES.VIDEO_SECTION]: { feedbackType: "compose" },

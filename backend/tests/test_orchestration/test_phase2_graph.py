@@ -15,10 +15,10 @@ from app.orchestration.nodes import (
     _auto_approval_result,
     _approval_result,
     _manual_approval_node,
-    shot_approval_node,
+    render_approval_node,
     review_node,
     route_after_plan_approval,
-    route_after_shot_approval,
+    route_after_render_approval,
     route_after_review,
     route_from_start,
 )
@@ -60,8 +60,8 @@ def test_phase2_runtime_config_uses_persisted_run_thread_id() -> None:
 
 
 def test_route_helpers_fall_back_to_expected_stages() -> None:
-    assert route_after_plan_approval({}) == "character"
-    assert route_after_shot_approval({}) == "compose"
+    assert route_after_plan_approval({}) == "render"
+    assert route_after_render_approval({}) == "compose"
     assert route_after_review({}) == "plan"
     assert route_from_start({}) == "plan"
 
@@ -70,22 +70,22 @@ def test_approval_result_helpers_set_review_routing() -> None:
     approved = _approval_result(
         approval_stage="plan_approval",
         history_key="plan",
-        next_stage="character",
+        next_stage="render",
         feedback="",
     )
     revised = _approval_result(
         approval_stage="plan_approval",
         history_key="plan",
-        next_stage="character",
+        next_stage="render",
         feedback="needs work",
     )
     auto = _auto_approval_result(
         approval_stage="plan_approval",
         history_key="plan",
-        next_stage="character",
+        next_stage="render",
     )
 
-    assert approved["route_stage"] == "character"
+    assert approved["route_stage"] == "render"
     assert approved["review_requested"] is False
     assert revised["route_stage"] == "review"
     assert revised["review_requested"] is True
@@ -112,10 +112,10 @@ async def test_manual_approval_node_auto_mode_short_circuits() -> None:
         history_key="plan",
         gate="plan",
         message="msg",
-        next_stage="character",
+        next_stage="render",
     )
 
-    assert result["route_stage"] == "character"
+    assert result["route_stage"] == "render"
     assert result["review_requested"] is False
 
 
@@ -141,7 +141,7 @@ async def test_manual_approval_node_normalizes_interrupt_resume(monkeypatch) -> 
         history_key="plan",
         gate="plan",
         message="msg",
-        next_stage="character",
+        next_stage="render",
     )
 
     assert result["approval_feedback"] == "ok"
@@ -170,7 +170,7 @@ async def test_manual_approval_node_routes_to_review_when_feedback_present(monke
         history_key="plan",
         gate="plan",
         message="msg",
-        next_stage="character",
+        next_stage="render",
     )
 
     assert result["review_requested"] is True
@@ -207,8 +207,7 @@ class _Orchestrator:
         self.ws = _Ws()
         self.agents = [
             _NoopAgent("plan", executed),
-            _NoopAgent("character", executed),
-            _NoopAgent("shot", executed),
+            _NoopAgent("render", executed),
             _NoopAgent("compose", executed),
             _NoopAgent("review", executed),
         ]
@@ -246,7 +245,7 @@ def _initial_state(start_stage: str) -> dict[str, Any]:
     ("start_stage", "expected_agents", "expected_gate"),
     [
         ("plan", ["plan"], "plan"),
-        ("character", ["character"], "character"),
+        ("render", ["render"], "render"),
     ],
 )
 async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
@@ -339,18 +338,18 @@ async def test_phase2_graph_auto_skips_compose_when_video_provider_invalid() -> 
             target_ids=None,
             completion_info=None,
         ),
-        start_stage="shot",  # type: ignore[arg-type]
+        start_stage="render",  # type: ignore[arg-type]
         auto_mode=False,
     )
 
     compiled = build_phase2_graph().compile()
     result = await compiled.ainvoke(
-        _initial_state("shot"),
-        {"configurable": {"thread_id": "thread-shot-no-video"}},
+        _initial_state("render"),
+        {"configurable": {"thread_id": "thread-render-no-video"}},
         context=runtime_context,
     )
 
-    assert executed == ["shot"]
+    assert executed == ["render"]
     assert result.get("current_stage") == "compose"
 
 
@@ -363,7 +362,7 @@ def test_normalize_resume_value_handles_supported_shapes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_character_approval_auto_routes_to_shot_when_video_invalid() -> None:
+async def test_render_approval_auto_routes_to_compose_when_video_invalid() -> None:
     orchestrator = GenerationOrchestrator(
         settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
         ws=MockWsManager(),
@@ -374,7 +373,7 @@ async def test_character_approval_auto_routes_to_shot_when_video_invalid() -> No
     agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), target_ids=None, completion_info=None)
     runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False, orchestrator=orchestrator, agent_context=agent_ctx))
 
-    state = await shot_approval_node({}, runtime)
+    state = await render_approval_node({}, runtime)
 
     assert state["route_stage"] == "compose"
 
@@ -382,10 +381,10 @@ async def test_character_approval_auto_routes_to_shot_when_video_invalid() -> No
 def test_route_helpers_prefer_route_stage_and_fallbacks():
     assert route_from_start({}) == "plan"
     assert route_after_review({}) == "plan"
-    assert route_after_plan_approval({}) == "character"
+    assert route_after_plan_approval({}) == "render"
     assert route_after_plan_approval({"review_requested": True}) == "review"
-    assert route_after_shot_approval({}) == "compose"
-    assert route_after_shot_approval({"review_requested": True}) == "review"
+    assert route_after_render_approval({}) == "compose"
+    assert route_after_render_approval({"review_requested": True}) == "review"
 
 
 @pytest.mark.asyncio

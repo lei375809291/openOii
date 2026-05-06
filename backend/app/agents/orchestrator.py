@@ -12,8 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.utils import utcnow
 from app.agents.base import AgentContext
 from app.agents.plan import PlanAgent
-from app.agents.character import CharacterAgent
-from app.agents.shot import ShotAgent
+from app.agents.render import RenderAgent
 from app.agents.compose import ComposeAgent
 from app.agents.review_rules import ReviewRuleEngine
 from app.config import Settings
@@ -51,10 +50,8 @@ def _next_phase2_stage(stage: str | None) -> str | None:
 STAGE_AGENT_MAP = {
     "plan": "plan",
     "plan_approval": "plan",
-    "character": "character",
-    "character_approval": "character",
-    "shot": "shot",
-    "shot_approval": "shot",
+    "render": "render",
+    "render_approval": "render",
     "compose": "compose",
     "review": "review",
 }
@@ -81,18 +78,14 @@ AGENT_COMPLETION_INFO = {
     "plan": {
         "completed": "已完成创作方案规划",
         "details": "生成了角色设定和分镜脚本",
-        "next": "接下来将为角色生成参考图片",
+        "next": "接下来将为角色和分镜生成参考图片",
         "question": "创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
     },
-    "character": {
-        "completed": "已完成角色形象图生成",
-        "next": "接下来将为分镜生成首帧图",
-        "question": "角色形象是否满意？如果需要重新生成，请告诉我。",
-    },
-    "shot": {
-        "completed": "已完成分镜首帧图生成",
+    "render": {
+        "completed": "已完成角色形象和分镜画面渲染",
+        "details": "角色形象和分镜画面均已渲染完成",
         "next": "接下来将根据分镜生成视频片段并合成",
-        "question": "分镜画面是否满意？如果需要重新生成，请告诉我。",
+        "question": "角色形象和分镜画面是否满意？如果需要重新生成，请告诉我。",
     },
     "compose": {
         "completed": "已完成视频合成",
@@ -223,8 +216,7 @@ class GenerationOrchestrator:
         self._last_user_feedback_id: int | None = None
         self.agents = [
             PlanAgent(),
-            CharacterAgent(),
-            ShotAgent(),
+            RenderAgent(),
             ComposeAgent(),
             ReviewRuleEngine(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
         ]
@@ -293,11 +285,8 @@ class GenerationOrchestrator:
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-            elif start_agent == "character":
+            elif start_agent == "render":
                 await self._clear_character_images(project_id)
-                await self._clear_shot_images(project_id)
-                await self._clear_shot_videos(project_id)
-            elif start_agent == "shot":
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
             elif start_agent == "compose":
@@ -309,11 +298,8 @@ class GenerationOrchestrator:
                 await self._delete_project_shots(project_id)
                 await self._delete_project_characters(project_id)
                 cleared_types = ["characters", "shots"]
-            elif start_agent == "character":
+            elif start_agent == "render":
                 await self._clear_character_images(project_id)
-                await self._clear_shot_images(project_id)
-                await self._clear_shot_videos(project_id)
-            elif start_agent == "shot":
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
             elif start_agent == "compose":

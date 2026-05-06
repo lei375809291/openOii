@@ -49,7 +49,7 @@ export const SHAPE_TYPES = {
   VIDEO_SECTION: "video-section",
 } as const;
 
-export type StoryboardBoardSectionKey = "plan" | "character" | "shot" | "compose";
+export type StoryboardBoardSectionKey = "plan" | "render" | "compose";
 
 export type StoryboardBoardShape = TLBaseShape<
   typeof SHAPE_TYPES.STORYBOARD_BOARD,

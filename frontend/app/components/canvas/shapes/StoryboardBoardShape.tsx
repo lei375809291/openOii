@@ -23,8 +23,7 @@ import type {
 
 const SECTION_TITLES: Record<StoryboardBoardSectionKey, string> = {
   plan: "编剧规划",
-  character: "角色形象",
-  shot: "分镜画面",
+  render: "视觉渲染",
   compose: "最终输出",
 };
 
@@ -54,7 +53,7 @@ function emitEntityAction({
   action: ShapeActionName;
   entityType: "character" | "shot";
   entityId: number;
-  feedbackType: "character" | "shot";
+  feedbackType: "render";
   shotPatch?: ShapeActionPayload["shotPatch"];
   feedbackContent?: string;
 }) {
@@ -86,7 +85,7 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
       action,
       entityType: "character",
       entityId: character.id,
-      feedbackType: "character",
+      feedbackType: "render",
     });
   };
 
@@ -98,7 +97,7 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
         action: "edit",
         entityType: "character",
         entityId: character.id,
-        feedbackType: "character",
+        feedbackType: "render",
         feedbackContent: content,
       });
     }
@@ -181,7 +180,7 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
       setIsEditing(true);
       return;
     }
-    emitEntityAction({ action, entityType: "shot", entityId: shot.id, feedbackType: "shot" });
+    emitEntityAction({ action, entityType: "shot", entityId: shot.id, feedbackType: "render" });
   };
 
   const handleSaveEdit = () => {
@@ -191,7 +190,7 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
         action: "edit",
         entityType: "shot",
         entityId: shot.id,
-        feedbackType: "shot",
+        feedbackType: "render",
         shotPatch: {
           action: editAction || null,
           dialogue: editDialogue || null,
@@ -414,18 +413,15 @@ export class StoryboardBoardShapeUtil extends ShapeUtil<StoryboardBoardShape> {
               </SectionShell>
             )}
 
-            {sections.includes("character") && (
-              <SectionShell sectionKey="character" sectionTitle={SECTION_TITLES.character} statusLabel={statusLabels.character ?? "待生成"} placeholder={Boolean(placeholders.character)} placeholderText={placeholderTexts.character ?? getWorkspaceSectionPlaceholderText("character")}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {typedCharacters.map((character) => <CharacterCard key={character.id} character={character} />)}
-                </div>
-              </SectionShell>
-            )}
-
-            {sections.includes("shot") && (
-              <SectionShell sectionKey="shot" sectionTitle={SECTION_TITLES.shot} statusLabel={statusLabels.shot ?? "待生成"} placeholder={Boolean(placeholders.shot)} placeholderText={placeholderTexts.shot ?? getWorkspaceSectionPlaceholderText("shot")}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {typedShots.map((shot) => <ShotCard key={shot.id} shot={shot} />)}
+            {sections.includes("render") && (
+              <SectionShell sectionKey="render" sectionTitle={SECTION_TITLES.render} statusLabel={statusLabels.render ?? "待生成"} placeholder={Boolean(placeholders.render)} placeholderText={placeholderTexts.render ?? getWorkspaceSectionPlaceholderText("render")}>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {typedCharacters.map((character) => <CharacterCard key={character.id} character={character} />)}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {typedShots.map((shot) => <ShotCard key={shot.id} shot={shot} />)}
+                  </div>
                 </div>
               </SectionShell>
             )}

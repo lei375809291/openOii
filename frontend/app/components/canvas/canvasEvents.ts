@@ -7,7 +7,7 @@ export interface ShapeActionPayload {
   action: ShapeActionName;
   entityType: "character" | "shot";
   entityId: number;
-  feedbackType: "character" | "shot";
+  feedbackType: "render";
   shotPatch?: ShotUpdatePayload;
   feedbackContent?: string;
 }

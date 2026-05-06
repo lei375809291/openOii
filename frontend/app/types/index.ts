@@ -295,10 +295,8 @@ export interface Message {
 export type WorkflowStage =
   | "plan"
   | "plan_approval"
-  | "character"
-  | "character_approval"
-  | "shot"
-  | "shot_approval"
+  | "render"
+  | "render_approval"
   | "compose"
   | "review";
 

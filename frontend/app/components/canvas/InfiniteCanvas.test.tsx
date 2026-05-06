@@ -231,7 +231,7 @@ vi.mock("~/stores/editorStore", () => ({
     projectTitle: "Store 标题",
     projectSummary: "Store 摘要",
     projectStory: "Store 故事",
-    currentStage: "character",
+    currentStage: "render",
     recoverySummary: null,
     currentRunId: 77,
     isGenerating: false,
@@ -288,11 +288,7 @@ vi.mock("~/stores/editorStore", () => ({
       projectTitle: "Store 标题",
       projectSummary: "Store 摘要",
       projectStory: "Store 故事",
-      currentStage: "character",
-      recoverySummary: null,
-      currentRunId: 77,
-      isGenerating: false,
-      awaitingConfirm: false,
+      currentStage: "render",
     };
     const result = selector(state);
     return () => result;
@@ -329,14 +325,13 @@ describe("InfiniteCanvas", () => {
 
     expect(useCanvasLayoutMock.mock.calls[0]?.[0].visibleSections).toEqual([
       "plan",
-      "character",
-      "shot",
+      "render",
     ]);
     expect(mockEditor.createShapes).toHaveBeenCalledWith([
       expect.objectContaining({
         id: "shape:storyboard-board",
         type: "storyboard-board",
-        props: expect.objectContaining({ visibleSections: ["plan", "character", "shot"] }),
+        props: expect.objectContaining({ visibleSections: ["plan", "render"] }),
       }),
     ]);
   });

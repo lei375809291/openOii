@@ -113,9 +113,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 		return SECTION_ORDER.filter((section) => {
 			if (section === "plan") return true;
-			if (section === "character") return characters.length > 0 || sectionIndex >= 1;
-			if (section === "shot") return shots.length > 0 || sectionIndex >= 2;
-			if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 3;
+			if (section === "render") return characters.length > 0 || shots.some((s) => Boolean(s.image_url)) || sectionIndex >= 1;
+			if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 2;
 			return false;
 		});
 	}, [characters, shots, finalVideoUrl, currentStageIndex, recoverySummary]);

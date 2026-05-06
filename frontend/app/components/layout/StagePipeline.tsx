@@ -8,6 +8,7 @@ import {
 	ArrowPathIcon,
 	StopIcon,
 	UserIcon,
+	PaintBrushIcon,
 } from "@heroicons/react/24/outline";
 import type { WorkflowStage } from "~/types";
 import { STAGE_PIPELINE, getPipelineStageIndex } from "~/utils/pipeline";
@@ -19,6 +20,7 @@ const STAGE_ICONS: Record<string, typeof LightBulbIcon> = {
 	film: FilmIcon,
 	cube: CubeIcon,
 	user: UserIcon,
+	palette: PaintBrushIcon,
 };
 
 interface StagePipelineProps {

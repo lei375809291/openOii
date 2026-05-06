@@ -207,8 +207,8 @@ describe('ChatPanel', () => {
     expect(onSendFeedback).toHaveBeenLastCalledWith('  这里有建议  ');
   });
 
-  it('shows character stage icon when currentStage is character', () => {
-    storeState.currentStage = 'character';
+  it('shows render stage icon when currentStage is render', () => {
+    storeState.currentStage = 'render';
 
     render(
       <ChatPanel
@@ -220,11 +220,11 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('角色渲染阶段')).toBeInTheDocument();
+    expect(screen.getByText('渲染阶段')).toBeInTheDocument();
   });
 
-  it('shows shot stage icon when currentStage is shot', () => {
-    storeState.currentStage = 'shot';
+  it('shows render_approval stage icon when currentStage is render_approval', () => {
+    storeState.currentStage = 'render_approval';
 
     render(
       <ChatPanel
@@ -236,7 +236,7 @@ describe('ChatPanel', () => {
       />
     );
 
-    expect(screen.getByText('分镜渲染阶段')).toBeInTheDocument();
+    expect(screen.getByText('渲染阶段')).toBeInTheDocument();
   });
 
   it('shows merge stage icon when currentStage is merge', () => {

@@ -8,18 +8,15 @@ from typing import Annotated, Any, Literal, TypedDict
 Phase2Stage = Literal[
     "plan",
     "plan_approval",
-    "character",
-    "character_approval",
-    "shot",
-    "shot_approval",
+    "render",
+    "render_approval",
     "compose",
     "review",
 ]
 
 PRODUCTION_STAGE_SEQUENCE: tuple[str, ...] = (
     "plan",
-    "character",
-    "shot",
+    "render",
     "compose",
 )
 

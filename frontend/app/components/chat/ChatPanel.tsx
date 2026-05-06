@@ -13,7 +13,6 @@ import {
   StopIcon,
   BoltIcon,
   AdjustmentsHorizontalIcon,
-  FilmIcon,
 } from "@heroicons/react/24/outline";
 import { getWorkflowStageInfo } from "~/utils/workflowStage";
 
@@ -32,8 +31,7 @@ interface ChatPanelProps {
 
 function getStageIcon(stage: WorkflowStage) {
   if (stage === "compose") return RocketLaunchIcon;
-  if (stage === "character" || stage === "character_approval") return PaintBrushIcon;
-  if (stage === "shot" || stage === "shot_approval") return FilmIcon;
+  if (stage === "render" || stage === "render_approval") return PaintBrushIcon;
   if (stage === "plan" || stage === "plan_approval") return LightBulbIcon;
   return LightBulbIcon;
 }

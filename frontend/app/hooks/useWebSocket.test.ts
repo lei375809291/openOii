@@ -409,7 +409,7 @@ describe("useProjectWebSocket", () => {
           agent: "plan",
           run_id: 202,
           message: "请确认",
-          stage: "character",
+          stage: "render",
           recovery_summary: { test: true } as never,
         },
       } as never,
@@ -425,7 +425,7 @@ describe("useProjectWebSocket", () => {
         agent: "plan",
         run_id: 202,
       },
-      currentStage: "character",
+      currentStage: "render",
     });
 
     expect(useEditorStore.getState().recoverySummary).toMatchObject({ test: true });
@@ -472,7 +472,7 @@ describe("useProjectWebSocket", () => {
           agent: "plan",
           run_id: 303,
           message: "auto confirm",
-          stage: "character",
+          stage: "render",
           recovery_summary: { test: true } as never,
           auto_mode: true,
         },
@@ -483,7 +483,7 @@ describe("useProjectWebSocket", () => {
 
     expect(autoConfirmSpy).not.toHaveBeenCalled();
     expect(useEditorStore.getState().awaitingConfirm).toBe(true);
-    expect(useEditorStore.getState().currentStage).toBe("character");
+    expect(useEditorStore.getState().currentStage).toBe("render");
 
     applyWsEvent(
       {
@@ -491,7 +491,7 @@ describe("useProjectWebSocket", () => {
         data: {
           agent: "plan",
           run_id: 303,
-          stage: "shot",
+          stage: "render",
           auto_mode: true,
         },
       } as never,
