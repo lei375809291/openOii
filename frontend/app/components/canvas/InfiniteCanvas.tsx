@@ -3,13 +3,20 @@ import {
 	type Editor,
 	type TLComponents,
 	Tldraw,
+	type TLShapePartial,
 } from "tldraw";
 import "tldraw/tldraw.css";
 import { useQuery } from "@tanstack/react-query";
 import { useCanvasLayout } from "~/hooks/useCanvasLayout";
-import type { SectionKey, StoryboardBoardPartial } from "~/hooks/useCanvasLayout";
+import type { SectionKey } from "~/hooks/useCanvasLayout";
 import { SECTION_ORDER } from "~/hooks/useCanvasLayout";
-import { getStaticUrl, projectsApi, assetsApi, charactersApi, shotsApi } from "~/services/api";
+import {
+	getStaticUrl,
+	projectsApi,
+	assetsApi,
+	charactersApi,
+	shotsApi,
+} from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { canvasEvents, type CanvasEvents } from "./canvasEvents";
@@ -44,11 +51,19 @@ const components: TLComponents = {
 	ContextMenu: null,
 };
 
+/** Shape types from the old monolithic layout that should be cleaned up */
+const STALE_SHAPE_TYPES = new Set([
+	"connector",
+	"ConnectorShape",
+	"arrow",
+	"storyboard-board",
+]);
+
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const editorRef = useRef<Editor | null>(null);
 	const [isInitialized, setIsInitialized] = useState(false);
 	const lastAppliedShapesSignatureRef = useRef<string | null>(null);
-	const boardShapeRef = useRef<StoryboardBoardPartial | null>(null);
+	const shapesRef = useRef<TLShapePartial[]>([]);
 	const shapesSignatureRef = useRef("");
 
 	const {
@@ -63,19 +78,21 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		awaitingConfirm,
 		recoverySummary,
 		currentRunId,
-	} = useEditorStore(useShallow((s) => ({
-		characters: s.characters,
-		shots: s.shots,
-		projectVideoUrl: s.projectVideoUrl,
-		projectTitle: s.projectTitle,
-		projectSummary: s.projectSummary,
-		projectStory: s.projectStory,
-		currentStage: s.currentStage,
-		isGenerating: s.isGenerating,
-		awaitingConfirm: s.awaitingConfirm,
-		recoverySummary: s.recoverySummary,
-		currentRunId: s.currentRunId,
-	})));
+	} = useEditorStore(
+		useShallow((s) => ({
+			characters: s.characters,
+			shots: s.shots,
+			projectVideoUrl: s.projectVideoUrl,
+			projectTitle: s.projectTitle,
+			projectSummary: s.projectSummary,
+			projectStory: s.projectStory,
+			currentStage: s.currentStage,
+			isGenerating: s.isGenerating,
+			awaitingConfirm: s.awaitingConfirm,
+			recoverySummary: s.recoverySummary,
+			currentRunId: s.currentRunId,
+		})),
+	);
 
 	const { data: project } = useQuery({
 		queryKey: ["project", projectId],
@@ -99,7 +116,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 	const currentStageIndex = useMemo(
 		() => getPipelineStageIndex(recoverySummary?.current_stage ?? currentStage),
-		[recoverySummary, currentStage]
+		[recoverySummary, currentStage],
 	);
 
 	const visibleSections = useMemo((): SectionKey[] => {
@@ -107,14 +124,24 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			currentStageIndex >= 0 ? currentStageIndex : 0,
 			recoverySummary?.preserved_stages?.reduce(
 				(max, s) => Math.max(max, getPipelineStageIndex(s)),
-				0
-			) ?? 0
+				0,
+			) ?? 0,
 		);
 
 		return SECTION_ORDER.filter((section) => {
 			if (section === "plan") return true;
-			if (section === "render") return characters.length > 0 || shots.some((s) => Boolean(s.image_url)) || sectionIndex >= 1;
-			if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 2;
+			if (section === "render")
+				return (
+					characters.length > 0 ||
+					shots.some((s) => Boolean(s.image_url)) ||
+					sectionIndex >= 1
+				);
+			if (section === "compose")
+				return (
+					Boolean(finalVideoUrl) ||
+					shots.some((s) => Boolean(s.video_url)) ||
+					sectionIndex >= 2
+				);
 			return false;
 		});
 	}, [characters, shots, finalVideoUrl, currentStageIndex, recoverySummary]);
@@ -134,64 +161,96 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		currentStage,
 	});
 
-	const boardShape = layout.shapes[0] ?? null;
 	const shapesSignature = useMemo(() => JSON.stringify(layout), [layout]);
-	boardShapeRef.current = boardShape;
+	shapesRef.current = layout.shapes;
 	shapesSignatureRef.current = shapesSignature;
 
-	const handleShapeAction = useCallback((data: CanvasEvents["shape-action"]) => {
-		if (data.action === "add-to-assets" && data.entityType === "character" && data.entityId) {
-			assetsApi.createFromCharacter(data.entityId).then(() => {
-				toast.success({ title: "资产库", message: "已添加到资产库" });
-			}).catch(() => {
-				toast.error({ title: "资产库", message: "添加失败" });
-			});
-			return;
-		}
+	const handleShapeAction = useCallback(
+		(data: CanvasEvents["shape-action"]) => {
+			if (
+				data.action === "add-to-assets" &&
+				data.entityType === "character" &&
+				data.entityId
+			) {
+				assetsApi
+					.createFromCharacter(data.entityId)
+					.then(() => {
+						toast.success({ title: "资产库", message: "已添加到资产库" });
+					})
+					.catch(() => {
+						toast.error({ title: "资产库", message: "添加失败" });
+					});
+				return;
+			}
 
-		if (data.action === "approve") {
-			const request = data.entityType === "character"
-				? charactersApi.approve(data.entityId)
-				: shotsApi.approve(data.entityId);
-			request.then(() => {
-				toast.success({ title: "审批", message: "已批准" });
-			}).catch(() => {
-				toast.error({ title: "审批", message: "批准失败" });
-			});
-			return;
-		}
+			if (data.action === "approve") {
+				const request =
+					data.entityType === "character"
+						? charactersApi.approve(data.entityId)
+						: shotsApi.approve(data.entityId);
+				request
+					.then(() => {
+						toast.success({ title: "审批", message: "已批准" });
+					})
+					.catch(() => {
+						toast.error({ title: "审批", message: "批准失败" });
+					});
+				return;
+			}
 
-		if (data.action === "regenerate") {
-			const request = data.entityType === "character"
-				? charactersApi.regenerate(data.entityId)
-				: shotsApi.regenerate(data.entityId, "image");
-			request.then(() => {
-				toast.success({ title: "重新生成", message: "任务已启动" });
-			}).catch(() => {
-				toast.error({ title: "重新生成", message: "启动失败" });
-			});
-			return;
-		}
+			if (data.action === "regenerate") {
+				const request =
+					data.entityType === "character"
+						? charactersApi.regenerate(data.entityId)
+						: shotsApi.regenerate(data.entityId, "image");
+				request
+					.then(() => {
+						toast.success({ title: "重新生成", message: "任务已启动" });
+					})
+					.catch(() => {
+						toast.error({ title: "重新生成", message: "启动失败" });
+					});
+				return;
+			}
 
-		if (data.action === "edit" && data.entityType === "shot" && data.shotPatch) {
-			shotsApi.update(data.entityId, data.shotPatch).then(() => {
-				toast.success({ title: "镜头", message: "已保存修改" });
-			}).catch(() => {
-				toast.error({ title: "镜头", message: "保存失败" });
-			});
-			return;
-		}
+			if (
+				data.action === "edit" &&
+				data.entityType === "shot" &&
+				data.shotPatch
+			) {
+				shotsApi
+					.update(data.entityId, data.shotPatch)
+					.then(() => {
+						toast.success({ title: "镜头", message: "已保存修改" });
+					})
+					.catch(() => {
+						toast.error({ title: "镜头", message: "保存失败" });
+					});
+				return;
+			}
 
-		if (data.action === "edit") {
-			const content = data.feedbackContent?.trim();
-			if (!content) return;
-			projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType, data.entityType, data.entityId).then(() => {
-				toast.success({ title: "修改意见", message: "已提交" });
-			}).catch(() => {
-				toast.error({ title: "修改意见", message: "提交失败" });
-			});
-		}
-	}, [projectId, currentRunId]);
+			if (data.action === "edit") {
+				const content = data.feedbackContent?.trim();
+				if (!content) return;
+				projectsApi
+					.feedback(
+						projectId,
+						content,
+						currentRunId ?? undefined,
+						data.feedbackType,
+						data.entityType,
+						data.entityId,
+					)
+					.then(() => {
+						toast.success({ title: "修改意见", message: "已提交" });
+					})
+					.catch(() => {
+						toast.error({ title: "修改意见", message: "提交失败" });
+					});
+			}
+		},
+		[projectId, currentRunId],
+	);
 
 	useEffect(() => {
 		const unsubscribers = [
@@ -207,6 +266,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const handleMount = useCallback((editor: Editor) => {
 		editorRef.current = editor;
 
+		// Clean up any stale IndexedDB persistence from old canvas versions
 		if (typeof indexedDB !== "undefined" && indexedDB.databases) {
 			indexedDB.databases().then((dbs) => {
 				for (const db of dbs) {
@@ -217,21 +277,25 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			});
 		}
 
+		// Delete any stale shapes from previous layout architectures
 		const allShapes = editor.getCurrentPageShapes();
-		const staleTypes = new Set(["connector", "ConnectorShape", "arrow", "script-section", "character-section", "storyboard-section", "video-section"]);
 		const staleShapeIds = allShapes
-			.filter((s) => staleTypes.has(s.type))
+			.filter((s) => STALE_SHAPE_TYPES.has(s.type))
 			.map((s) => s.id);
 		if (staleShapeIds.length > 0) {
 			editor.deleteShapes(staleShapeIds);
 		}
 
-		const currentBoardShape = boardShapeRef.current;
+		// Create initial shapes (parents first, then children with parentId)
+		const currentShapes = shapesRef.current;
 		const currentSignature = shapesSignatureRef.current;
 
-		if (currentBoardShape) {
+		if (currentShapes.length > 0) {
+			const parents = currentShapes.filter((s) => !s.parentId);
+			const children = currentShapes.filter((s) => s.parentId);
 			editor.run(() => {
-				editor.createShapes([currentBoardShape]);
+				if (parents.length > 0) editor.createShapes(parents);
+				if (children.length > 0) editor.createShapes(children);
 			});
 			lastAppliedShapesSignatureRef.current = currentSignature;
 			setTimeout(() => {
@@ -244,38 +308,94 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		setIsInitialized(true);
 	}, []);
 
+	// Sync shapes when layout changes — preserve user-dragged positions
 	useEffect(() => {
 		const editor = editorRef.current;
 		if (!editor || !isInitialized) return;
 		if (lastAppliedShapesSignatureRef.current === shapesSignature) return;
 
-		if (!boardShape) return;
+		const desiredShapes = layout.shapes;
+		if (desiredShapes.length === 0) return;
 
-		const currentShapes = editor.getCurrentPageShapes();
-		const currentBoardShape = editor.getShape(boardShape.id);
+		const existingShapes = editor.getCurrentPageShapes();
+		const existingMap = new Map(existingShapes.map((s) => [s.id, s]));
+		const desiredIds = new Set(desiredShapes.map((s) => s.id));
 
 		editor.run(() => {
-			const toDelete = currentShapes.filter((s) => s.id !== boardShape.id);
+			// Delete shapes that are no longer in the layout
+			const toDelete = existingShapes.filter(
+				(s) => !desiredIds.has(s.id) && !STALE_SHAPE_TYPES.has(s.type),
+			);
 			if (toDelete.length > 0) {
 				editor.deleteShapes(toDelete.map((s) => s.id));
 			}
 
-			if (currentBoardShape) {
-				editor.updateShapes([boardShape]);
-			} else {
-				editor.createShapes([boardShape]);
+			// Separate parents (no parentId) from children (have parentId)
+			const parents: TLShapePartial[] = [];
+			const children: TLShapePartial[] = [];
+			for (const desired of desiredShapes) {
+				if (desired.parentId) {
+					children.push(desired);
+				} else {
+					parents.push(desired);
+				}
+			}
+
+			// Create/update parents first, then children (parentId requires parent to exist)
+			const parentsToCreate: TLShapePartial[] = [];
+			const parentsToUpdate: TLShapePartial[] = [];
+
+			for (const desired of parents) {
+				const existing = existingMap.get(desired.id);
+				if (!existing) {
+					parentsToCreate.push(desired);
+				} else {
+					parentsToUpdate.push({
+						...desired,
+						x: existing.x,
+						y: existing.y,
+					});
+				}
+			}
+
+			if (parentsToCreate.length > 0) {
+				editor.createShapes(parentsToCreate);
+			}
+			if (parentsToUpdate.length > 0) {
+				editor.updateShapes(parentsToUpdate);
+			}
+
+			// Now create/update children
+			const childrenToCreate: TLShapePartial[] = [];
+			const childrenToUpdate: TLShapePartial[] = [];
+
+			for (const desired of children) {
+				const existing = existingMap.get(desired.id);
+				if (!existing) {
+					childrenToCreate.push(desired);
+				} else {
+					// Preserve user-dragged position for children too
+					childrenToUpdate.push({
+						...desired,
+						x: existing.x,
+						y: existing.y,
+					});
+				}
+			}
+
+			if (childrenToCreate.length > 0) {
+				editor.createShapes(childrenToCreate);
+			}
+			if (childrenToUpdate.length > 0) {
+				editor.updateShapes(childrenToUpdate);
 			}
 		});
 
-		if (!currentBoardShape) {
-			const shapeOnPage = editor.getShape(boardShape.id);
-			if (shapeOnPage) {
-				const bounds = editor.getShapeGeometry(shapeOnPage).bounds;
-				editor.zoomToBounds(
-					{ x: shapeOnPage.x + bounds.x, y: shapeOnPage.y + bounds.y, w: bounds.w, h: bounds.h },
-					{ animation: { duration: 400 }, targetZoom: editor.getZoomLevel() }
-				);
-			}
+		// If this is the first time we're adding shapes, zoom to fit
+		if (existingShapes.length === 0 && desiredShapes.length > 0) {
+			setTimeout(() => {
+				editor.zoomToFit({ animation: { duration: 400 } });
+			}, 100);
 		}
 
 		lastAppliedShapesSignatureRef.current = shapesSignature;
@@ -288,7 +408,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					persistenceKey="openoii-canvas-v9"
+					persistenceKey="openoii-canvas-v10"
 				>
 					<CanvasToolbar />
 					<ShapeContextMenu />
