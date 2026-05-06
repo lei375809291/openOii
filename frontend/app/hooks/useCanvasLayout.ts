@@ -2,11 +2,9 @@ import { useMemo } from "react";
 import { createShapeId, type TLShapePartial } from "tldraw";
 import { SHAPE_TYPES } from "~/components/canvas/shapes";
 import type {
-	CharacterCardShape,
 	CharacterSectionShape,
 	ComposeSectionShape,
 	PlanSectionShape,
-	ShotCardShape,
 	StoryboardSectionShape,
 } from "~/components/canvas/shapes";
 import type { Character, Shot, WorkflowStage } from "~/types";
@@ -212,7 +210,6 @@ export function useCanvasLayout({
 
 		const shapes: TLShapePartial[] = [];
 		const { startX, startY, boardWidth } = config;
-		const cardWidth = (boardWidth - CARD_GAP) / 2;
 		let currentY = startY;
 
 		// --- Plan Section (full width) ---
@@ -265,25 +262,6 @@ export function useCanvasLayout({
 					sectionTitle: "角色",
 				},
 			} satisfies TLShapePartial<CharacterSectionShape>);
-
-			// Character cards as children of the section
-			for (let i = 0; i < characters.length; i++) {
-				const col = i % 2;
-				const row = Math.floor(i / 2);
-				shapes.push({
-					id: createShapeId(`character-card-${characters[i].id}`),
-					type: SHAPE_TYPES.CHARACTER_CARD,
-					parentId: charSectionId,
-					// Position relative to parent
-					x: col * (cardWidth + CARD_GAP),
-					y: row * (CARD_DEFAULT_H + CARD_GAP),
-					props: {
-						w: cardWidth,
-						h: CARD_DEFAULT_H,
-						character: characters[i],
-					},
-				} satisfies TLShapePartial<CharacterCardShape>);
-			}
 			currentY += charSectionH + SECTION_GAP;
 
 			// Storyboard/Shot Section (container for shot cards)
@@ -310,25 +288,6 @@ export function useCanvasLayout({
 					placeholderText: "等待分镜画面生成...",
 				},
 			} satisfies TLShapePartial<StoryboardSectionShape>);
-
-			// Shot cards as children of the section
-			for (let i = 0; i < shots.length; i++) {
-				const col = i % 2;
-				const row = Math.floor(i / 2);
-				shapes.push({
-					id: createShapeId(`shot-card-${shots[i].id}`),
-					type: SHAPE_TYPES.SHOT_CARD,
-					parentId: shotSectionId,
-					// Position relative to parent
-					x: col * (cardWidth + CARD_GAP),
-					y: row * (CARD_DEFAULT_H + CARD_GAP),
-					props: {
-						w: cardWidth,
-						h: CARD_DEFAULT_H,
-						shot: shots[i],
-					},
-				} satisfies TLShapePartial<ShotCardShape>);
-			}
 			currentY += shotSectionH + SECTION_GAP;
 		}
 

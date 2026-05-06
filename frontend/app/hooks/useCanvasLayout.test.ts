@@ -98,7 +98,7 @@ describe("useCanvasLayout", () => {
 		expect(types).not.toContain("plan-section");
 	});
 
-	it("groups character cards inside a character-section with parentId", () => {
+	it("creates a character-section with characters prop", () => {
 		const characters = [makeCharacter(1, "Alice"), makeCharacter(2, "Bob")];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -111,18 +111,12 @@ describe("useCanvasLayout", () => {
 			(s) => s.type === "character-section",
 		);
 		expect(charSection).toBeDefined();
-
-		const charCards = result.current.shapes.filter(
-			(s) => s.type === "character-card",
-		);
-		expect(charCards).toHaveLength(2);
-		// All character cards should have parentId pointing to the character-section
-		for (const card of charCards) {
-			expect(card.parentId).toBe(charSection!.id);
-		}
+		expect(
+			(charSection!.props as Record<string, unknown>).characters,
+		).toHaveLength(2);
 	});
 
-	it("groups shot cards inside a storyboard-section with parentId", () => {
+	it("creates a storyboard-section with shots prop", () => {
 		const shots = [makeShot(10, 1), makeShot(20, 2)];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -135,33 +129,9 @@ describe("useCanvasLayout", () => {
 			(s) => s.type === "storyboard-section",
 		);
 		expect(shotSection).toBeDefined();
-
-		const shotCards = result.current.shapes.filter(
-			(s) => s.type === "shot-card",
+		expect((shotSection!.props as Record<string, unknown>).shots).toHaveLength(
+			2,
 		);
-		expect(shotCards).toHaveLength(2);
-		// All shot cards should have parentId pointing to the storyboard-section
-		for (const card of shotCards) {
-			expect(card.parentId).toBe(shotSection!.id);
-		}
-	});
-
-	it("positions character cards relative to their parent section", () => {
-		const characters = [makeCharacter(1, "A"), makeCharacter(2, "B")];
-		const { result } = renderHook(() =>
-			useCanvasLayout({
-				...defaultProps,
-				characters,
-				visibleSections: ["plan", "render"] as SectionKey[],
-			}),
-		);
-		const charCards = result.current.shapes.filter(
-			(s) => s.type === "character-card",
-		);
-		// First card: column 0, relative x = 0
-		expect(charCards[0]!.x).toBe(0);
-		// Second card: column 1, relative x > 0
-		expect(charCards[1]!.x).toBeGreaterThan(0);
 	});
 
 	it("creates a compose-section shape when compose is visible", () => {
@@ -188,7 +158,7 @@ describe("useCanvasLayout", () => {
 		expect(types).not.toContain("compose-section");
 	});
 
-	it("assigns stable shape IDs based on entity type and ID", () => {
+	it("assigns stable shape IDs to section shapes", () => {
 		const characters = [makeCharacter(42, "Test")];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -197,11 +167,11 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render"] as SectionKey[],
 			}),
 		);
-		const charCard = result.current.shapes.find(
-			(s) => s.type === "character-card",
+		const charSection = result.current.shapes.find(
+			(s) => s.type === "character-section",
 		);
-		expect(charCard).toBeDefined();
-		// Shape ID should be stable (same character ID produces same shape ID)
+		expect(charSection).toBeDefined();
+		// Shape ID should be stable across re-renders
 		const { result: result2 } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -209,10 +179,10 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render"] as SectionKey[],
 			}),
 		);
-		const charCard2 = result2.current.shapes.find(
-			(s) => s.type === "character-card",
+		const charSection2 = result2.current.shapes.find(
+			(s) => s.type === "character-section",
 		);
-		expect(charCard2?.id).toBe(charCard?.id);
+		expect(charSection2?.id).toBe(charSection?.id);
 	});
 
 	it("marks plan section state as generating when generating", () => {

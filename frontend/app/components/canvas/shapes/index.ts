@@ -4,8 +4,6 @@ import { CharacterSectionShapeUtil } from "./CharacterSectionShape";
 import { StoryboardSectionShapeUtil } from "./StoryboardSectionShape";
 import { VideoSectionShapeUtil } from "./VideoSectionShape";
 import { PlanSectionShapeUtil } from "./PlanSectionShape";
-import { CharacterCardShapeUtil } from "./CharacterCardShape";
-import { ShotCardShapeUtil } from "./ShotCardShape";
 import { ComposeSectionShapeUtil } from "./ComposeSectionShape";
 
 export { StoryboardBoardShapeUtil } from "./StoryboardBoardShape";
@@ -14,8 +12,6 @@ export { CharacterSectionShapeUtil } from "./CharacterSectionShape";
 export { StoryboardSectionShapeUtil } from "./StoryboardSectionShape";
 export { VideoSectionShapeUtil } from "./VideoSectionShape";
 export { PlanSectionShapeUtil } from "./PlanSectionShape";
-export { CharacterCardShapeUtil } from "./CharacterCardShape";
-export { ShotCardShapeUtil } from "./ShotCardShape";
 export { ComposeSectionShapeUtil } from "./ComposeSectionShape";
 export { SHAPE_TYPES } from "./types";
 export type {
@@ -26,8 +22,6 @@ export type {
 	StoryboardSectionShape,
 	VideoSectionShape,
 	PlanSectionShape,
-	CharacterCardShape,
-	ShotCardShape,
 	ComposeSectionShape,
 } from "./types";
 
@@ -38,7 +32,5 @@ export const customShapeUtils = [
 	StoryboardSectionShapeUtil,
 	VideoSectionShapeUtil,
 	PlanSectionShapeUtil,
-	CharacterCardShapeUtil,
-	ShotCardShapeUtil,
 	ComposeSectionShapeUtil,
 ];

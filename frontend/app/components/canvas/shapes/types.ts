@@ -47,10 +47,7 @@ export const SHAPE_TYPES = {
 	CHARACTER_SECTION: "character-section",
 	STORYBOARD_SECTION: "storyboard-section",
 	VIDEO_SECTION: "video-section",
-	// 新增：独立可拖动卡片
 	PLAN_SECTION: "plan-section",
-	CHARACTER_CARD: "character-card",
-	SHOT_CARD: "shot-card",
 	COMPOSE_SECTION: "compose-section",
 } as const;
 
@@ -147,26 +144,6 @@ export type PlanSectionShape = TLBaseShape<
 	} & CanvasSectionStatusProps
 >;
 
-// 单角色卡片 Shape (独立可拖动)
-export type CharacterCardShape = TLBaseShape<
-	typeof SHAPE_TYPES.CHARACTER_CARD,
-	{
-		w: number;
-		h: number;
-		character: ReviewedCharacter;
-	}
->;
-
-// 单镜头卡片 Shape (独立可拖动)
-export type ShotCardShape = TLBaseShape<
-	typeof SHAPE_TYPES.SHOT_CARD,
-	{
-		w: number;
-		h: number;
-		shot: ReviewedShot;
-	}
->;
-
 // 合成区域 Shape (最终视频)
 export type ComposeSectionShape = TLBaseShape<
 	typeof SHAPE_TYPES.COMPOSE_SECTION,
@@ -189,8 +166,7 @@ declare module "tldraw" {
 		[SHAPE_TYPES.STORYBOARD_SECTION]: StoryboardSectionShape["props"];
 		[SHAPE_TYPES.VIDEO_SECTION]: VideoSectionShape["props"];
 		[SHAPE_TYPES.PLAN_SECTION]: PlanSectionShape["props"];
-		[SHAPE_TYPES.CHARACTER_CARD]: CharacterCardShape["props"];
-		[SHAPE_TYPES.SHOT_CARD]: ShotCardShape["props"];
+
 		[SHAPE_TYPES.COMPOSE_SECTION]: ComposeSectionShape["props"];
 	}
 }

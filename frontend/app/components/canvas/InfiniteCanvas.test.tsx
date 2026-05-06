@@ -101,12 +101,6 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 							},
 						},
 						{
-							id: "shape:character-card-1",
-							type: "character-card",
-							parentId: "shape:character-section",
-							x: 0,
-							y: 0,
-							props: { w: 452, h: 380, character: { id: 1, name: "阿宁" } },
 						},
 						{
 							id: "shape:storyboard-section",
@@ -125,12 +119,6 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 							},
 						},
 						{
-							id: "shape:shot-card-11",
-							type: "shot-card",
-							parentId: "shape:storyboard-section",
-							x: 0,
-							y: 0,
-							props: { w: 452, h: 380, shot: { id: 11, order: 1 } },
 						},
 					]
 				: []),
