@@ -94,6 +94,7 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
         <SectionShell
+          sectionKey="compose"
           sectionTitle="最终输出"
           statusLabel={statusLabel}
           placeholder={!videoUrl && placeholder}

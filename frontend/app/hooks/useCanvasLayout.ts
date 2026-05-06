@@ -16,7 +16,7 @@ interface LayoutConfig {
 const DEFAULT_CONFIG: LayoutConfig = {
   startX: 100,
   startY: 100,
-  boardWidth: 920,
+  boardWidth: Math.min(920, (typeof window !== "undefined" ? window.innerWidth : 960) - 40),
 };
 
 const SECTION_ORDER: SectionKey[] = ["plan", "character", "shot", "compose"];

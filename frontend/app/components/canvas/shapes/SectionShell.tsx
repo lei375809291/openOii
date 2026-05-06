@@ -3,6 +3,7 @@ import { type PropsWithChildren, type ReactNode } from "react";
 
 interface SectionShellProps {
   sectionTitle: string;
+  sectionKey: "plan" | "character" | "shot" | "compose";
   statusLabel: string;
   placeholder: boolean;
   placeholderText?: string;
@@ -12,16 +13,18 @@ interface SectionShellProps {
 
 export function SectionShell({
   sectionTitle,
+  sectionKey,
   statusLabel,
   placeholder,
   placeholderText,
   placeholderIcon,
   children,
 }: PropsWithChildren<SectionShellProps>) {
+  const cardClass = sectionKey === "shot" ? "card-comic" : "card-doodle";
   return (
-    <div className="flex flex-col w-full border-2 border-base-content/20 rounded-lg bg-base-100 shadow-sm">
-      <div className="flex items-center justify-between px-3 py-2 border-b-2 border-base-content/10 shrink-0 bg-base-200/50">
-        <h2 className="text-sm font-semibold m-0">{sectionTitle}</h2>
+    <div className={`flex flex-col w-full ${cardClass}`}>
+      <div className="flex items-center justify-between px-3 py-2 border-b-2 border-base-content/10 shrink-0 bg-base-200/60">
+        <h2 className="text-sm font-heading font-bold m-0">{sectionTitle}</h2>
         <span className="badge badge-ghost badge-xs">{statusLabel}</span>
       </div>
       <div className="flex-1 p-3">

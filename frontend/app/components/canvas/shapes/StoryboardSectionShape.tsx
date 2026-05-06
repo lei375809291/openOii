@@ -267,6 +267,7 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
         <SectionShell
+          sectionKey="shot"
           sectionTitle={sectionTitle}
           statusLabel={statusLabel}
           placeholder={placeholder}

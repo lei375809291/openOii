@@ -62,6 +62,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
         <SectionShell
+          sectionKey="plan"
           sectionTitle="编剧"
           statusLabel={statusLabel}
           placeholder={placeholder}

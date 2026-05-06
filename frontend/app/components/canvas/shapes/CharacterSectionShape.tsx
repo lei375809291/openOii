@@ -145,6 +145,7 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
         <SectionShell
+          sectionKey="character"
           sectionTitle="角色"
           statusLabel={statusLabel}
           placeholder={placeholder}

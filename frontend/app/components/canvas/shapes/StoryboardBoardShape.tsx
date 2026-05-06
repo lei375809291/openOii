@@ -74,20 +74,12 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
   const currentImage = getStaticUrl(character.image_url);
   const approvedImage = getStaticUrl(character.approved_image_url);
   const displayImage = isApproved && approvedImage ? approvedImage : currentImage;
+  const [isEditing, setIsEditing] = useState(false);
+  const [feedbackText, setFeedbackText] = useState(character.description || "");
 
   const handleAction = (action: ShapeActionName) => {
-    if (action === "regenerate" && !window.confirm(`重新生成角色 ${character.name}？`)) return;
-    if (action === "approve" && !window.confirm(`批准角色 ${character.name}？`)) return;
     if (action === "edit") {
-      const feedbackContent = window.prompt(`请输入对角色 ${character.name} 的修改意见`, character.description || "");
-      if (!feedbackContent?.trim()) return;
-      emitEntityAction({
-        action,
-        entityType: "character",
-        entityId: character.id,
-        feedbackType: "character",
-        feedbackContent: feedbackContent.trim(),
-      });
+      setIsEditing(true);
       return;
     }
     emitEntityAction({
@@ -98,8 +90,22 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
     });
   };
 
+  const handleSaveEdit = () => {
+    setIsEditing(false);
+    const content = feedbackText.trim();
+    if (content) {
+      emitEntityAction({
+        action: "edit",
+        entityType: "character",
+        entityId: character.id,
+        feedbackType: "character",
+        feedbackContent: content,
+      });
+    }
+  };
+
   return (
-    <article className="group overflow-hidden rounded-xl border-2 border-base-content/15 bg-base-200/70 shadow-sm">
+    <article className="group overflow-hidden card-doodle">
       <div className="relative aspect-[4/3] bg-base-300">
         {displayImage ? (
           <img src={displayImage} alt={character.name} className="h-full w-full object-cover" />
@@ -109,30 +115,53 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
           </div>
         )}
         <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-base-content/0 opacity-0 transition group-hover:bg-base-content/25 group-hover:opacity-100">
-          <button type="button" className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30" title="重新生成" onPointerDown={stopCanvasDrag} onClick={() => handleAction("regenerate")}>
-            <SvgIcon name="refresh-cw" size={12} />
+          <button type="button" className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target" title="重新生成" onPointerDown={stopCanvasDrag} onClick={() => handleAction("regenerate")}>
+            <SvgIcon name="refresh-cw" size={14} />
           </button>
-          <button type="button" className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30" title="编辑" onPointerDown={stopCanvasDrag} onClick={() => handleAction("edit")}>
-            <SvgIcon name="pencil" size={12} />
+          <button type="button" className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target" title="编辑" onPointerDown={stopCanvasDrag} onClick={() => handleAction("edit")}>
+            <SvgIcon name="pencil" size={14} />
           </button>
           {!isApproved && (
-            <button type="button" className="btn btn-xs btn-circle btn-ghost text-success hover:bg-success/30" title="批准" onPointerDown={stopCanvasDrag} onClick={() => handleAction("approve")}>
-              <SvgIcon name="check" size={12} />
+            <button type="button" className="btn btn-sm btn-circle btn-ghost text-success hover:bg-success/30 touch-target" title="批准" onPointerDown={stopCanvasDrag} onClick={() => handleAction("approve")}>
+              <SvgIcon name="check" size={14} />
             </button>
           )}
-          <button type="button" className="btn btn-xs btn-circle btn-ghost text-primary hover:bg-primary/30" title="添加到资产库" onPointerDown={stopCanvasDrag} onClick={() => handleAction("add-to-assets")}>
-            <SvgIcon name="star" size={12} />
+          <button type="button" className="btn btn-sm btn-circle btn-ghost text-primary hover:bg-primary/30 touch-target" title="添加到资产库" onPointerDown={stopCanvasDrag} onClick={() => handleAction("add-to-assets")}>
+            <SvgIcon name="star" size={14} />
           </button>
         </div>
+        {isApproved && (
+          <span className="absolute right-2 top-2 badge badge-xs badge-success gap-1">
+            <SvgIcon name="check" size={10} />已批准
+          </span>
+        )}
       </div>
       <div className="space-y-1.5 p-3">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${isApproved ? "bg-success" : "bg-warning"}`} />
-          <h3 className="m-0 text-sm font-semibold">{character.name}</h3>
+          <h3 className="m-0 text-sm font-heading font-bold">{character.name}</h3>
           <span className="badge badge-ghost badge-xs ml-auto">v{character.approval_version}</span>
         </div>
-        {character.description && (
-          <p className="m-0 text-xs leading-relaxed text-base-content/60">{character.description}</p>
+        {isEditing ? (
+          <div className="space-y-1.5 pt-1">
+            <textarea
+              className="input-doodle w-full text-xs p-2 resize-none"
+              rows={2}
+              placeholder="修改意见"
+              value={feedbackText}
+              onPointerDown={stopCanvasDrag}
+              onChange={(e) => setFeedbackText(e.currentTarget.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); } }}
+            />
+            <div className="flex gap-1">
+              <button type="button" className="btn btn-xs btn-doodle btn-primary" onPointerDown={stopCanvasDrag} onClick={handleSaveEdit}>提交</button>
+              <button type="button" className="btn btn-xs btn-ghost" onPointerDown={stopCanvasDrag} onClick={() => setIsEditing(false)}>取消</button>
+            </div>
+          </div>
+        ) : (
+          character.description && (
+            <p className="m-0 text-xs leading-relaxed text-base-content/60">{character.description}</p>
+          )
         )}
       </div>
     </article>
@@ -148,8 +177,6 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
   const [editAction, setEditAction] = useState(shot.action || "");
 
   const handleAction = (action: ShapeActionName) => {
-    if (action === "regenerate" && !window.confirm(`重新生成镜头 ${shot.order}？`)) return;
-    if (action === "approve" && !window.confirm(`批准镜头 ${shot.order}？`)) return;
     if (action === "edit") {
       setIsEditing(true);
       return;
@@ -174,7 +201,7 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
   };
 
   return (
-    <article className={`group overflow-hidden rounded-xl border-2 border-base-content/15 bg-base-200/70 shadow-sm ${isApproved ? "ring-1 ring-success/20" : ""}`}>
+    <article className={`group overflow-hidden card-comic ${isApproved ? "ring-2 ring-success/50" : ""}`}>
       <div className="relative aspect-video bg-base-300">
         {imageUrl ? (
           <img src={imageUrl} alt={`Shot ${shot.order}`} className="h-full w-full object-cover" />
@@ -185,27 +212,32 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
           {shot.duration ? `${shot.duration}s` : "未定时长"}
         </span>
         {shot.expression && <span className="badge badge-xs badge-primary absolute bottom-2 left-2">{shot.expression}</span>}
+        {isApproved && (
+          <span className="absolute left-2 top-2 badge badge-xs badge-success gap-1">
+            <SvgIcon name="check" size={10} />已批准
+          </span>
+        )}
         <div className="absolute inset-0 flex items-center justify-center gap-1 bg-base-content/0 opacity-0 transition group-hover:bg-base-content/25 group-hover:opacity-100">
-          <button type="button" className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30" title="重新生成" onPointerDown={stopCanvasDrag} onClick={() => handleAction("regenerate")}>
-            <SvgIcon name="refresh-cw" size={12} />
+          <button type="button" className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target" title="重新生成" onPointerDown={stopCanvasDrag} onClick={() => handleAction("regenerate")}>
+            <SvgIcon name="refresh-cw" size={14} />
           </button>
-          <button type="button" className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30" title="编辑" onPointerDown={stopCanvasDrag} onClick={() => handleAction("edit")}>
-            <SvgIcon name="pencil" size={12} />
+          <button type="button" className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target" title="编辑" onPointerDown={stopCanvasDrag} onClick={() => handleAction("edit")}>
+            <SvgIcon name="pencil" size={14} />
           </button>
           {videoUrl && (
             <button
               type="button"
-              className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30"
+              className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target"
               title="预览片段"
               onPointerDown={stopCanvasDrag}
               onClick={() => canvasEvents.emit("preview-video", { src: videoUrl, title: `镜头 ${shot.order}` })}
             >
-              <SvgIcon name="play" size={12} />
+              <SvgIcon name="play" size={14} />
             </button>
           )}
           {!isApproved && (
-            <button type="button" className="btn btn-xs btn-circle btn-ghost text-success hover:bg-success/30" title="批准" onPointerDown={stopCanvasDrag} onClick={() => handleAction("approve")}>
-              <SvgIcon name="check" size={12} />
+            <button type="button" className="btn btn-sm btn-circle btn-ghost text-success hover:bg-success/30 touch-target" title="批准" onPointerDown={stopCanvasDrag} onClick={() => handleAction("approve")}>
+              <SvgIcon name="check" size={14} />
             </button>
           )}
         </div>
@@ -213,17 +245,17 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
       <div className="space-y-1.5 p-3">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 shrink-0 rounded-full ${isApproved ? "bg-success" : "bg-warning"}`} />
-          <h3 className="m-0 text-sm font-semibold">镜头 {shot.order}</h3>
+          <h3 className="m-0 text-sm font-heading font-bold">镜头 {shot.order}</h3>
           {shot.camera && <span className="badge badge-ghost badge-xs ml-auto">{shot.camera}</span>}
         </div>
         {shot.scene && <p className="m-0 text-xs font-semibold text-base-content/75">{shot.scene}</p>}
         {shot.description && <p className="m-0 text-xs leading-relaxed text-base-content/60">{shot.description}</p>}
         {isEditing ? (
           <div className="space-y-1.5 pt-1">
-            <input type="text" className="input input-bordered input-xs w-full bg-base-100/80 text-xs" placeholder="动作" value={editAction} onPointerDown={stopCanvasDrag} onChange={(e) => setEditAction(e.currentTarget.value)} />
-            <input type="text" className="input input-bordered input-xs w-full bg-base-100/80 text-xs" placeholder="对话" value={editDialogue} onPointerDown={stopCanvasDrag} onChange={(e) => setEditDialogue(e.currentTarget.value)} onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()} />
+            <input type="text" className="input-doodle w-full text-xs p-2" placeholder="动作" value={editAction} onPointerDown={stopCanvasDrag} onChange={(e) => setEditAction(e.currentTarget.value)} />
+            <input type="text" className="input-doodle w-full text-xs p-2" placeholder="对话" value={editDialogue} onPointerDown={stopCanvasDrag} onChange={(e) => setEditDialogue(e.currentTarget.value)} onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()} />
             <div className="flex gap-1">
-              <button type="button" className="btn btn-xs btn-primary" onPointerDown={stopCanvasDrag} onClick={handleSaveEdit}>保存</button>
+              <button type="button" className="btn btn-xs btn-doodle btn-primary" onPointerDown={stopCanvasDrag} onClick={handleSaveEdit}>保存</button>
               <button type="button" className="btn btn-xs btn-ghost" onPointerDown={stopCanvasDrag} onClick={() => setIsEditing(false)}>取消</button>
             </div>
           </div>
@@ -375,38 +407,38 @@ export class StoryboardBoardShapeUtil extends ShapeUtil<StoryboardBoardShape> {
     return (
       <HTMLContainer style={{ width: w, pointerEvents: "all", overflow: "visible" }}>
         <div ref={ref} style={{ width: w }}>
-          <div className="flex flex-col gap-8 rounded-[1.6rem] bg-base-200/30 p-5">
+          <div className="flex flex-col rounded-[1.6rem] bg-base-200/30 p-5" style={{ gap: "var(--space-xl, 2rem)" }}>
             {sections.includes("plan") && (
-              <SectionShell sectionTitle={SECTION_TITLES.plan} statusLabel={statusLabels.plan ?? "待生成"} placeholder={Boolean(placeholders.plan)} placeholderText={placeholderTexts.plan ?? getWorkspaceSectionPlaceholderText("plan")}>
+              <SectionShell sectionKey="plan" sectionTitle={SECTION_TITLES.plan} statusLabel={statusLabels.plan ?? "待生成"} placeholder={Boolean(placeholders.plan)} placeholderText={placeholderTexts.plan ?? getWorkspaceSectionPlaceholderText("plan")}>
                 <PlanSection story={story} summary={summary} characters={typedCharacters} shots={typedShots} />
               </SectionShell>
             )}
 
             {sections.includes("character") && (
-              <SectionShell sectionTitle={SECTION_TITLES.character} statusLabel={statusLabels.character ?? "待生成"} placeholder={Boolean(placeholders.character)} placeholderText={placeholderTexts.character ?? getWorkspaceSectionPlaceholderText("character")}>
-                <div className="grid grid-cols-2 gap-4">
+              <SectionShell sectionKey="character" sectionTitle={SECTION_TITLES.character} statusLabel={statusLabels.character ?? "待生成"} placeholder={Boolean(placeholders.character)} placeholderText={placeholderTexts.character ?? getWorkspaceSectionPlaceholderText("character")}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {typedCharacters.map((character) => <CharacterCard key={character.id} character={character} />)}
                 </div>
               </SectionShell>
             )}
 
             {sections.includes("shot") && (
-              <SectionShell sectionTitle={SECTION_TITLES.shot} statusLabel={statusLabels.shot ?? "待生成"} placeholder={Boolean(placeholders.shot)} placeholderText={placeholderTexts.shot ?? getWorkspaceSectionPlaceholderText("shot")}>
-                <div className="grid grid-cols-2 gap-4">
+              <SectionShell sectionKey="shot" sectionTitle={SECTION_TITLES.shot} statusLabel={statusLabels.shot ?? "待生成"} placeholder={Boolean(placeholders.shot)} placeholderText={placeholderTexts.shot ?? getWorkspaceSectionPlaceholderText("shot")}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {typedShots.map((shot) => <ShotCard key={shot.id} shot={shot} />)}
                 </div>
               </SectionShell>
             )}
 
             {sections.includes("compose") && (
-              <SectionShell sectionTitle={SECTION_TITLES.compose} statusLabel={statusLabels.compose ?? "待生成"} placeholder={!videoUrl && Boolean(placeholders.compose)} placeholderText={placeholderTexts.compose ?? getWorkspaceSectionPlaceholderText("compose")} placeholderIcon={VIDEO_PLACEHOLDER_ICON}>
+              <SectionShell sectionKey="compose" sectionTitle={SECTION_TITLES.compose} statusLabel={statusLabels.compose ?? "待生成"} placeholder={!videoUrl && Boolean(placeholders.compose)} placeholderText={placeholderTexts.compose ?? getWorkspaceSectionPlaceholderText("compose")} placeholderIcon={VIDEO_PLACEHOLDER_ICON}>
                 {videoUrl ? (
                   <div className="space-y-3">
-                    <video className="w-full rounded-xl bg-neutral" src={videoUrl} controls onPointerDown={stopCanvasDrag} aria-label={videoTitle}>
+                    <video className="w-full rounded-xl bg-base-300" src={videoUrl} controls onPointerDown={stopCanvasDrag} aria-label={videoTitle}>
                       <track kind="captions" label="中文" srcLang="zh" default src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${videoTitle || "最终视频"}`)}`} />
                     </video>
                     <div className="flex justify-end">
-                      <a href={getStaticUrl(downloadUrl || videoUrl) ?? undefined} download className="btn btn-sm btn-ghost gap-1 border-2 border-base-content/15 text-xs transition-all hover:-translate-y-0.5 hover:border-primary/40" onPointerDown={stopCanvasDrag}>
+                      <a href={getStaticUrl(downloadUrl || videoUrl) ?? undefined} download className="btn btn-sm btn-doodle gap-1 text-xs" onPointerDown={stopCanvasDrag}>
                         <SvgIcon name="download" size={12} />
                         下载
                       </a>
