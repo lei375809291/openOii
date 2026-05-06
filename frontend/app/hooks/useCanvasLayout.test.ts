@@ -18,28 +18,27 @@ const defaultProps = {
   currentStage: "plan" as const,
 };
 
+function getBoardProps(result: ReturnType<typeof useCanvasLayout>) {
+  const board = result.shapes[0];
+  if (!board?.props) throw new Error("Expected storyboard board props");
+  return board.props;
+}
+
 describe("useCanvasLayout", () => {
-  it("returns layout with shapes and bindings", () => {
+  it("returns one storyboard board shape", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    expect(result.current.shapes.length).toBeGreaterThan(0);
+    expect(result.current.shapes).toHaveLength(1);
+    expect(result.current.shapes[0]?.type).toBe("storyboard-board");
   });
 
-  it("includes plan shape", () => {
+  it("stores visible sections on the board", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const planShape = result.current.shapes.find((s) => (s.id as string).includes("plan"));
-    expect(planShape).toBeDefined();
+    expect(getBoardProps(result.current).visibleSections).toEqual(["plan", "character"]);
   });
 
-  it("includes character shape when visible", () => {
+  it("keeps the layout as a single board shape", () => {
     const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const characterShape = result.current.shapes.find((s) => (s.id as string).includes("character"));
-    expect(characterShape).toBeDefined();
-  });
-
-  it("creates section shapes without arrows", () => {
-    const { result } = renderHook(() => useCanvasLayout(defaultProps));
-    const arrows = result.current.shapes.filter((s) => s.type === "arrow");
-    expect(arrows.length).toBe(0);
+    expect(result.current.shapes.map((s) => s.type)).toEqual(["storyboard-board"]);
   });
 
   it("omits sections not in visibleSections", () => {
@@ -58,8 +57,7 @@ describe("useCanvasLayout", () => {
         visibleSections: ["plan"] as SectionKey[],
       }),
     );
-    const planShape = result.current.shapes.find((s) => (s.id as string).includes("plan"));
-    expect((planShape?.props as any).sectionState).toBe("generating");
+    expect(getBoardProps(result.current).sectionStates?.plan).toBe("generating");
   });
 
   it("marks complete state correctly", () => {
@@ -71,7 +69,6 @@ describe("useCanvasLayout", () => {
         visibleSections: ["plan"] as SectionKey[],
       }),
     );
-    const planShape = result.current.shapes.find((s) => (s.id as string).includes("plan"));
-    expect((planShape?.props as any).sectionState).toBe("complete");
+    expect(getBoardProps(result.current).sectionStates?.plan).toBe("complete");
   });
 });

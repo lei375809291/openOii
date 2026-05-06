@@ -364,6 +364,21 @@ async def test_feedback_project_success(async_client, test_session, monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_feedback_project_returns_409_for_active_conflict(async_client, test_session):
+    project = await create_project(test_session)
+    await create_run(test_session, project_id=project.id, status="running")
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/feedback",
+        json={"content": "Please adjust tone"},
+    )
+
+    assert res.status_code == 409
+    body = res.json()
+    assert "run" in body or "state" in body or "kind" in body
+
+
+@pytest.mark.asyncio
 async def test_review_rule_engine_routes_shot_feedback_to_render(test_session, test_settings):
     from tests.agent_fixtures import FakeLLM, make_context
 

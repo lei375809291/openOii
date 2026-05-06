@@ -2,16 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	type Editor,
 	type TLComponents,
-	type TLShapePartial,
 	Tldraw,
 } from "tldraw";
 import "tldraw/tldraw.css";
 import { useQuery } from "@tanstack/react-query";
 import { useCanvasLayout } from "~/hooks/useCanvasLayout";
-import type { SectionKey } from "~/hooks/useCanvasLayout";
+import type { SectionKey, StoryboardBoardPartial } from "~/hooks/useCanvasLayout";
 import { SECTION_ORDER } from "~/hooks/useCanvasLayout";
-import { registerCollisionSystem, layoutAllSections } from "~/hooks/useCollisionSystem";
-import { getStaticUrl, projectsApi, assetsApi } from "~/services/api";
+import { getStaticUrl, projectsApi, assetsApi, charactersApi, shotsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { canvasEvents, type CanvasEvents } from "./canvasEvents";
@@ -50,13 +48,16 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const editorRef = useRef<Editor | null>(null);
 	const [isInitialized, setIsInitialized] = useState(false);
 	const lastAppliedShapesSignatureRef = useRef<string | null>(null);
-	const shapesRef = useRef<TLShapePartial[]>([]);
+	const boardShapeRef = useRef<StoryboardBoardPartial | null>(null);
 	const shapesSignatureRef = useRef("");
 
 	const {
 		characters,
 		shots,
 		projectVideoUrl,
+		projectTitle,
+		projectSummary,
+		projectStory,
 		currentStage,
 		isGenerating,
 		awaitingConfirm,
@@ -66,6 +67,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		characters: s.characters,
 		shots: s.shots,
 		projectVideoUrl: s.projectVideoUrl,
+		projectTitle: s.projectTitle,
+		projectSummary: s.projectSummary,
+		projectStory: s.projectStory,
 		currentStage: s.currentStage,
 		isGenerating: s.isGenerating,
 		awaitingConfirm: s.awaitingConfirm,
@@ -89,6 +93,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 	const rawVideoUrl = projectVideoUrl || project?.video_url;
 	const finalVideoUrl = rawVideoUrl ? getStaticUrl(rawVideoUrl) : null;
+	const story = projectStory ?? project?.story ?? null;
+	const summary = projectSummary ?? project?.summary ?? null;
+	const videoTitle = projectTitle ?? project?.title ?? "最终视频";
 
 	const currentStageIndex = useMemo(
 		() => getPipelineStageIndex(recoverySummary?.current_stage ?? currentStage),
@@ -105,22 +112,22 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		);
 
 		return SECTION_ORDER.filter((section) => {
-		if (section === "plan") return true;
-		if (section === "character") return characters.length > 0 || sectionIndex >= 1;
-		if (section === "shot") return shots.length > 0 || sectionIndex >= 2;
-		if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 3;
-		return false;
+			if (section === "plan") return true;
+			if (section === "character") return characters.length > 0 || sectionIndex >= 1;
+			if (section === "shot") return shots.length > 0 || sectionIndex >= 2;
+			if (section === "compose") return Boolean(finalVideoUrl) || shots.some((s) => Boolean(s.video_url)) || sectionIndex >= 3;
+			return false;
 		});
 	}, [characters, shots, finalVideoUrl, currentStageIndex, recoverySummary]);
 
 	const layout = useCanvasLayout({
 		projectId,
-		story: project?.story || null,
-		summary: project?.summary || null,
+		story,
+		summary,
 		characters,
 		shots,
 		videoUrl: finalVideoUrl,
-		videoTitle: project?.title || "最终视频",
+		videoTitle,
 		visibleSections,
 		isGenerating,
 		awaitingConfirm,
@@ -128,8 +135,9 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		currentStage,
 	});
 
+	const boardShape = layout.shapes[0] ?? null;
 	const shapesSignature = useMemo(() => JSON.stringify(layout), [layout]);
-	shapesRef.current = layout.shapes;
+	boardShapeRef.current = boardShape;
 	shapesSignatureRef.current = shapesSignature;
 
 	const handleShapeAction = useCallback((data: CanvasEvents["shape-action"]) => {
@@ -141,13 +149,49 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			});
 			return;
 		}
-		const feedbackMap: Record<string, string> = {
-			regenerate: `请重新生成`,
-			edit: `请修改内容`,
-			approve: `批准通过`,
-		};
-		const content = feedbackMap[data.action] || "请修改";
-		projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType, data.entityType, data.entityId ?? undefined);
+
+		if (data.action === "approve") {
+			const request = data.entityType === "character"
+				? charactersApi.approve(data.entityId)
+				: shotsApi.approve(data.entityId);
+			request.then(() => {
+				toast.success({ title: "审批", message: "已批准" });
+			}).catch(() => {
+				toast.error({ title: "审批", message: "批准失败" });
+			});
+			return;
+		}
+
+		if (data.action === "regenerate") {
+			const request = data.entityType === "character"
+				? charactersApi.regenerate(data.entityId)
+				: shotsApi.regenerate(data.entityId, "image");
+			request.then(() => {
+				toast.success({ title: "重新生成", message: "任务已启动" });
+			}).catch(() => {
+				toast.error({ title: "重新生成", message: "启动失败" });
+			});
+			return;
+		}
+
+		if (data.action === "edit" && data.entityType === "shot" && data.shotPatch) {
+			shotsApi.update(data.entityId, data.shotPatch).then(() => {
+				toast.success({ title: "镜头", message: "已保存修改" });
+			}).catch(() => {
+				toast.error({ title: "镜头", message: "保存失败" });
+			});
+			return;
+		}
+
+		if (data.action === "edit") {
+			const content = data.feedbackContent?.trim();
+			if (!content) return;
+			projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType, data.entityType, data.entityId).then(() => {
+				toast.success({ title: "修改意见", message: "已提交" });
+			}).catch(() => {
+				toast.error({ title: "修改意见", message: "提交失败" });
+			});
+		}
 	}, [projectId, currentRunId]);
 
 	useEffect(() => {
@@ -175,7 +219,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		}
 
 		const allShapes = editor.getCurrentPageShapes();
-		const staleTypes = new Set(["connector", "ConnectorShape", "arrow"]);
+		const staleTypes = new Set(["connector", "ConnectorShape", "arrow", "script-section", "character-section", "storyboard-section", "video-section"]);
 		const staleShapeIds = allShapes
 			.filter((s) => staleTypes.has(s.type))
 			.map((s) => s.id);
@@ -183,14 +227,12 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			editor.deleteShapes(staleShapeIds);
 		}
 
-		registerCollisionSystem(editor);
-
-		const currentShapes = shapesRef.current;
+		const currentBoardShape = boardShapeRef.current;
 		const currentSignature = shapesSignatureRef.current;
 
-		if (currentShapes.length > 0) {
+		if (currentBoardShape) {
 			editor.run(() => {
-				editor.createShapes(currentShapes);
+				editor.createShapes([currentBoardShape]);
 			});
 			lastAppliedShapesSignatureRef.current = currentSignature;
 			setTimeout(() => {
@@ -208,41 +250,32 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		if (!editor || !isInitialized) return;
 		if (lastAppliedShapesSignatureRef.current === shapesSignature) return;
 
-		const sectionShapes = layout.shapes;
+		if (!boardShape) return;
+
 		const currentShapes = editor.getCurrentPageShapes();
-		const currentIds = new Set(currentShapes.map((s) => s.id));
-		const newSectionIds = new Set(sectionShapes.map((s) => s.id));
+		const currentBoardShape = editor.getShape(boardShape.id);
 
 		editor.run(() => {
-			const toDelete = currentShapes.filter((s) => !newSectionIds.has(s.id));
+			const toDelete = currentShapes.filter((s) => s.id !== boardShape.id);
 			if (toDelete.length > 0) {
 				editor.deleteShapes(toDelete.map((s) => s.id));
 			}
 
-			for (const shape of sectionShapes) {
-				if (currentIds.has(shape.id)) {
-					const { h: _h, ...propsWithoutH } = shape.props as any;
-					editor.updateShape({ id: shape.id, type: shape.type, props: propsWithoutH } as any);
-				} else {
-					editor.createShapes([shape]);
-				}
+			if (currentBoardShape) {
+				editor.updateShapes([boardShape]);
+			} else {
+				editor.createShapes([boardShape]);
 			}
-
-			layoutAllSections(editor, false);
 		});
 
-		const newlyCreated = sectionShapes.filter((s) => !currentIds.has(s.id));
-		if (newlyCreated.length > 0) {
-			const lastShape = newlyCreated[newlyCreated.length - 1];
-			if (lastShape.id) {
-				const shapeOnPage = editor.getShape(lastShape.id as any);
-				if (shapeOnPage) {
-					const bounds = editor.getShapeGeometry(shapeOnPage).bounds;
-					editor.zoomToBounds(
-						{ x: shapeOnPage.x + bounds.x, y: shapeOnPage.y + bounds.y, w: bounds.w, h: bounds.h },
-						{ animation: { duration: 400 }, targetZoom: editor.getZoomLevel() }
-					);
-				}
+		if (!currentBoardShape) {
+			const shapeOnPage = editor.getShape(boardShape.id);
+			if (shapeOnPage) {
+				const bounds = editor.getShapeGeometry(shapeOnPage).bounds;
+				editor.zoomToBounds(
+					{ x: shapeOnPage.x + bounds.x, y: shapeOnPage.y + bounds.y, w: bounds.w, h: bounds.h },
+					{ animation: { duration: 400 }, targetZoom: editor.getZoomLevel() }
+				);
 			}
 		}
 
@@ -256,7 +289,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					persistenceKey="openoii-canvas-v8"
+					persistenceKey="openoii-canvas-v9"
 				>
 					<CanvasToolbar />
 					<ShapeContextMenu />

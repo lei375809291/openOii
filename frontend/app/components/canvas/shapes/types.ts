@@ -42,11 +42,35 @@ export type ReviewedShot = Shot & ShotReviewSnapshot;
 
 // Shape 类型常量
 export const SHAPE_TYPES = {
+  STORYBOARD_BOARD: "storyboard-board",
   SCRIPT_SECTION: "script-section",
   CHARACTER_SECTION: "character-section",
   STORYBOARD_SECTION: "storyboard-section",
   VIDEO_SECTION: "video-section",
 } as const;
+
+export type StoryboardBoardSectionKey = "plan" | "character" | "shot" | "compose";
+
+export type StoryboardBoardShape = TLBaseShape<
+  typeof SHAPE_TYPES.STORYBOARD_BOARD,
+  {
+    w: number;
+    h: number;
+    projectId: number;
+    story: string;
+    summary: string;
+    characters: ReviewedCharacter[];
+    shots: ReviewedShot[];
+    videoUrl: string;
+    videoTitle: string;
+    visibleSections: StoryboardBoardSectionKey[];
+    sectionStates: Partial<Record<StoryboardBoardSectionKey, string>>;
+    placeholders: Partial<Record<StoryboardBoardSectionKey, boolean>>;
+    statusLabels: Partial<Record<StoryboardBoardSectionKey, string>>;
+    placeholderTexts: Partial<Record<StoryboardBoardSectionKey, string>>;
+    downloadUrl: string;
+  }
+>;
 
 // 剧本区域 Shape (包含故事原文、摘要、角色列表文字版、分镜描述)
 export type ScriptSectionShape = TLBaseShape<
@@ -107,6 +131,7 @@ export type VideoSectionShape = TLBaseShape<
 // 扩展 tldraw 全局类型
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
+    [SHAPE_TYPES.STORYBOARD_BOARD]: StoryboardBoardShape["props"];
     [SHAPE_TYPES.SCRIPT_SECTION]: ScriptSectionShape["props"];
     [SHAPE_TYPES.CHARACTER_SECTION]: CharacterSectionShape["props"];
     [SHAPE_TYPES.STORYBOARD_SECTION]: StoryboardSectionShape["props"];

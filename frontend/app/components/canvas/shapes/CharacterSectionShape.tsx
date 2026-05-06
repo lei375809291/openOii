@@ -14,6 +14,7 @@ import {
   getWorkspaceSectionStatusLabel,
 } from "~/utils/workspaceStatus";
 import { canvasEvents } from "../canvasEvents";
+import type { ShapeActionName } from "../canvasEvents";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
 
@@ -23,7 +24,7 @@ function CharacterCard({ char }: { char: ReviewedCharacter }) {
   const approvedImage = getStaticUrl(char.approved_image_url);
   const displayImage = isApproved && approvedImage ? approvedImage : currentImage;
 
-  const handleAction = (action: string) => {
+  const handleAction = (action: ShapeActionName) => {
     if (action === "regenerate" && !window.confirm(`重新生成角色 ${char.name}？`)) return;
     if (action === "approve" && !window.confirm(`批准角色 ${char.name}？`)) return;
     canvasEvents.emit("shape-action", {

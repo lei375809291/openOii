@@ -178,6 +178,7 @@ class ShotUpdate(BaseModel):
     lighting: str | None = None
     dialogue: str | None = None
     sfx: str | None = None
+    seed: int | None = None
     character_ids: list[int] | None = None
 
 

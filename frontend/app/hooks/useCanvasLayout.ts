@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import type { TLShapePartial } from "tldraw";
+import { createShapeId, type TLShapePartial } from "tldraw";
 import { SHAPE_TYPES } from "~/components/canvas/shapes";
+import type { StoryboardBoardShape } from "~/components/canvas/shapes";
 import type { Character, Shot, WorkflowStage } from "~/types";
 
 type SectionKey = "plan" | "character" | "shot" | "compose";
@@ -9,15 +10,13 @@ type SectionState = "draft" | "generating" | "blocked" | "complete";
 interface LayoutConfig {
   startX: number;
   startY: number;
-  sectionWidth: number;
-  sectionGap: number;
+  boardWidth: number;
 }
 
 const DEFAULT_CONFIG: LayoutConfig = {
   startX: 100,
   startY: 100,
-  sectionWidth: 800,
-  sectionGap: 40,
+  boardWidth: 920,
 };
 
 const SECTION_ORDER: SectionKey[] = ["plan", "character", "shot", "compose"];
@@ -36,25 +35,11 @@ const SECTION_PLACEHOLDER_TEXT: Record<SectionKey, string> = {
   compose: "等待视频合成...",
 };
 
-const SECTION_SHAPE_TYPES: Record<SectionKey, string> = {
-  plan: SHAPE_TYPES.SCRIPT_SECTION,
-  character: SHAPE_TYPES.CHARACTER_SECTION,
-  shot: SHAPE_TYPES.STORYBOARD_SECTION,
-  compose: SHAPE_TYPES.VIDEO_SECTION,
-};
-
 const SECTION_STATUS_LABELS: Record<SectionState, string> = {
   draft: "待生成",
   generating: "生成中",
   blocked: "待生成",
   complete: "已完成",
-};
-
-const SECTION_FALLBACK_H: Record<SectionKey, number> = {
-  plan: 200,
-  character: 200,
-  shot: 200,
-  compose: 300,
 };
 
 interface UseCanvasLayoutProps {
@@ -128,8 +113,10 @@ function isPlaceholder(key: SectionKey, data: {
   }
 }
 
+export type StoryboardBoardPartial = TLShapePartial<StoryboardBoardShape>;
+
 export interface CanvasLayoutResult {
-  shapes: TLShapePartial[];
+  shapes: StoryboardBoardPartial[];
 }
 
 export function useCanvasLayout({
@@ -158,59 +145,44 @@ export function useCanvasLayout({
   );
 
   const result = useMemo(() => {
-    const shapes: TLShapePartial[] = [];
-    let currentY = config.startY;
+    const visibleSet = new Set(visibleSections);
+    const visibleList = SECTION_ORDER.filter((s) => visibleSet.has(s));
+    const sectionStates: Partial<Record<SectionKey, SectionState>> = {};
+    const placeholders: Partial<Record<SectionKey, boolean>> = {};
+    const statusLabels: Partial<Record<SectionKey, string>> = {};
+    const placeholderTexts: Partial<Record<SectionKey, string>> = {};
 
-    const contentBySection: Record<SectionKey, Record<string, unknown>> = {
-      plan: {
+    for (const section of visibleList) {
+      const state = deriveSectionState(section, sectionData);
+      sectionStates[section] = state;
+      placeholders[section] = isPlaceholder(section, sectionData);
+      statusLabels[section] = SECTION_STATUS_LABELS[state];
+      placeholderTexts[section] = SECTION_PLACEHOLDER_TEXT[section];
+    }
+
+    const shapes: StoryboardBoardPartial[] = [{
+      id: createShapeId("storyboard-board"),
+      type: SHAPE_TYPES.STORYBOARD_BOARD,
+      x: config.startX,
+      y: config.startY,
+      props: {
+        w: config.boardWidth,
+        h: 600,
+        projectId,
         story: story || "",
         summary: summary || "",
         characters,
         shots,
-      },
-      character: { characters, sectionTitle: "角色形象" },
-      shot: { shots, sectionTitle: "分镜画面" },
-      compose: {
-        projectId,
         videoUrl: videoUrl || "",
-        title: videoTitle,
+        videoTitle,
+        visibleSections: visibleList,
+        sectionStates,
+        placeholders,
+        statusLabels,
+        placeholderTexts,
         downloadUrl: `/api/v1/projects/${projectId}/final-video`,
-        previewLabel: "预览最终视频",
-        downloadLabel: "下载最终视频",
-        retryLabel: "重试合成",
-        provenanceText: "",
-        blockingText: "",
-        retryFeedback: "",
-        retryRunId: null,
-        retryThreadId: null,
       },
-    };
-
-    const visibleSet = new Set(visibleSections);
-    const visibleList = SECTION_ORDER.filter((s) => visibleSet.has(s));
-
-    for (const section of visibleList) {
-      const state = deriveSectionState(section, sectionData);
-      const placeholder = isPlaceholder(section, sectionData);
-
-      shapes.push({
-        id: `shape:${section}` as any,
-        type: SECTION_SHAPE_TYPES[section] as (typeof SHAPE_TYPES)[keyof typeof SHAPE_TYPES],
-        x: config.startX,
-        y: currentY,
-        props: {
-          w: config.sectionWidth,
-          h: SECTION_FALLBACK_H[section],
-          ...contentBySection[section],
-          sectionState: state,
-          placeholder,
-          statusLabel: SECTION_STATUS_LABELS[state],
-          placeholderText: SECTION_PLACEHOLDER_TEXT[section],
-        },
-      } as TLShapePartial);
-
-      currentY += SECTION_FALLBACK_H[section] + config.sectionGap;
-    }
+    }];
 
     return { shapes };
   }, [
@@ -230,4 +202,4 @@ export function useCanvasLayout({
 }
 
 export type { SectionKey, SectionState };
-export { SECTION_ORDER, SECTION_LABELS, SECTION_PLACEHOLDER_TEXT, SECTION_STATUS_LABELS, SECTION_FALLBACK_H };
+export { SECTION_ORDER, SECTION_LABELS, SECTION_PLACEHOLDER_TEXT, SECTION_STATUS_LABELS };

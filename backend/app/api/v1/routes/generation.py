@@ -86,6 +86,7 @@ async def generate_project(
 
     active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
     resumable_run = await _latest_run_for_project(session, project_id, ("failed", "cancelled"))
+
     provider_resolution: ProviderResolution = await resolve_project_provider_settings_async(
         project, settings
     )
@@ -267,12 +268,24 @@ async def feedback_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
+    if active_run is not None:
+        control = await build_recovery_control_surface(
+            session=session,
+            database_url=settings.database_url,
+            run=active_run,
+            state="active",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=control.model_dump(mode="json"),
+        )
+
     provider_resolution: ProviderResolution = await resolve_project_provider_settings_async(
         project, settings
     )
     provider_snapshot = provider_resolution.as_project_provider_settings().model_dump(mode="json")
 
-    # 并发限制已移除，允许多个任务同时运行
     run = AgentRun(
         project_id=project_id,
         status="queued",

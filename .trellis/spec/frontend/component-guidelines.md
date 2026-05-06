@@ -8,7 +8,7 @@
 
 - **React 18** with `react-jsx` (no `import React`).
 - **TypeScript strict mode** + `noUnusedLocals` + `noUnusedParameters`.
-- **Tailwind CSS v4** via `@import "tailwindcss"` in `app/styles/globals.css` (DaisyUI theme on top, "doodle" / "brutal" custom utility classes).
+- **Tailwind CSS v3** via `@tailwind` directives in `app/styles/globals.css` and `tailwind.config.ts` (DaisyUI theme on top, "doodle" / "brutal" custom utility classes).
 - **`clsx`** for conditional class composition.
 - **`@heroicons/react`** for page-level icons (nav, settings).
 - **`SvgIcon`** (`components/ui/SvgIcon.tsx`) for canvas card and inline icons — 8 Lucide paths embedded as named `name` prop, zero external deps, `currentColor` + `size` prop. Add new icons by appending path to `LUCIDE_PATHS` in SvgIcon.tsx.
@@ -119,7 +119,7 @@ Buttons own their `loading` UI. Pages own their page-level `LoadingOverlay`. Don
 
 ## Styling
 
-### Tailwind v4
+### Tailwind v3
 
 - Use utility classes directly. No CSS modules, no `styled-components`.
 - Theme tokens: `bg-primary`, `text-primary-content`, `bg-base-100`, `border-base-content/30`.
@@ -159,6 +159,27 @@ Use the project's DaisyUI-flavored `<dialog className="modal modal-open" open>` 
 - Compose on top of the existing `Modal` primitive when possible.
 - Accept `isOpen`/`onClose`.
 - Trap focus and close on backdrop click + ESC (the `<dialog>` element handles this in modern browsers; verify in tests).
+
+### Infinite Canvas Storyboard Layout
+
+The project storyboard canvas is a single tldraw custom shape, not four independently positioned stage shapes.
+
+- Source files: `frontend/app/components/canvas/InfiniteCanvas.tsx`, `frontend/app/hooks/useCanvasLayout.ts`, `frontend/app/components/canvas/shapes/StoryboardBoardShape.tsx`, `frontend/app/hooks/useDomSize.ts`.
+- Shape contract: `useCanvasLayout()` returns one `TLShapePartial` with `id: "shape:storyboard-board"`, `type: "storyboard-board"`, and props `{ projectId, story, summary, characters, shots, videoUrl, videoTitle, visibleSections, sectionStates, placeholders, statusLabels, placeholderTexts, downloadUrl }`.
+- Layout rule: the four stages (`plan`, `character`, `shot`, `compose`) are rendered inside `StoryboardBoardShape` as normal React DOM sections using `flex flex-col gap-8`. Browser flow owns vertical spacing, so card height changes naturally reflow without collisions.
+- tldraw rule: tldraw owns infinite-canvas navigation, selection, zoom, and pan only. Do not reintroduce multiple section shapes, arrow bindings, collision systems, or manual `y` recalculation for stage spacing.
+- Dynamic size rule: `StoryboardBoardShape.getGeometry()` reads measured DOM size through `getShapeSize(editor, shape.id)` from `useDomSize`; `h` is only a fallback for initial geometry.
+- Backend data flow: `InfiniteCanvas` reads project query data plus Zustand `characters`, `shots`, `projectVideoUrl`, `currentStage`, `isGenerating`, `awaitingConfirm`, `recoverySummary`, `currentRunId`; all backend fields are projected into the single board shape unchanged.
+- Action flow: card buttons emit `canvasEvents.emit("shape-action", { shapeId: "shape:storyboard-board", action, entityType, entityId, feedbackType, shotPatch?, feedbackContent? })`. `InfiniteCanvas` must route structured commands to entity APIs: `charactersApi.approve/regenerate`, `shotsApi.approve/regenerate/update`, and `assetsApi.createFromCharacter`. Only free-form natural-language edits use `projectsApi.feedback(...)`; approvals must never be modeled as feedback.
+- Stale persistence: when replacing shape types, bump `persistenceKey` in `InfiniteCanvas.tsx` and delete stale tldraw shape types in `handleMount` so old IndexedDB records do not crash shape validation.
+
+Good case: add a new visual field to character cards by extending `ReviewedCharacter`, passing it through the board props, and rendering inside `CharacterCard`; spacing stays DOM-driven.
+
+Base case: a new shot arrives over WebSocket, Zustand updates `shots`, `useCanvasLayout` updates the board props, and the board's shot grid grows without changing shape positions.
+
+Bad case: creating `shape:plan`, `shape:character`, `shape:shot`, and `shape:compose` as separate tldraw shapes and then trying to prevent overlap with ResizeObserver, collision handlers, or store listeners.
+
+Required tests: `pnpm exec vitest run app/hooks/useCanvasLayout.test.ts app/components/canvas/InfiniteCanvas.test.tsx` must assert that only the `storyboard-board` shape is projected and that visible sections/state props match the backend/Zustand inputs.
 
 ---
 

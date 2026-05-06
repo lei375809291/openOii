@@ -12,7 +12,7 @@ vi.mock("tldraw", () => ({
     resetZoom: vi.fn(),
     getViewportScreenCenter: () => ({ x: 400, y: 300 }),
   })),
-  track: vi.fn((component: any) => component),
+  track: vi.fn(<T,>(component: T) => component),
 }));
 
 import { CanvasToolbar } from "./CanvasToolbar";

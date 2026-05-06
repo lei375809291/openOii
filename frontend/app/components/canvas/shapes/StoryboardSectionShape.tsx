@@ -15,6 +15,7 @@ import {
   getWorkspaceSectionStatusLabel,
 } from "~/utils/workspaceStatus";
 import { canvasEvents } from "../canvasEvents";
+import type { ShapeActionName } from "../canvasEvents";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
 
@@ -30,7 +31,7 @@ function ShotCard({
   const [editDialogue, setEditDialogue] = useState(shot.dialogue || "");
   const [editAction, setEditAction] = useState(shot.action || "");
 
-  const handleAction = (action: string) => {
+  const handleAction = (action: ShapeActionName) => {
     if (action === "regenerate" && !window.confirm(`重新生成镜头 ${shot.order}？`)) return;
     if (action === "approve" && !window.confirm(`批准镜头 ${shot.order}？`)) return;
     if (action === "edit") {
@@ -58,6 +59,10 @@ function ShotCard({
         entityType: "shot",
         entityId: shot.id,
         feedbackType: "shot",
+        shotPatch: {
+          action: editAction || null,
+          dialogue: editDialogue || null,
+        },
       });
     }
   };

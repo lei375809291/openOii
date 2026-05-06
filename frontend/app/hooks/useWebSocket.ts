@@ -485,7 +485,6 @@ export function applyWsEvent(
 
     case "pong":
     case "echo":
-    case "connected":
       break;
   }
 }

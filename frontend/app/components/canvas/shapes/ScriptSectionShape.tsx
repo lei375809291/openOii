@@ -93,9 +93,9 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
                     </tr>
                   </thead>
                   <tbody>
-                    {shots.map((shot: any, i: number) => {
+                    {shots.map((shot, i) => {
                       const charNames = shot.character_ids
-                        ?.map((cid: number) => characters.find((c: any) => c.id === cid)?.name)
+                        ?.map((cid) => characters.find((character) => character.id === cid)?.name)
                         .filter(Boolean);
                       return (
                         <tr key={shot.id} className={i % 2 === 0 ? "bg-base-100" : "bg-base-200/30"}>
@@ -114,7 +114,7 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
             {!story && !summary && shots.length === 0 && characters.length > 0 && (
               <div className="text-xs text-base-content/60">
                 <span className="font-medium text-base-content/80">角色：</span>
-                {characters.map((c: any) => c.name).join("、")}
+                {characters.map((character) => character.name).join("、")}
               </div>
             )}
           </div>

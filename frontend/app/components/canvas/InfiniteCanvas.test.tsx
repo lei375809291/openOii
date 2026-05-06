@@ -1,31 +1,81 @@
 import { render, waitFor } from "@testing-library/react";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InfiniteCanvas } from "./InfiniteCanvas";
+import type { SectionKey } from "~/hooks/useCanvasLayout";
+import type { Character, RecoverySummaryRead, Shot } from "~/types";
+
+interface LayoutMockArgs {
+  story?: string | null;
+  summary?: string | null;
+  visibleSections?: SectionKey[];
+}
+
+interface MockShape {
+  id: string;
+  type?: string;
+  props?: Record<string, unknown>;
+}
+
+interface MockEditor {
+  run: ReturnType<typeof vi.fn<(fn: () => void) => void>>;
+  createShapes: ReturnType<typeof vi.fn<(nextShapes: MockShape[]) => void>>;
+  updateShapes: ReturnType<typeof vi.fn<(nextShapes: MockShape[]) => void>>;
+  deleteShapes: ReturnType<typeof vi.fn<(ids: string[]) => void>>;
+  getCurrentPageShapes: ReturnType<typeof vi.fn<() => MockShape[]>>;
+  getBindingsFromShape: ReturnType<typeof vi.fn<() => unknown[]>>;
+  createBindings: ReturnType<typeof vi.fn>;
+  deleteBindings: ReturnType<typeof vi.fn>;
+  getShape: ReturnType<typeof vi.fn<(id: string) => MockShape | null>>;
+  getShapeGeometry: ReturnType<typeof vi.fn<() => { bounds: { x: number; y: number; w: number; h: number } }>>;
+  zoomToBounds: ReturnType<typeof vi.fn>;
+  getZoomLevel: ReturnType<typeof vi.fn<() => number>>;
+  store: { listen: ReturnType<typeof vi.fn<() => () => void>> };
+  zoomToFit: ReturnType<typeof vi.fn>;
+  animateShape: ReturnType<typeof vi.fn>;
+  sideEffects: {
+    registerBeforeChangeHandler: ReturnType<typeof vi.fn<() => () => void>>;
+    registerAfterChangeHandler: ReturnType<typeof vi.fn<() => () => void>>;
+  };
+  reset: () => void;
+}
+
+interface MockEditorStoreState {
+  characters: Character[];
+  shots: Shot[];
+  projectVideoUrl: string | null;
+  projectTitle: string | null;
+  projectSummary: string | null;
+  projectStory: string | null;
+  currentStage: string | null;
+  recoverySummary: RecoverySummaryRead | null;
+  currentRunId: number | null;
+  isGenerating: boolean;
+  awaitingConfirm: boolean;
+}
 
 const useCanvasLayoutMock = vi.hoisted(() =>
-  vi.fn((args: any) => ({
-    shapes: (args.visibleSections ?? []).map((key: string, index: number) => ({
-      id: `shape:${key}`,
-      type: "mock-shape",
+  vi.fn((args: LayoutMockArgs) => ({
+    shapes: [{
+      id: "shape:storyboard-board",
+      type: "storyboard-board",
       x: 0,
-      y: index * 100,
-      props: { w: 100, h: 100 },
-    })),
-    bindings: [],
+      y: 0,
+      props: { w: 100, h: 100, visibleSections: args.visibleSections ?? [] },
+    }],
   }))
 );
 
 const mockEditor = vi.hoisted(() => {
-  let shapes: Array<{ id: string; type?: string }> = [];
+  let shapes: MockShape[] = [];
 
-  const editor: any = {
+  const editor: MockEditor = {
     run: vi.fn((fn: () => void) => fn()),
-    createShapes: vi.fn((nextShapes: Array<{ id: string }>) => {
+    createShapes: vi.fn((nextShapes: MockShape[]) => {
       shapes = nextShapes.map((shape) => ({ ...shape }));
     }),
-    updateShapes: vi.fn((nextShapes: Array<{ id: string }>) => {
+    updateShapes: vi.fn((nextShapes: MockShape[]) => {
       for (const shape of nextShapes) {
         shapes = shapes.map((current) => (current.id === shape.id ? { ...current, ...shape } : current));
       }
@@ -89,10 +139,10 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("tldraw", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = await importOriginal<typeof import("tldraw")>();
   return {
     ...actual,
-    Tldraw: ({ children, onMount }: { children: React.ReactNode; onMount: (editor: any) => void }) => {
+    Tldraw: ({ children, onMount }: { children: ReactNode; onMount: (editor: unknown) => void }) => {
       useEffect(() => {
         onMount(mockEditor);
       }, [onMount]);
@@ -111,7 +161,7 @@ vi.mock("./ShapeContextMenu", () => ({
 }));
 
 vi.mock("./shapes", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = await importOriginal<typeof import("./shapes")>();
   return {
     ...actual,
     customShapeUtils: [],
@@ -119,7 +169,7 @@ vi.mock("./shapes", async (importOriginal) => {
 });
 
 vi.mock("~/hooks/useCanvasLayout", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = await importOriginal<typeof import("~/hooks/useCanvasLayout")>();
   return {
     ...actual,
     useCanvasLayout: useCanvasLayoutMock,
@@ -178,11 +228,17 @@ vi.mock("~/stores/editorStore", () => ({
       },
     ],
     projectVideoUrl: null,
+    projectTitle: "Store 标题",
+    projectSummary: "Store 摘要",
+    projectStory: "Store 故事",
     currentStage: "character",
     recoverySummary: null,
+    currentRunId: 77,
+    isGenerating: false,
+    awaitingConfirm: false,
   }),
-  useShallow: (selector: any) => {
-    const state = {
+  useShallow: <T,>(selector: (state: MockEditorStoreState) => T) => {
+    const state: MockEditorStoreState = {
       characters: [
         {
           id: 1,
@@ -208,6 +264,7 @@ vi.mock("~/stores/editorStore", () => ({
           image_prompt: "image prompt",
           image_url: null,
           video_url: null,
+          seed: null,
           duration: 7,
           camera: "wide",
           motion_note: "slow push in",
@@ -228,8 +285,14 @@ vi.mock("~/stores/editorStore", () => ({
         },
       ],
       projectVideoUrl: null,
+      projectTitle: "Store 标题",
+      projectSummary: "Store 摘要",
+      projectStory: "Store 故事",
       currentStage: "character",
       recoverySummary: null,
+      currentRunId: 77,
+      isGenerating: false,
+      awaitingConfirm: false,
     };
     const result = selector(state);
     return () => result;
@@ -239,6 +302,19 @@ vi.mock("~/stores/editorStore", () => ({
 vi.mock("~/services/api", () => ({
   projectsApi: {
     get: () => Promise.resolve({}),
+    feedback: vi.fn(() => Promise.resolve({ status: "queued", run_id: 1 })),
+  },
+  charactersApi: {
+    approve: vi.fn(() => Promise.resolve({})),
+    regenerate: vi.fn(() => Promise.resolve({})),
+  },
+  shotsApi: {
+    approve: vi.fn(() => Promise.resolve({})),
+    regenerate: vi.fn(() => Promise.resolve({})),
+    update: vi.fn(() => Promise.resolve({})),
+  },
+  assetsApi: {
+    createFromCharacter: vi.fn(() => Promise.resolve({})),
   },
   getStaticUrl: (path: string | null | undefined) => path,
 }));
@@ -257,21 +333,23 @@ describe("InfiniteCanvas", () => {
       "shot",
     ]);
     expect(mockEditor.createShapes).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "shape:plan" }),
-      expect.objectContaining({ id: "shape:character" }),
-      expect.objectContaining({ id: "shape:shot" }),
+      expect.objectContaining({
+        id: "shape:storyboard-board",
+        type: "storyboard-board",
+        props: expect.objectContaining({ visibleSections: ["plan", "character", "shot"] }),
+      }),
     ]);
   });
 
-  it("passes story and summary to canvas layout", async () => {
+  it("passes live store story and summary to canvas layout", async () => {
     render(<InfiniteCanvas projectId={1} />);
 
     await waitFor(() => {
       expect(useCanvasLayoutMock).toHaveBeenCalled();
     });
 
-    expect(useCanvasLayoutMock.mock.calls[0]?.[0].story).toBe("一个侦探在雨夜的城市中寻找真相");
-    expect(useCanvasLayoutMock.mock.calls[0]?.[0].summary).toBe("创作了3个角色和8个镜头的剧本");
+    expect(useCanvasLayoutMock.mock.calls[0]?.[0].story).toBe("Store 故事");
+    expect(useCanvasLayoutMock.mock.calls[0]?.[0].summary).toBe("Store 摘要");
   });
 
   it("does not rewrite the projected canvas when backend data is unchanged", async () => {
