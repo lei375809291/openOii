@@ -111,7 +111,9 @@ class PlanAgent(BaseAgent):
 
         return {"characters": characters, "shots": shots}
 
-    async def _apply_incremental_changes(self, ctx: AgentContext, data: dict, visual_bible: str) -> tuple[int, int]:
+    async def _apply_incremental_changes(
+        self, ctx: AgentContext, data: dict, visual_bible: str
+    ) -> tuple[int, int]:
         preserve_ids = data.get("preserve_ids") or {}
         preserve_char_ids = set(preserve_ids.get("characters") or [])
         preserve_shot_ids = set(preserve_ids.get("shots") or [])
@@ -126,9 +128,7 @@ class PlanAgent(BaseAgent):
                 await ctx.session.delete(char)
 
         deleted_shot_ids = []
-        shot_res = await ctx.session.execute(
-            select(Shot).where(Shot.project_id == ctx.project.id)
-        )
+        shot_res = await ctx.session.execute(select(Shot).where(Shot.project_id == ctx.project.id))
         for shot in shot_res.scalars().all():
             if shot.id not in preserve_shot_ids:
                 deleted_shot_ids.append(shot.id)
@@ -185,7 +185,9 @@ class PlanAgent(BaseAgent):
                 shot_desc = shot_data.get("description")
                 if not (isinstance(shot_desc, str) and shot_desc.strip()):
                     continue
-                shot_order = shot_data.get("order") if isinstance(shot_data.get("order"), int) else idx + 1
+                shot_order = (
+                    shot_data.get("order") if isinstance(shot_data.get("order"), int) else idx + 1
+                )
                 image_prompt = _compose_image_prompt(shot_data, visual_bible)
                 video_prompt = _compose_video_prompt(shot_data)
 
@@ -241,7 +243,6 @@ class PlanAgent(BaseAgent):
                 "story": ctx.project.story,
                 "style": ctx.project.style,
                 "status": ctx.project.status,
-                "creation_mode": getattr(ctx.project, "creation_mode", None),
                 "target_shot_count": getattr(ctx.project, "target_shot_count", None),
                 "character_hints": getattr(ctx.project, "character_hints", None) or None,
             },
@@ -256,7 +257,9 @@ class PlanAgent(BaseAgent):
 
         user_prompt = json.dumps(payload, ensure_ascii=False)
 
-        resp = await self.call_llm(ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096)
+        resp = await self.call_llm(
+            ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096
+        )
         data = extract_json(resp.text)
 
         user_message = data.get("user_message") or ""
@@ -326,7 +329,9 @@ class PlanAgent(BaseAgent):
             lines.append(f"视觉指南：{visual_bible[:80]}")
 
         if is_incremental:
-            new_char_count, new_shot_count = await self._apply_incremental_changes(ctx, data, visual_bible)
+            new_char_count, new_shot_count = await self._apply_incremental_changes(
+                ctx, data, visual_bible
+            )
 
             char_res = await ctx.session.execute(
                 select(Character).where(Character.project_id == ctx.project.id)
@@ -347,14 +352,22 @@ class PlanAgent(BaseAgent):
                 lines.append(f"角色：{', '.join(char_names)}")
             lines.append(f"{len(final_shots)} 个分镜")
 
-            summary = ctx.project.summary or f"增量更新：{len(final_chars)}个角色、{len(final_shots)}个分镜"
+            summary = (
+                ctx.project.summary
+                or f"增量更新：{len(final_chars)}个角色、{len(final_shots)}个分镜"
+            )
             ctx.completion_info = CompletionInfo(
                 completed=user_message or "已完成创作方案增量更新",
                 details=f"更新后共 {len(final_chars)} 个角色、{len(final_shots)} 个分镜",
                 next="接下来将为角色和分镜生成参考图片",
                 question="增量更新后的方案是否符合预期？如需调整，请告诉我具体的修改意见。",
             )
-            await self.send_message(ctx, user_message or "\n".join(lines) or "增量更新完成", summary=summary, progress=1.0)
+            await self.send_message(
+                ctx,
+                user_message or "\n".join(lines) or "增量更新完成",
+                summary=summary,
+                progress=1.0,
+            )
             return
 
         raw_characters = data.get("characters") or []
@@ -448,4 +461,6 @@ class PlanAgent(BaseAgent):
             next="接下来将为角色和分镜生成参考图片",
             question="创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
         )
-        await self.send_message(ctx, user_message or "\n".join(lines) or "规划完成", summary=summary, progress=1.0)
+        await self.send_message(
+            ctx, user_message or "\n".join(lines) or "规划完成", summary=summary, progress=1.0
+        )

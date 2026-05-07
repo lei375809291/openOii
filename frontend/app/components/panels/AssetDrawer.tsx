@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { assetsApi, getStaticUrl } from "~/services/api";
 import { Button } from "~/components/ui/Button";
@@ -17,17 +16,6 @@ function AssetCard({
 	asset: Asset;
 	onDelete: (id: number) => void;
 }) {
-	const typeLabel: Record<string, string> = {
-		character: "角色",
-		scene: "场景",
-		style: "风格",
-	};
-	const typeCls: Record<string, string> = {
-		character: "badge-primary",
-		scene: "badge-secondary",
-		style: "badge-accent",
-	};
-
 	return (
 		<div className="card card-compact bg-base-200 border-2 border-base-content/10 hover:border-primary/40 transition-colors">
 			<figure className="h-32 bg-base-300 overflow-hidden">
@@ -47,11 +35,6 @@ function AssetCard({
 			<div className="card-body p-2 gap-1">
 				<div className="flex items-center gap-1">
 					<h4 className="text-xs font-bold flex-1 truncate">{asset.name}</h4>
-					<span
-						className={`badge badge-xs ${typeCls[asset.asset_type] || "badge-ghost"}`}
-					>
-						{typeLabel[asset.asset_type] || asset.asset_type}
-					</span>
 				</div>
 				{asset.description && (
 					<p className="text-xs text-base-content/50 line-clamp-2">
@@ -73,11 +56,10 @@ function AssetCard({
 
 export function AssetDrawer({ open, onClose }: AssetDrawerProps) {
 	const queryClient = useQueryClient();
-	const [filter, setFilter] = useState<string>("");
 
 	const { data } = useQuery({
-		queryKey: ["assets", filter],
-		queryFn: () => assetsApi.list(filter || undefined),
+		queryKey: ["assets"],
+		queryFn: () => assetsApi.list("character"),
 		enabled: open,
 	});
 
@@ -114,30 +96,9 @@ export function AssetDrawer({ open, onClose }: AssetDrawerProps) {
 					</Button>
 				</div>
 
-				<div className="flex gap-1 px-3 py-2 border-b border-base-content/5">
-					{["", "character", "scene", "style"].map((t) => {
-						const label: Record<string, string> = {
-							"": "全部",
-							character: "角色",
-							scene: "场景",
-							style: "风格",
-						};
-						return (
-							<button
-								key={t}
-								type="button"
-								onClick={() => setFilter(t)}
-								className={`btn btn-xs ${filter === t ? "btn-primary" : "btn-ghost"}`}
-							>
-								{label[t]}
-							</button>
-						);
-					})}
-				</div>
-
 				<div
 					className="p-3 overflow-y-auto"
-					style={{ height: "calc(100vh - 100px)" }}
+					style={{ height: "calc(100vh - 80px)" }}
 				>
 					{items.length === 0 ? (
 						<div className="text-center text-xs text-base-content/40 py-8">

@@ -130,7 +130,9 @@ async def test_config_service_build_and_apply_overrides(test_session, monkeypatc
     def fake_apply(overrides):
         captured.update(overrides)
 
-    monkeypatch.setattr("app.services.config_service.apply_settings_overrides_to_runtime", fake_apply)
+    monkeypatch.setattr(
+        "app.services.config_service.apply_settings_overrides_to_runtime", fake_apply
+    )
 
     service = ConfigService(test_session)
     overrides = await service.build_settings_overrides()
@@ -143,7 +145,9 @@ async def test_config_service_build_and_apply_overrides(test_session, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_config_service_ensure_initialized_creates_env_items(test_session, monkeypatch, tmp_path):
+async def test_config_service_ensure_initialized_creates_env_items(
+    test_session, monkeypatch, tmp_path
+):
     env_path = tmp_path / "provider.env"
     env_path.write_text(
         "TEXT_API_KEY=env-key\nPUBLIC_BASE_URL=https://env.example.com\n", encoding="utf-8"
@@ -159,7 +163,9 @@ async def test_config_service_ensure_initialized_creates_env_items(test_session,
 
 
 @pytest.mark.asyncio
-async def test_config_service_ensure_initialized_skips_existing_items(test_session, monkeypatch, tmp_path):
+async def test_config_service_ensure_initialized_skips_existing_items(
+    test_session, monkeypatch, tmp_path
+):
     env_path = tmp_path / "provider.env"
     env_path.write_text("TEXT_API_KEY=env-key\n", encoding="utf-8")
     monkeypatch.setenv("ENV_FILE", str(env_path))
@@ -172,7 +178,9 @@ async def test_config_service_ensure_initialized_skips_existing_items(test_sessi
 
 
 @pytest.mark.asyncio
-async def test_config_service_ensure_initialized_returns_zero_when_env_missing(test_session, monkeypatch, tmp_path):
+async def test_config_service_ensure_initialized_returns_zero_when_env_missing(
+    test_session, monkeypatch, tmp_path
+):
     monkeypatch.setenv("ENV_FILE", str(tmp_path / "missing.env"))
 
     service = ConfigService(test_session)
@@ -182,7 +190,9 @@ async def test_config_service_ensure_initialized_returns_zero_when_env_missing(t
 
 
 @pytest.mark.asyncio
-async def test_config_service_ensure_initialized_returns_zero_when_env_empty(test_session, monkeypatch, tmp_path):
+async def test_config_service_ensure_initialized_returns_zero_when_env_empty(
+    test_session, monkeypatch, tmp_path
+):
     env_path = tmp_path / "provider.env"
     env_path.write_text("# only comments\n", encoding="utf-8")
     monkeypatch.setenv("ENV_FILE", str(env_path))
@@ -230,10 +240,42 @@ async def test_config_service_upsert_configs_update_skip_and_restart(test_sessio
 
 @pytest.mark.asyncio
 async def test_config_service_upsert_configs_from_existing_masked_value_skips_update(test_session):
-    await create_config_item(test_session, key="SECRET_KEY", value="secret123456", is_sensitive=True)
+    await create_config_item(
+        test_session, key="SECRET_KEY", value="secret123456", is_sensitive=True
+    )
 
     service = ConfigService(test_session)
     result = await service.upsert_configs({"SECRET_KEY": "secr******3456"})
 
     assert result.updated == 0
     assert result.skipped == 1
+
+
+@pytest.mark.asyncio
+async def test_upsert_configs_empty_value_deletes_db_row(test_session):
+    """空字符串应删除 DB 行（让用户“清除”敏感配置）"""
+    await create_config_item(test_session, key="IMAGE_API_KEY", value="old-key", is_sensitive=True)
+
+    service = ConfigService(test_session)
+    result = await service.upsert_configs({"IMAGE_API_KEY": ""})
+
+    assert result.updated == 1
+    assert result.skipped == 0
+
+    # 验证 DB 行已删除
+    item = await test_session.get(ConfigItem, "IMAGE_API_KEY")
+    assert item is None
+
+
+@pytest.mark.asyncio
+async def test_upsert_configs_empty_value_no_existing_row_skips(test_session):
+    """空字符串且 DB 无记录时应跳过（不创建空记录）"""
+    service = ConfigService(test_session)
+    result = await service.upsert_configs({"NEW_KEY": ""})
+
+    assert result.updated == 0
+    assert result.skipped == 1
+
+    # 验证没有创建记录
+    item = await test_session.get(ConfigItem, "NEW_KEY")
+    assert item is None

@@ -26,3 +26,4 @@ backend/coverage.json
 .planning/
 backend/.coverage
 dump.rdb
+*.log

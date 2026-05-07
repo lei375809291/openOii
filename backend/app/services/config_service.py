@@ -135,9 +135,8 @@ def _parse_value(raw: str, field_type: Any) -> Any:
         pass  # 验证失败，尝试其他解析方式
     if isinstance(raw, str):
         stripped = raw.strip()
-        if (
-            (stripped.startswith("[") and stripped.endswith("]"))
-            or (stripped.startswith("{") and stripped.endswith("}"))
+        if (stripped.startswith("[") and stripped.endswith("]")) or (
+            stripped.startswith("{") and stripped.endswith("}")
         ):
             try:
                 return adapter.validate_python(json.loads(stripped))
@@ -225,9 +224,7 @@ class ConfigService:
     async def get_raw_value(self, key: str) -> str | None:
         """获取配置项的原始值（未脱敏）"""
         # 先从数据库查找
-        res = await self.session.execute(
-            select(ConfigItem).where(ConfigItem.key == key)
-        )
+        res = await self.session.execute(select(ConfigItem).where(ConfigItem.key == key))
         item = res.scalar_one_or_none()
         if item:
             return item.value
@@ -263,6 +260,7 @@ class ConfigService:
             res = await self.session.execute(select(ConfigItem).where(ConfigItem.key.in_(keys)))
             existing_items = {item.key: item for item in res.scalars().all()}
         updated_keys: list[str] = []
+        deleted_keys: list[str] = []
         skipped = 0
         for raw_key, raw_value in configs.items():
             key = (raw_key or "").strip()
@@ -275,9 +273,16 @@ class ConfigService:
             value = str(raw_value)
             existing_item = existing_items.get(key)
             effective_value = existing_item.value if existing_item else env_values.get(key)
-            is_sensitive = (existing_item.is_sensitive if existing_item else False) or is_sensitive_key(key)
+            is_sensitive = (
+                existing_item.is_sensitive if existing_item else False
+            ) or is_sensitive_key(key)
             if is_sensitive and _is_masked_input(value, effective_value):
                 skipped += 1
+                continue
+            # 空字符串 → 删除 DB 行（回退到 .env 值或彻底移除）
+            if not value and existing_item:
+                await self.session.delete(existing_item)
+                deleted_keys.append(key)
                 continue
             if existing_item:
                 existing_item.value = value
@@ -285,6 +290,10 @@ class ConfigService:
                 existing_item.updated_at = utcnow()
                 self.session.add(existing_item)
             else:
+                # 空字符串且 DB 无记录 → 跳过（不创建空记录）
+                if not value:
+                    skipped += 1
+                    continue
                 self.session.add(
                     ConfigItem(
                         key=key,
@@ -295,11 +304,12 @@ class ConfigService:
                     )
                 )
             updated_keys.append(key)
-        if updated_keys:
+        if updated_keys or deleted_keys:
             await self.session.commit()
-        restart_keys = [key for key in updated_keys if _requires_restart(key)]
+        all_changed = updated_keys + deleted_keys
+        restart_keys = [key for key in all_changed if _requires_restart(key)]
         return ConfigUpdateResult(
-            updated=len(updated_keys),
+            updated=len(updated_keys) + len(deleted_keys),
             skipped=skipped,
             restart_keys=restart_keys,
         )

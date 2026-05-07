@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from app.api import deps as api_deps
 from app.api.deps import get_app_settings, get_db_session, get_ws_manager
 from app.api.v1.routes import config as config_routes
+from app.config import Settings
 from app.main import create_app
 from app.models.config_item import ConfigItem
 from app.schemas.config import TestConnectionResponse as ConfigTestConnectionResponse
@@ -768,3 +769,138 @@ async def test_test_connection_does_not_require_admin_token(
 
     # test-connection is a read-only probe, no admin token needed
     assert res.status_code in (200, 500)  # 200 if provider configured, 500 if not
+
+
+@pytest.mark.asyncio
+async def test_update_configs_no_admin_token_initial_setup(test_session, ws_manager, monkeypatch):
+    """配置更新在未设置 admin_token 时不需要认证（首次设置场景）"""
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    settings.admin_token = ""
+
+    app = create_app()
+
+    async def override_get_session():
+        yield test_session
+
+    async def override_get_settings():
+        return settings
+
+    async def override_get_ws():
+        return ws_manager
+
+    app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
+    monkeypatch.setattr(api_deps, "get_settings", lambda: settings)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # No X-Admin-Token header — should succeed because admin_token not configured
+        res = await client.put(
+            "/api/v1/config",
+            json={"configs": {"ADMIN_TOKEN": "my-secret-token"}},
+        )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["updated"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_update_configs_with_admin_token_required(test_session, ws_manager, monkeypatch):
+    """配置更新在已设置 admin_token 时需要正确的 token"""
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    settings.admin_token = "existing-token"
+
+    app = create_app()
+
+    async def override_get_session():
+        yield test_session
+
+    async def override_get_settings():
+        return settings
+
+    async def override_get_ws():
+        return ws_manager
+
+    app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
+    monkeypatch.setattr(api_deps, "get_settings", lambda: settings)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Missing token → 403
+        res_no_token = await client.put(
+            "/api/v1/config",
+            json={"configs": {"TEST_KEY": "value"}},
+        )
+        assert res_no_token.status_code == 403
+
+        # Wrong token → 403
+        res_wrong = await client.put(
+            "/api/v1/config",
+            json={"configs": {"TEST_KEY": "value"}},
+            headers={"X-Admin-Token": "wrong-token"},
+        )
+        assert res_wrong.status_code == 403
+
+        # Correct token → 200
+        res_correct = await client.put(
+            "/api/v1/config",
+            json={"configs": {"TEST_KEY": "value"}},
+            headers={"X-Admin-Token": "existing-token"},
+        )
+        assert res_correct.status_code == 200
+        assert res_correct.json()["updated"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_update_configs_admin_token_bootstrap(test_session, ws_manager, monkeypatch):
+    """首次设置 ADMIN_TOKEN 的完整引导流程"""
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    settings.admin_token = ""
+
+    app = create_app()
+
+    async def override_get_session():
+        yield test_session
+
+    async def override_get_settings():
+        return settings
+
+    async def override_get_ws():
+        return ws_manager
+
+    app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
+    monkeypatch.setattr(api_deps, "get_settings", lambda: settings)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Step 1: No admin token configured, can save without header
+        res = await client.put(
+            "/api/v1/config",
+            json={"configs": {"ADMIN_TOKEN": "new-bootstrap-token", "LLM_API_KEY": "sk-test"}},
+        )
+        assert res.status_code == 200
+        assert res.json()["updated"] >= 2
+
+        # Step 2: Now admin token is configured — subsequent requests need the header
+        settings.admin_token = "new-bootstrap-token"
+
+        # Without header → 403
+        res_fail = await client.put(
+            "/api/v1/config",
+            json={"configs": {"ANTHROPIC_BASE_URL": "https://example.com"}},
+        )
+        assert res_fail.status_code == 403
+
+        # With correct header → 200
+        res_ok = await client.put(
+            "/api/v1/config",
+            json={"configs": {"ANTHROPIC_BASE_URL": "https://example.com"}},
+            headers={"X-Admin-Token": "new-bootstrap-token"},
+        )
+        assert res_ok.status_code == 200

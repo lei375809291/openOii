@@ -1,15 +1,15 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore, type RunMode } from "~/stores/editorStore";
 import type {
-  Character,
-  ProjectProviderSettings,
-  RecoverySummaryRead,
-  RunAwaitingConfirmEventData,
-  RunConfirmedEventData,
-  RunProgressEventData,
-  Shot,
-  WsEvent,
-  WorkflowStage,
+	Character,
+	ProjectProviderSettings,
+	RecoverySummaryRead,
+	RunAwaitingConfirmEventData,
+	RunConfirmedEventData,
+	RunProgressEventData,
+	Shot,
+	WsEvent,
+	WorkflowStage,
 } from "~/types";
 import { toast } from "~/utils/toast";
 import { isWorkflowStage } from "~/utils/workflowStage";
@@ -21,470 +21,526 @@ const MAX_RECONNECT_ATTEMPTS = 5;
 
 let messageIdCounter = 0;
 function generateMessageId(): string {
-  return `msg_${Date.now()}_${++messageIdCounter}`;
+	return `msg_${Date.now()}_${++messageIdCounter}`;
 }
 
 const globalConnections = new Map<number, WebSocket>();
 
 function shouldAutoConfirm(_agent: string | null, runMode: RunMode): boolean {
-  if (runMode === "yolo") return true;
-  return false;
+	if (runMode === "yolo") return true;
+	return false;
 }
 
 export function useProjectWebSocket(projectId: number | null) {
-  const reconnectAttempts = useRef(0);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sendRef = useRef<(data: Record<string, unknown>) => void>(() => {});
+	const reconnectAttempts = useRef(0);
+	const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const autoConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
+	const sendRef = useRef<(data: Record<string, unknown>) => void>(() => {});
 
-  const clearReconnectTimer = useCallback(() => {
-    if (reconnectTimer.current) {
-      clearTimeout(reconnectTimer.current);
-      reconnectTimer.current = null;
-    }
-  }, []);
+	const clearReconnectTimer = useCallback(() => {
+		if (reconnectTimer.current) {
+			clearTimeout(reconnectTimer.current);
+			reconnectTimer.current = null;
+		}
+	}, []);
 
-  const clearAutoConfirm = useCallback(() => {
-    if (autoConfirmTimerRef.current) {
-      clearTimeout(autoConfirmTimerRef.current);
-      autoConfirmTimerRef.current = null;
-    }
-  }, []);
+	const clearAutoConfirm = useCallback(() => {
+		if (autoConfirmTimerRef.current) {
+			clearTimeout(autoConfirmTimerRef.current);
+			autoConfirmTimerRef.current = null;
+		}
+	}, []);
 
-  const scheduleAutoConfirm = useCallback((runId: number) => {
-    clearAutoConfirm();
-    autoConfirmTimerRef.current = setTimeout(() => {
-      sendRef.current({ type: "confirm", data: { run_id: runId } });
-    }, 1500);
-  }, [clearAutoConfirm]);
+	const scheduleAutoConfirm = useCallback(
+		(runId: number) => {
+			clearAutoConfirm();
+			autoConfirmTimerRef.current = setTimeout(() => {
+				sendRef.current({ type: "confirm", data: { run_id: runId } });
+			}, 1500);
+		},
+		[clearAutoConfirm],
+	);
 
-  const connect = useCallback(() => {
-    if (!projectId) return;
-    clearReconnectTimer();
+	const connect = useCallback(() => {
+		if (!projectId) return;
+		clearReconnectTimer();
 
-    const existingWs = globalConnections.get(projectId);
-    let ws = existingWs;
-    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-      ws = new WebSocket(`${WS_BASE}/ws/projects/${projectId}`);
-      globalConnections.set(projectId, ws);
-    }
+		const existingWs = globalConnections.get(projectId);
+		let ws = existingWs;
+		if (
+			!ws ||
+			ws.readyState === WebSocket.CLOSED ||
+			ws.readyState === WebSocket.CLOSING
+		) {
+			ws = new WebSocket(`${WS_BASE}/ws/projects/${projectId}`);
+			globalConnections.set(projectId, ws);
+		}
 
-    ws.onopen = () => {
-      const wasReconnecting = reconnectAttempts.current > 0;
-      if (import.meta.env.DEV) {
-        console.debug("[WS] 已连接到项目", projectId);
-      }
-      reconnectAttempts.current = 0;
-      if (wasReconnecting) {
-        toast.success({ title: "重新连接成功", message: "可以继续创作了", duration: 2000 });
-      }
-    };
+		ws.onopen = () => {
+			const wasReconnecting = reconnectAttempts.current > 0;
+			if (import.meta.env.DEV) {
+				console.debug("[WS] 已连接到项目", projectId);
+			}
+			reconnectAttempts.current = 0;
+			if (wasReconnecting) {
+				toast.success({
+					title: "重新连接成功",
+					message: "可以继续创作了",
+					duration: 2000,
+				});
+			}
+		};
 
-    ws.onmessage = (event) => {
-      try {
-        const data: WsEvent = JSON.parse(event.data);
-        applyWsEvent(data, useEditorStore.getState(), scheduleAutoConfirm);
-      } catch (e) {
-        if (import.meta.env.DEV) {
-          console.error("[WS] 解析错误:", e);
-        }
-        toast.error({
-          title: "数据格式错误",
-          message: "服务器返回了无法识别的数据，请刷新页面重试",
-          duration: 3000,
-        });
-      }
-    };
+		ws.onmessage = (event) => {
+			try {
+				const data: WsEvent = JSON.parse(event.data);
+				applyWsEvent(data, useEditorStore.getState(), scheduleAutoConfirm);
+			} catch (e) {
+				if (import.meta.env.DEV) {
+					console.error("[WS] 解析错误:", e);
+				}
+				toast.error({
+					title: "数据格式错误",
+					message: "服务器返回了无法识别的数据，请刷新页面重试",
+					duration: 3000,
+				});
+			}
+		};
 
-    ws.onerror = (error) => {
-      if (import.meta.env.DEV) {
-        console.error("[WS] 连接错误:", error);
-      }
-      toast.error({
-        title: "无法连接到服务器",
-        message: "请检查网络连接，或稍后重试",
-        duration: 0,
-        actions: [{ label: "重新连接", onClick: () => { reconnectAttempts.current = 0; connect(); } }],
-      });
-    };
+		ws.onerror = (error) => {
+			if (import.meta.env.DEV) {
+				console.error("[WS] 连接错误:", error);
+			}
+			toast.error({
+				title: "无法连接到服务器",
+				message: "请检查网络连接，或稍后重试",
+				duration: 0,
+				actions: [
+					{
+						label: "重新连接",
+						onClick: () => {
+							reconnectAttempts.current = 0;
+							connect();
+						},
+					},
+				],
+			});
+		};
 
-    ws.onclose = () => {
-      if (import.meta.env.DEV) {
-        console.debug("[WS] 连接断开");
-      }
-      globalConnections.delete(projectId);
+		ws.onclose = () => {
+			if (import.meta.env.DEV) {
+				console.debug("[WS] 连接断开");
+			}
+			globalConnections.delete(projectId);
 
-      if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-        reconnectAttempts.current++;
-        if (import.meta.env.DEV) {
-          console.debug(`[WS] ${RECONNECT_DELAY / 1000}秒后尝试重连 (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
-        }
-        toast.warning({
-          title: "连接中断",
-          message: `正在重新连接 (尝试 ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`,
-          duration: RECONNECT_DELAY,
-        });
-        reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY);
-      } else {
-        toast.error({
-          title: "连接失败",
-          message: "多次尝试后仍无法连接。请检查网络后刷新页面",
-          duration: 0,
-          actions: [{ label: "刷新页面", onClick: () => window.location.reload() }],
-        });
-      }
-    };
-  }, [projectId, clearReconnectTimer, scheduleAutoConfirm]);
+			if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+				reconnectAttempts.current++;
+				if (import.meta.env.DEV) {
+					console.debug(
+						`[WS] ${RECONNECT_DELAY / 1000}秒后尝试重连 (${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`,
+					);
+				}
+				toast.warning({
+					title: "连接中断",
+					message: `正在重新连接 (尝试 ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`,
+					duration: RECONNECT_DELAY,
+				});
+				reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY);
+			} else {
+				toast.error({
+					title: "连接失败",
+					message: "多次尝试后仍无法连接。请检查网络后刷新页面",
+					duration: 0,
+					actions: [
+						{ label: "刷新页面", onClick: () => window.location.reload() },
+					],
+				});
+			}
+		};
+	}, [projectId, clearReconnectTimer, scheduleAutoConfirm]);
 
-  const disconnect = useCallback(() => {
-    clearReconnectTimer();
-    clearAutoConfirm();
-    reconnectAttempts.current = MAX_RECONNECT_ATTEMPTS;
-    if (projectId) {
-      const ws = globalConnections.get(projectId);
-      if (ws) {
-        ws.close();
-        globalConnections.delete(projectId);
-      }
-    }
-  }, [projectId, clearReconnectTimer, clearAutoConfirm]);
+	const disconnect = useCallback(() => {
+		clearReconnectTimer();
+		clearAutoConfirm();
+		reconnectAttempts.current = MAX_RECONNECT_ATTEMPTS;
+		if (projectId) {
+			const ws = globalConnections.get(projectId);
+			if (ws) {
+				ws.close();
+				globalConnections.delete(projectId);
+			}
+		}
+	}, [projectId, clearReconnectTimer, clearAutoConfirm]);
 
-  const send = useCallback((data: Record<string, unknown>) => {
-    if (!projectId) return;
-    const ws = globalConnections.get(projectId);
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(data));
-    }
-  }, [projectId]);
+	const send = useCallback(
+		(data: Record<string, unknown>) => {
+			if (!projectId) return;
+			const ws = globalConnections.get(projectId);
+			if (ws?.readyState === WebSocket.OPEN) {
+				ws.send(JSON.stringify(data));
+			}
+		},
+		[projectId],
+	);
 
-  sendRef.current = send;
+	sendRef.current = send;
 
-  useEffect(() => {
-    reconnectAttempts.current = 0;
-    connect();
-    return () => {
-      clearReconnectTimer();
-    };
-  }, [connect, clearReconnectTimer]);
+	useEffect(() => {
+		reconnectAttempts.current = 0;
+		connect();
+		return () => {
+			clearReconnectTimer();
+		};
+	}, [connect, clearReconnectTimer]);
 
-  return { send, disconnect, reconnect: connect, clearAutoConfirm };
+	return { send, disconnect, reconnect: connect, clearAutoConfirm };
 }
 
 function clearLoadingStates(
-  store: ReturnType<typeof useEditorStore.getState>,
-  agentFilter?: string
+	store: ReturnType<typeof useEditorStore.getState>,
+	agentFilter?: string,
 ): void {
-  const currentMessages = useEditorStore.getState().messages;
-  const updatedMessages = currentMessages.map((msg) => {
-    if (msg.isLoading && (!agentFilter || msg.agent === agentFilter)) {
-      return { ...msg, isLoading: false };
-    }
-    return msg;
-  });
-  if (updatedMessages.some((msg, idx) => msg !== currentMessages[idx])) {
-    store.setMessages(updatedMessages);
-  }
+	const currentMessages = useEditorStore.getState().messages;
+	const updatedMessages = currentMessages.map((msg) => {
+		if (msg.isLoading && (!agentFilter || msg.agent === agentFilter)) {
+			return { ...msg, isLoading: false };
+		}
+		return msg;
+	});
+	if (updatedMessages.some((msg, idx) => msg !== currentMessages[idx])) {
+		store.setMessages(updatedMessages);
+	}
 }
 
 function cleanupStaleMessages(
-  store: ReturnType<typeof useEditorStore.getState>,
-  completedAgent: string
+	store: ReturnType<typeof useEditorStore.getState>,
+	completedAgent: string,
 ): void {
-  const currentMessages = useEditorStore.getState().messages;
-  const cleaned = currentMessages.filter((msg) => {
-    if (msg.agent !== completedAgent) return true;
-    if (msg.role === "info" && (msg.content.includes("已确认") || msg.content.includes("继续执行"))) return false;
-    if (!msg.content?.trim() && !msg.summary) return false;
-    return true;
-  });
-  if (cleaned.length !== currentMessages.length) {
-    store.setMessages(cleaned);
-  }
+	const currentMessages = useEditorStore.getState().messages;
+	const cleaned = currentMessages.filter((msg) => {
+		if (msg.agent !== completedAgent) return true;
+		if (
+			msg.role === "info" &&
+			(msg.content.includes("已确认") || msg.content.includes("继续执行"))
+		)
+			return false;
+		if (!msg.content?.trim() && !msg.summary) return false;
+		return true;
+	});
+	if (cleaned.length !== currentMessages.length) {
+		store.setMessages(cleaned);
+	}
 }
 
-function resolveEventStage(data: Record<string, unknown>): WorkflowStage | undefined {
-  const stage = data.stage ?? data.current_stage;
-  if (isWorkflowStage(stage)) return stage;
-  return undefined;
+function resolveEventStage(
+	data: Record<string, unknown>,
+): WorkflowStage | undefined {
+	const stage = data.stage ?? data.current_stage;
+	if (isWorkflowStage(stage)) return stage;
+	return undefined;
 }
 
-function applyStage(store: ReturnType<typeof useEditorStore.getState>, data: Record<string, unknown>) {
-  const stage = resolveEventStage(data);
-  if (stage) store.setCurrentStage(stage);
+function applyStage(
+	store: ReturnType<typeof useEditorStore.getState>,
+	data: Record<string, unknown>,
+) {
+	const stage = resolveEventStage(data);
+	if (stage) store.setCurrentStage(stage);
 }
 
 type AutoConfirmFn = (runId: number) => void;
 
 export function applyWsEvent(
-  event: WsEvent,
-  store: ReturnType<typeof useEditorStore.getState>,
-  autoConfirm: AutoConfirmFn,
+	event: WsEvent,
+	store: ReturnType<typeof useEditorStore.getState>,
+	autoConfirm: AutoConfirmFn,
 ): void {
-  switch (event.type) {
-    case "connected":
-      break;
+	switch (event.type) {
+		case "connected":
+			break;
 
-    case "error": {
-      const code = event.data.code as string | undefined;
-      const msg = event.data.message as string | undefined;
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "error",
-        content: msg || code || "Unknown error",
-        timestamp: new Date().toISOString(),
-      });
-      toast.error({ title: "服务器错误", message: msg || code || "" });
-      break;
-    }
+		case "error": {
+			const code = event.data.code as string | undefined;
+			const msg = event.data.message as string | undefined;
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "error",
+				content: msg || code || "Unknown error",
+				timestamp: new Date().toISOString(),
+			});
+			toast.error({ title: "服务器错误", message: msg || code || "" });
+			break;
+		}
 
-    case "run_started":
-      store.setGenerating(true);
-      store.setProgress(0);
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "separator",
-        content: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        timestamp: new Date().toISOString(),
-      });
-      store.setCurrentRunId(event.data.run_id as number);
-      store.setCurrentAgent((event.data.current_agent as string | null) ?? null);
-      store.setAwaitingConfirm(false);
-      store.setRecoveryGate(null);
-      applyStage(store, event.data);
-      if (event.data.recovery_summary) {
-        store.setRecoverySummary(event.data.recovery_summary as RecoverySummaryRead);
-      }
-      if (Object.hasOwn(event.data, "provider_snapshot")) {
-        store.setCurrentRunProviderSnapshot(event.data.provider_snapshot as ProjectProviderSettings | null);
-      }
-      break;
+		case "run_started":
+			store.setGenerating(true);
+			store.setProgress(0);
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "separator",
+				content: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+				timestamp: new Date().toISOString(),
+			});
+			store.setCurrentRunId(event.data.run_id as number);
+			store.setCurrentAgent(
+				(event.data.current_agent as string | null) ?? null,
+			);
+			store.setAwaitingConfirm(false);
+			store.setRecoveryGate(null);
+			applyStage(store, event.data);
+			if (event.data.recovery_summary) {
+				store.setRecoverySummary(
+					event.data.recovery_summary as RecoverySummaryRead,
+				);
+			}
+			if (Object.hasOwn(event.data, "provider_snapshot")) {
+				store.setCurrentRunProviderSnapshot(
+					event.data.provider_snapshot as ProjectProviderSettings | null,
+				);
+			}
+			break;
 
-    case "run_progress": {
-      const p = event.data as unknown as RunProgressEventData;
-      if (!store.isGenerating && p.run_id) {
-        store.setGenerating(true);
-        store.setCurrentRunId(p.run_id);
-      }
-      store.setCurrentAgent(p.current_agent ?? null);
-      store.setProgress(p.progress);
-      if (p.recovery_summary) store.setRecoverySummary(p.recovery_summary);
-      applyStage(store, event.data);
-      break;
-    }
+		case "run_progress": {
+			const p = event.data as unknown as RunProgressEventData;
+			if (!store.isGenerating && p.run_id) {
+				store.setGenerating(true);
+				store.setCurrentRunId(p.run_id);
+			}
+			store.setCurrentAgent(p.current_agent ?? null);
+			store.setProgress(p.progress);
+			if (p.recovery_summary) store.setRecoverySummary(p.recovery_summary);
+			applyStage(store, event.data);
+			break;
+		}
 
-    case "run_message": {
-      const agent = event.data.agent as string;
-      clearLoadingStates(store, agent);
-      const msgProgress = event.data.progress as number | undefined;
-      if (typeof msgProgress === "number" && msgProgress >= 0 && msgProgress <= 1) {
-        store.setProgress(msgProgress);
-      }
-      store.addMessage({
-        id: generateMessageId(),
-        agent,
-        role: event.data.role as string,
-        content: event.data.content as string,
-        summary: (event.data.summary as string | undefined) ?? undefined,
-        timestamp: new Date().toISOString(),
-        progress: msgProgress,
-        isLoading: event.data.isLoading as boolean | undefined,
-      });
-      break;
-    }
+		case "run_message": {
+			const agent = event.data.agent as string;
+			clearLoadingStates(store, agent);
+			const msgProgress = event.data.progress as number | undefined;
+			if (
+				typeof msgProgress === "number" &&
+				msgProgress >= 0 &&
+				msgProgress <= 1
+			) {
+				store.setProgress(msgProgress);
+			}
+			store.addMessage({
+				id: generateMessageId(),
+				agent,
+				role: event.data.role as string,
+				content: event.data.content as string,
+				summary: (event.data.summary as string | undefined) ?? undefined,
+				timestamp: new Date().toISOString(),
+				progress: msgProgress,
+				isLoading: event.data.isLoading as boolean | undefined,
+			});
+			break;
+		}
 
-    case "run_awaiting_confirm": {
-      clearLoadingStates(store);
-      const gate = event.data as unknown as RunAwaitingConfirmEventData;
-      if (!store.isGenerating) {
-        store.setGenerating(true);
-        store.setCurrentRunId(gate.run_id);
-      }
-      store.setAwaitingConfirm(true, gate.agent, gate.run_id);
-      store.setRecoveryGate(gate);
-      store.setRecoverySummary(gate.recovery_summary);
-      applyStage(store, event.data);
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "info",
-        content: event.data.message as string,
-        timestamp: new Date().toISOString(),
-      });
+		case "run_awaiting_confirm": {
+			clearLoadingStates(store);
+			const gate = event.data as unknown as RunAwaitingConfirmEventData;
+			if (!store.isGenerating) {
+				store.setGenerating(true);
+				store.setCurrentRunId(gate.run_id);
+			}
+			store.setAwaitingConfirm(true, gate.agent, gate.run_id);
+			store.setRecoveryGate(gate);
+			store.setRecoverySummary(gate.recovery_summary);
+			applyStage(store, event.data);
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "info",
+				content: event.data.message as string,
+				timestamp: new Date().toISOString(),
+			});
 
-      if (!gate.auto_mode && shouldAutoConfirm(gate.agent, store.runMode)) {
-        autoConfirm(gate.run_id);
-      }
-      break;
-    }
+			if (!gate.auto_mode && shouldAutoConfirm(gate.agent, store.runMode)) {
+				autoConfirm(gate.run_id);
+			}
+			break;
+		}
 
-    case "run_confirmed": {
-      const confirmed = event.data as unknown as RunConfirmedEventData;
-      store.setAwaitingConfirm(false);
-      store.setRecoveryGate(null);
-      if (confirmed.recovery_summary) store.setRecoverySummary(confirmed.recovery_summary);
-      applyStage(store, event.data);
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "info",
-        content: confirmed.auto_mode ? "自动确认，继续执行..." : "已确认，继续执行...",
-        timestamp: new Date().toISOString(),
-      });
-      break;
-    }
+		case "run_confirmed": {
+			const confirmed = event.data as unknown as RunConfirmedEventData;
+			store.setAwaitingConfirm(false);
+			store.setRecoveryGate(null);
+			if (confirmed.recovery_summary)
+				store.setRecoverySummary(confirmed.recovery_summary);
+			applyStage(store, event.data);
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "info",
+				content: confirmed.auto_mode
+					? "自动确认，继续执行..."
+					: "已确认，继续执行...",
+				timestamp: new Date().toISOString(),
+			});
+			break;
+		}
 
-    case "run_completed": {
-      clearLoadingStates(store);
-      const completedAgent = (event.data?.current_agent as string) || "";
-      if (completedAgent) cleanupStaleMessages(store, completedAgent);
-      cleanupStaleMessages(store, "system");
-      store.resetRunState();
-      store.setProgress(1);
-      const completedStage = event.data?.current_stage as string | undefined;
-      if (completedStage && isWorkflowStage(completedStage)) {
-        store.setCurrentStage(completedStage);
-      } else {
-        store.setCurrentStage("compose");
-      }
-      if (typeof event.data?.message === "string" && event.data.message.trim()) {
-        store.addMessage({
-          id: generateMessageId(),
-          agent: "system",
-          role: "assistant",
-          content: event.data.message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      break;
-    }
+		case "run_completed": {
+			clearLoadingStates(store);
+			const completedAgent = (event.data?.current_agent as string) || "";
+			if (completedAgent) cleanupStaleMessages(store, completedAgent);
+			cleanupStaleMessages(store, "system");
+			store.resetRunState();
+			store.setProgress(1);
+			const completedStage = event.data?.current_stage as string | undefined;
+			if (completedStage && isWorkflowStage(completedStage)) {
+				store.setCurrentStage(completedStage);
+			} else {
+				store.setCurrentStage("compose");
+			}
+			if (
+				typeof event.data?.message === "string" &&
+				event.data.message.trim()
+			) {
+				store.addMessage({
+					id: generateMessageId(),
+					agent: "system",
+					role: "assistant",
+					content: event.data.message,
+					timestamp: new Date().toISOString(),
+				});
+			}
+			break;
+		}
 
-    case "run_failed":
-      clearLoadingStates(store);
-      store.resetRunState();
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "error",
-        content: `生成失败: ${event.data.error}`,
-        timestamp: new Date().toISOString(),
-      });
-      toast.error({
-        title: "生成失败",
-        message: (event.data.error as string) || "未知错误",
-        duration: 5000,
-      });
-      break;
+		case "run_failed":
+			clearLoadingStates(store);
+			store.resetRunState();
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "error",
+				content: `生成失败: ${event.data.error}`,
+				timestamp: new Date().toISOString(),
+			});
+			toast.error({
+				title: "生成失败",
+				message: (event.data.error as string) || "未知错误",
+				duration: 5000,
+			});
+			break;
 
-    case "run_cancelled":
-      clearLoadingStates(store);
-      store.resetRunState();
-      store.setProgress(0);
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "info",
-        content: "生成已停止",
-        timestamp: new Date().toISOString(),
-      });
-      break;
+		case "run_cancelled":
+			clearLoadingStates(store);
+			store.resetRunState();
+			store.setProgress(0);
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "info",
+				content: "生成已停止",
+				timestamp: new Date().toISOString(),
+			});
+			break;
 
-    case "character_created":
-    case "character_updated":
-      if (event.data.character) {
-        store.updateCharacter(event.data.character as Character);
-      }
-      break;
+		case "character_created":
+		case "character_updated":
+			if (event.data.character) {
+				store.updateCharacter(event.data.character as Character);
+			}
+			break;
 
-    case "shot_created":
-    case "shot_updated":
-      if (event.data.shot) {
-        store.updateShot(event.data.shot as Shot);
-      }
-      break;
+		case "shot_created":
+		case "shot_updated":
+			if (event.data.shot) {
+				store.updateShot(event.data.shot as Shot);
+			}
+			break;
 
-    case "character_deleted": {
-      const charId = event.data.character_id as number | undefined;
-      if (charId !== undefined) {
-        store.setCharacters(store.characters.filter((c) => c.id !== charId));
-      }
-      break;
-    }
+		case "character_deleted": {
+			const charId = event.data.character_id as number | undefined;
+			if (charId !== undefined) {
+				store.setCharacters(store.characters.filter((c) => c.id !== charId));
+			}
+			break;
+		}
 
-    case "shot_deleted": {
-      const shotId = event.data.shot_id as number | undefined;
-      if (shotId !== undefined) {
-        store.setShots(store.shots.filter((s) => s.id !== shotId));
-      }
-      break;
-    }
+		case "shot_deleted": {
+			const shotId = event.data.shot_id as number | undefined;
+			if (shotId !== undefined) {
+				store.setShots(store.shots.filter((s) => s.id !== shotId));
+			}
+			break;
+		}
 
-    case "data_cleared": {
-      const clearedTypes = event.data.cleared_types as string[] | undefined;
-      if (clearedTypes) {
-        if (clearedTypes.includes("characters")) store.setCharacters([]);
-        if (clearedTypes.includes("shots")) store.setShots([]);
-      }
-      store.setProjectVideoUrl(null);
-      break;
-    }
+		case "data_cleared": {
+			const clearedTypes = event.data.cleared_types as string[] | undefined;
+			if (clearedTypes) {
+				if (clearedTypes.includes("characters")) store.setCharacters([]);
+				if (clearedTypes.includes("shots")) store.setShots([]);
+			}
+			store.setProjectVideoUrl(null);
+			break;
+		}
 
-    case "project_updated": {
-      const projectData = event.data.project as {
-        video_url?: string;
-        title?: string;
-        status?: string;
-        summary?: string;
-        story?: string;
-        style?: string;
-        target_shot_count?: number;
-        character_hints?: string[];
-        creation_mode?: string;
-        reference_images?: string[];
-        blocking_clips?: Array<{ shot_id: number; order: number; status: string; reason: string }>;
-      } | undefined;
-      if (projectData) {
-        if (projectData.video_url !== undefined) {
-          store.setProjectVideoUrl(projectData.video_url || null);
-        }
-        if (projectData.status !== undefined) {
-          store.setProjectStatus(projectData.status);
-        }
-        if (projectData.title !== undefined) {
-          store.setProjectTitle(projectData.title);
-        }
-        if (projectData.summary !== undefined) {
-          store.setProjectSummary(projectData.summary);
-        }
-        if (projectData.story !== undefined) {
-          store.setProjectStory(projectData.story);
-        }
-        if (projectData.style !== undefined) {
-          store.setProjectStyle(projectData.style);
-        }
-        if (projectData.target_shot_count !== undefined) {
-          store.setProjectTargetShotCount(projectData.target_shot_count);
-        }
-        if (projectData.character_hints !== undefined) {
-          store.setProjectCharacterHints(projectData.character_hints);
-        }
-        if (projectData.creation_mode !== undefined) {
-          store.setProjectCreationMode(projectData.creation_mode);
-        }
-        if (projectData.reference_images !== undefined) {
-          store.setProjectReferenceImages(projectData.reference_images);
-        }
-        if (projectData.blocking_clips !== undefined) {
-          store.setBlockingClips(projectData.blocking_clips || null);
-        }
-      }
-      store.setProjectUpdatedAt(Date.now());
-      break;
-    }
+		case "project_updated": {
+			const projectData = event.data.project as
+				| {
+						video_url?: string;
+						title?: string;
+						status?: string;
+						summary?: string;
+						story?: string;
+						style?: string;
+						target_shot_count?: number;
+						character_hints?: string[];
+						reference_images?: string[];
+						blocking_clips?: Array<{
+							shot_id: number;
+							order: number;
+							status: string;
+							reason: string;
+						}>;
+				  }
+				| undefined;
+			if (projectData) {
+				if (projectData.video_url !== undefined) {
+					store.setProjectVideoUrl(projectData.video_url || null);
+				}
+				if (projectData.status !== undefined) {
+					store.setProjectStatus(projectData.status);
+				}
+				if (projectData.title !== undefined) {
+					store.setProjectTitle(projectData.title);
+				}
+				if (projectData.summary !== undefined) {
+					store.setProjectSummary(projectData.summary);
+				}
+				if (projectData.story !== undefined) {
+					store.setProjectStory(projectData.story);
+				}
+				if (projectData.style !== undefined) {
+					store.setProjectStyle(projectData.style);
+				}
+				if (projectData.target_shot_count !== undefined) {
+					store.setProjectTargetShotCount(projectData.target_shot_count);
+				}
+				if (projectData.character_hints !== undefined) {
+					store.setProjectCharacterHints(projectData.character_hints);
+				}
+				if (projectData.reference_images !== undefined) {
+					store.setProjectReferenceImages(projectData.reference_images);
+				}
+				if (projectData.blocking_clips !== undefined) {
+					store.setBlockingClips(projectData.blocking_clips || null);
+				}
+			}
+			store.setProjectUpdatedAt(Date.now());
+			break;
+		}
 
-    case "pong":
-    case "echo":
-      break;
-  }
+		case "pong":
+		case "echo":
+			break;
+	}
 }

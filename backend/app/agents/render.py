@@ -40,7 +40,9 @@ class RenderAgent(BaseAgent):
     def _build_character_prompt(self, character: Character, *, style: str) -> str:
         desc = character.description or character.name
         style_desc = self._style_descriptor(style)
-        return f"{desc}, {style_desc}"
+        # 面部锚定词：强调清晰五官，提升一致性
+        face_anchor = "detailed face, clear facial features, sharp eyes"
+        return f"{desc}, {face_anchor}, {style_desc}"
 
     def _build_shot_prompt(self, shot: Shot, characters: list[Character], *, style: str) -> str:
         desc = shot.image_prompt or shot.description
@@ -48,6 +50,9 @@ class RenderAgent(BaseAgent):
         char_context = build_character_context(characters)
         if char_context:
             parts.append(char_context)
+        # 面部一致性锚定词
+        if characters:
+            parts.append("same character face as reference, consistent identity")
         style_desc = self._style_descriptor(style)
         parts.append(style_desc)
         return ", ".join(parts)
@@ -67,13 +72,20 @@ class RenderAgent(BaseAgent):
             return 0
 
         total = len(characters)
-        await self.send_message(ctx, f"开始为 {total} 个角色生成形象图...", progress=0.0, is_loading=True)
+        await self.send_message(
+            ctx, f"开始为 {total} 个角色生成形象图...", progress=0.0, is_loading=True
+        )
 
         updated_count = 0
         style = ctx.project.style or ""
         for i, char in enumerate(characters):
             try:
-                await self.send_progress_batch(ctx, total=total, current=i, message=f"   正在绘制：{char.name} ({i+1}/{total})")
+                await self.send_progress_batch(
+                    ctx,
+                    total=total,
+                    current=i,
+                    message=f"   正在绘制：{char.name} ({i + 1}/{total})",
+                )
                 image_prompt = self._build_character_prompt(char, style=style)
                 external_url = await self.generate_and_cache_image(ctx, prompt=image_prompt)
                 char.image_url = external_url
@@ -114,11 +126,18 @@ class RenderAgent(BaseAgent):
         failed_count = 0
         style = ctx.project.style or ""
 
-        await self.send_message(ctx, f"开始为 {total} 个分镜生成首帧图片（使用角色参考图）...", progress=0.0, is_loading=True)
+        await self.send_message(
+            ctx,
+            f"开始为 {total} 个分镜生成首帧图片（使用角色参考图）...",
+            progress=0.0,
+            is_loading=True,
+        )
 
         for i, shot in enumerate(shots):
             try:
-                await self.send_progress_batch(ctx, total=total, current=i, message=f"   正在绘制分镜 {i+1}/{total}...")
+                await self.send_progress_batch(
+                    ctx, total=total, current=i, message=f"   正在绘制分镜 {i + 1}/{total}..."
+                )
 
                 characters = await resolve_shot_bound_approved_characters(ctx.session, shot)
                 char_image_urls = [c.image_url for c in characters if c.image_url]
@@ -126,13 +145,23 @@ class RenderAgent(BaseAgent):
 
                 if char_image_urls:
                     try:
-                        reference_image_bytes = await self.image_composer.compose_character_reference_image(char_image_urls)
-                        logger.info("Composed character reference image with %d characters for shot %d", len(char_image_urls), shot.id)
+                        reference_image_bytes = (
+                            await self.image_composer.compose_character_reference_image(
+                                char_image_urls
+                            )
+                        )
+                        logger.info(
+                            "Composed character reference image with %d characters for shot %d",
+                            len(char_image_urls),
+                            shot.id,
+                        )
                     except Exception as exc:
                         reference_image_bytes = None
                         logger.warning("Failed to compose character reference image: %s", exc)
                 else:
-                    logger.info("No character images available for shot %d; using text-to-image", shot.id)
+                    logger.info(
+                        "No character images available for shot %d; using text-to-image", shot.id
+                    )
 
                 image_prompt = self._build_shot_prompt(shot, characters, style=style)
 
@@ -159,7 +188,9 @@ class RenderAgent(BaseAgent):
 
         await ctx.session.commit()
 
-        summary = f"为{updated_count}个分镜生成了首帧图片" if updated_count > 0 else "分镜图片生成失败"
+        summary = (
+            f"为{updated_count}个分镜生成了首帧图片" if updated_count > 0 else "分镜图片生成失败"
+        )
         if updated_count > 0:
             shots[0].description[:20] if shots and shots[0].description else ""
             msg = f"已为 {updated_count} 个分镜生成首帧图片，接下来将生成视频。"
@@ -167,12 +198,22 @@ class RenderAgent(BaseAgent):
                 msg += f"（{failed_count} 个失败）"
             await self.send_message(ctx, msg, summary=summary, progress=1.0)
         elif failed_count > 0:
-            await self.send_message(ctx, f"所有 {failed_count} 个分镜首帧图片生成均失败。", summary=summary, progress=1.0)
+            await self.send_message(
+                ctx,
+                f"所有 {failed_count} 个分镜首帧图片生成均失败。",
+                summary=summary,
+                progress=1.0,
+            )
 
         return updated_count
 
     async def run(self, ctx: AgentContext) -> None:
-        await self.send_message(ctx, "开始渲染：先生成角色形象图，再使用角色图作为参考生成分镜图...", progress=0.0, is_loading=True)
+        await self.send_message(
+            ctx,
+            "开始渲染：先生成角色形象图，再使用角色图作为参考生成分镜图...",
+            progress=0.0,
+            is_loading=True,
+        )
 
         char_count = await self._render_characters(ctx)
 

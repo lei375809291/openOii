@@ -1,13 +1,13 @@
 import { ApiError } from "~/types/errors";
 import { getApiBase } from "~/utils/runtimeBase";
 import type {
-  Character,
-  CharacterUpdatePayload,
-  CreateProjectPayload,
-  Project,
-  Shot,
-  ShotUpdatePayload,
-  UpdateProjectPayload,
+	Character,
+	CharacterUpdatePayload,
+	CreateProjectPayload,
+	Project,
+	Shot,
+	ShotUpdatePayload,
+	UpdateProjectPayload,
 } from "~/types";
 
 const API_BASE = getApiBase();
@@ -18,264 +18,345 @@ const API_BASE = getApiBase();
  * @returns 完整 URL，如 "http://localhost:18765/static/videos/xxx.mp4"
  */
 export function getStaticUrl(path: string | null | undefined): string | null {
-  if (!path) return null;
+	if (!path) return null;
 
-  // 安全检查：防止 XSS 和协议注入
-  const trimmedPath = path.trim();
+	// 安全检查：防止 XSS 和协议注入
+	const trimmedPath = path.trim();
 
-  // 只允许 http/https 协议
-  if (trimmedPath.startsWith("http://") || trimmedPath.startsWith("https://")) {
-    try {
-      const url = new URL(trimmedPath);
-      // 验证协议
-      if (url.protocol !== "http:" && url.protocol !== "https:") {
-        console.warn(`[Security] Invalid protocol in URL: ${url.protocol}`);
-        return null;
-      }
-      return trimmedPath;
-    } catch {
-      console.warn(`[Security] Invalid URL format: ${trimmedPath}`);
-      return null;
-    }
-  }
+	// 只允许 http/https 协议
+	if (trimmedPath.startsWith("http://") || trimmedPath.startsWith("https://")) {
+		try {
+			const url = new URL(trimmedPath);
+			// 验证协议
+			if (url.protocol !== "http:" && url.protocol !== "https:") {
+				console.warn(`[Security] Invalid protocol in URL: ${url.protocol}`);
+				return null;
+			}
+			return trimmedPath;
+		} catch {
+			console.warn(`[Security] Invalid URL format: ${trimmedPath}`);
+			return null;
+		}
+	}
 
-  // 阻止危险协议
-  const dangerousProtocols = ["javascript:", "data:", "vbscript:", "file:", "about:"];
-  if (dangerousProtocols.some(proto => trimmedPath.toLowerCase().startsWith(proto))) {
-    console.warn(`[Security] Dangerous protocol detected: ${trimmedPath}`);
-    return null;
-  }
+	// 阻止危险协议
+	const dangerousProtocols = [
+		"javascript:",
+		"data:",
+		"vbscript:",
+		"file:",
+		"about:",
+	];
+	if (
+		dangerousProtocols.some((proto) =>
+			trimmedPath.toLowerCase().startsWith(proto),
+		)
+	) {
+		console.warn(`[Security] Dangerous protocol detected: ${trimmedPath}`);
+		return null;
+	}
 
-  // 拼接 API_BASE
-  return `${API_BASE}${trimmedPath}`;
+	// 拼接 API_BASE
+	return `${API_BASE}${trimmedPath}`;
 }
 
 async function fetchApi<T>(
-  endpoint: string,
-  options?: RequestInit
+	endpoint: string,
+	options?: RequestInit,
 ): Promise<T> {
-  try {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-    });
+	try {
+		let adminToken: string | null = null;
+		try {
+			adminToken = localStorage.getItem("openoii_admin_token");
+		} catch {}
+		const res = await fetch(`${API_BASE}${endpoint}`, {
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...(adminToken ? { "X-Admin-Token": adminToken } : {}),
+				...options?.headers,
+			},
+		});
 
-    // 处理 204 No Content 响应
-    if (res.status === 204 || res.headers.get("content-length") === "0") {
-      return undefined as T;
-    }
+		// 处理 204 No Content 响应
+		if (res.status === 204 || res.headers.get("content-length") === "0") {
+			return undefined as T;
+		}
 
-    // 尝试解析响应体
-    let data: T;
-    try {
-      data = await res.json();
-    } catch {
-      // JSON 解析失败，如果响应不成功则抛出错误
-      if (!res.ok) {
-        throw new ApiError({
-          code: "INVALID_RESPONSE",
-          message: "服务器返回了无效的响应格式",
-          status: res.status,
-          request: {
-            method: options?.method || "GET",
-            url: endpoint,
-          },
-        });
-      }
-      // 响应成功但无法解析 JSON，返回 undefined（用于 204 等情况）
-      return undefined as T;
-    }
+		// 尝试解析响应体
+		let data: T;
+		try {
+			data = await res.json();
+		} catch {
+			// JSON 解析失败，如果响应不成功则抛出错误
+			if (!res.ok) {
+				throw new ApiError({
+					code: "INVALID_RESPONSE",
+					message: "服务器返回了无效的响应格式",
+					status: res.status,
+					request: {
+						method: options?.method || "GET",
+						url: endpoint,
+					},
+				});
+			}
+			// 响应成功但无法解析 JSON，返回 undefined（用于 204 等情况）
+			return undefined as T;
+		}
 
-    if (!res.ok) {
-      // 解析后端返回的结构化错误
-      const errorObj = data as unknown as { error?: { code?: string; message?: string; details?: Record<string, unknown> } };
-      const errorData = errorObj.error || {};
-      throw new ApiError({
-        code: errorData.code || "API_ERROR",
-        message: errorData.message || res.statusText || "请求失败",
-        status: res.status,
-        details: errorData.details as Record<string, unknown> | undefined,
-        request: {
-          method: options?.method || "GET",
-          url: endpoint,
-        },
-        response: data as Record<string, unknown>,
-      });
-    }
+		if (!res.ok) {
+			// 解析后端返回的结构化错误
+			const errorObj = data as unknown as {
+				error?: {
+					code?: string;
+					message?: string;
+					details?: Record<string, unknown>;
+				};
+			};
+			const errorData = errorObj.error || {};
+			throw new ApiError({
+				code: errorData.code || "API_ERROR",
+				message: errorData.message || res.statusText || "请求失败",
+				status: res.status,
+				details: errorData.details as Record<string, unknown> | undefined,
+				request: {
+					method: options?.method || "GET",
+					url: endpoint,
+				},
+				response: data as Record<string, unknown>,
+			});
+		}
 
-    return data;
-  } catch (error) {
-    // 如果已经是 ApiError，直接抛出
-    if (error instanceof ApiError) {
-      throw error;
-    }
+		return data;
+	} catch (error) {
+		// 如果已经是 ApiError，直接抛出
+		if (error instanceof ApiError) {
+			throw error;
+		}
 
-    // 网络错误或其他错误
-    throw new ApiError({
-      code: "NETWORK_ERROR",
-      message: "网络连接失败，请检查您的网络设置",
-      details: { originalError: String(error) },
-      request: {
-        method: options?.method || "GET",
-        url: endpoint,
-      },
-    });
-  }
+		// 网络错误或其他错误
+		throw new ApiError({
+			code: "NETWORK_ERROR",
+			message: "网络连接失败，请检查您的网络设置",
+			details: { originalError: String(error) },
+			request: {
+				method: options?.method || "GET",
+				url: endpoint,
+			},
+		});
+	}
 }
 
 // Projects API
 export const projectsApi = {
-  list: async () => {
-    const data = await fetchApi<{ items: Project[]; total: number }>("/api/v1/projects");
-    return data.items;
-  },
-  
-  get: (id: number) => fetchApi<Project>(`/api/v1/projects/${id}`),
-  
-  create: (data: CreateProjectPayload) =>
-    fetchApi<Project>("/api/v1/projects", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  
-  update: (id: number, data: UpdateProjectPayload) =>
-    fetchApi<Project>(`/api/v1/projects/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-  
-  delete: (id: number) =>
-    fetchApi<void>(`/api/v1/projects/${id}`, { method: "DELETE" }),
+	list: async () => {
+		const data = await fetchApi<{ items: Project[]; total: number }>(
+			"/api/v1/projects",
+		);
+		return data.items;
+	},
 
-  deleteMany: (ids: number[]) =>
-    fetchApi<void>("/api/v1/projects/batch-delete", {
-      method: "POST",
-      body: JSON.stringify({ ids }),
-    }),
+	get: (id: number) => fetchApi<Project>(`/api/v1/projects/${id}`),
 
-  uploadReference: async (projectId: number, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const baseUrl = getApiBase();
-    const res = await fetch(`${baseUrl}/api/v1/projects/${projectId}/upload-reference`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-    return res.json() as Promise<{ url: string; reference_images: string[] }>;
-  },
-  
-  getCharacters: (id: number) =>
-    fetchApi<Character[]>(`/api/v1/projects/${id}/characters`),
+	create: (data: CreateProjectPayload) =>
+		fetchApi<Project>("/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
 
-  getShots: (id: number) =>
-    fetchApi<Shot[]>(`/api/v1/projects/${id}/shots`),
+	update: (id: number, data: UpdateProjectPayload) =>
+		fetchApi<Project>(`/api/v1/projects/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		}),
 
-  getMessages: (id: number) =>
-    fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
+	delete: (id: number) =>
+		fetchApi<void>(`/api/v1/projects/${id}`, { method: "DELETE" }),
 
-  generate: (id: number, data?: { seed?: number; notes?: string; auto_mode?: boolean }) =>
-    fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
-      method: "POST",
-      body: JSON.stringify(data || {}),
-    }),
+	deleteMany: (ids: number[]) =>
+		fetchApi<void>("/api/v1/projects/batch-delete", {
+			method: "POST",
+			body: JSON.stringify({ ids }),
+		}),
 
-  cancel: (id: number) =>
-    fetchApi<{ status: string; cancelled: number }>(`/api/v1/projects/${id}/cancel`, {
-      method: "POST",
-    }),
+	uploadReference: async (projectId: number, file: File) => {
+		const formData = new FormData();
+		formData.append("file", file);
+		const baseUrl = getApiBase();
+		const res = await fetch(
+			`${baseUrl}/api/v1/projects/${projectId}/upload-reference`,
+			{
+				method: "POST",
+				body: formData,
+			},
+		);
+		if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+		return res.json() as Promise<{ url: string; reference_images: string[] }>;
+	},
 
-  resume: (id: number, runId: number) =>
-    fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/resume`, {
-      method: "POST",
-      body: JSON.stringify({ run_id: runId }),
-    }),
+	getCharacters: (id: number) =>
+		fetchApi<Character[]>(`/api/v1/projects/${id}/characters`),
 
-  feedback: (id: number, content: string, runId?: number, feedbackType?: string, entityType?: string, entityId?: number) =>
-    fetchApi<{ status: string; run_id?: number }>(`/api/v1/projects/${id}/feedback`, {
-      method: "POST",
-      body: JSON.stringify({ content, run_id: runId, feedback_type: feedbackType, entity_type: entityType, entity_id: entityId }),
-    }),
+	getShots: (id: number) => fetchApi<Shot[]>(`/api/v1/projects/${id}/shots`),
+
+	getMessages: (id: number) =>
+		fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
+
+	generate: (
+		id: number,
+		data?: { seed?: number; notes?: string; auto_mode?: boolean },
+	) =>
+		fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
+			method: "POST",
+			body: JSON.stringify(data || {}),
+		}),
+
+	cancel: (id: number) =>
+		fetchApi<{ status: string; cancelled: number }>(
+			`/api/v1/projects/${id}/cancel`,
+			{
+				method: "POST",
+			},
+		),
+
+	resume: (id: number, runId: number) =>
+		fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/resume`, {
+			method: "POST",
+			body: JSON.stringify({ run_id: runId }),
+		}),
+
+	feedback: (
+		id: number,
+		content: string,
+		runId?: number,
+		feedbackType?: string,
+		entityType?: string,
+		entityId?: number,
+	) =>
+		fetchApi<{ status: string; run_id?: number }>(
+			`/api/v1/projects/${id}/feedback`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					content,
+					run_id: runId,
+					feedback_type: feedbackType,
+					entity_type: entityType,
+					entity_id: entityId,
+				}),
+			},
+		),
 };
 
 // Shots API
 export const shotsApi = {
-  update: (id: number, data: ShotUpdatePayload) =>
-    fetchApi<Shot>(`/api/v1/shots/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-  approve: (id: number) =>
-    fetchApi<Shot>(`/api/v1/shots/${id}/approve`, {
-      method: "POST",
-    }),
-  regenerate: (id: number, type: "image" | "video") =>
-    fetchApi<import("~/types").AgentRun>(`/api/v1/shots/${id}/regenerate`, {
-      method: "POST",
-      body: JSON.stringify({ type }),
-    }),
-  delete: (id: number) =>
-    fetchApi<void>(`/api/v1/shots/${id}`, { method: "DELETE" }),
+	update: (id: number, data: ShotUpdatePayload) =>
+		fetchApi<Shot>(`/api/v1/shots/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		}),
+	approve: (id: number) =>
+		fetchApi<Shot>(`/api/v1/shots/${id}/approve`, {
+			method: "POST",
+		}),
+	regenerate: (id: number, type: "image" | "video") =>
+		fetchApi<import("~/types").AgentRun>(`/api/v1/shots/${id}/regenerate`, {
+			method: "POST",
+			body: JSON.stringify({ type }),
+		}),
+	delete: (id: number) =>
+		fetchApi<void>(`/api/v1/shots/${id}`, { method: "DELETE" }),
 };
 
 // Characters API
 export const charactersApi = {
-  update: (id: number, data: CharacterUpdatePayload) =>
-    fetchApi<Character>(`/api/v1/characters/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-  approve: (id: number) =>
-    fetchApi<Character>(`/api/v1/characters/${id}/approve`, {
-      method: "POST",
-    }),
-  regenerate: (id: number) =>
-    fetchApi<import("~/types").AgentRun>(`/api/v1/characters/${id}/regenerate`, {
-      method: "POST",
-      body: JSON.stringify({ type: "image" }),
-    }),
-  delete: (id: number) =>
-    fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),
+	update: (id: number, data: CharacterUpdatePayload) =>
+		fetchApi<Character>(`/api/v1/characters/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		}),
+	approve: (id: number) =>
+		fetchApi<Character>(`/api/v1/characters/${id}/approve`, {
+			method: "POST",
+		}),
+	regenerate: (id: number) =>
+		fetchApi<import("~/types").AgentRun>(
+			`/api/v1/characters/${id}/regenerate`,
+			{
+				method: "POST",
+				body: JSON.stringify({ type: "image" }),
+			},
+		),
+	delete: (id: number) =>
+		fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),
 };
 
 // Assets API
 export const assetsApi = {
-  list: (assetType?: string) => {
-    const params = assetType ? `?asset_type=${assetType}` : "";
-    return fetchApi<import("~/types").AssetList>(`/api/v1/assets${params}`);
-  },
-  create: (data: import("~/types").AssetCreatePayload) =>
-    fetchApi<import("~/types").Asset>("/api/v1/assets", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  createFromCharacter: (characterId: number) =>
-    fetchApi<import("~/types").Asset>(`/api/v1/assets/from-character/${characterId}`, {
-      method: "POST",
-    }),
-  delete: (id: number) =>
-    fetchApi<void>(`/api/v1/assets/${id}`, { method: "DELETE" }),
+	list: (assetType?: string) => {
+		const params = assetType ? `?asset_type=${assetType}` : "";
+		return fetchApi<import("~/types").AssetList>(`/api/v1/assets${params}`);
+	},
+	create: (data: import("~/types").AssetCreatePayload) =>
+		fetchApi<import("~/types").Asset>("/api/v1/assets", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
+	createFromCharacter: (characterId: number) =>
+		fetchApi<import("~/types").Asset>(
+			`/api/v1/assets/from-character/${characterId}`,
+			{
+				method: "POST",
+			},
+		),
+	delete: (id: number) =>
+		fetchApi<void>(`/api/v1/assets/${id}`, { method: "DELETE" }),
 };
 
 // Config API
 export const configApi = {
-  get: () => fetchApi<import("~/types").ConfigItem[]>("/api/v1/config"),
-  update: (config: Record<string, import("~/types").ConfigValue>) =>
-    fetchApi<{ updated: number; skipped: number; restart_required: boolean; restart_keys: string[]; message: string }>("/api/v1/config", {
-      method: "PUT",
-      body: JSON.stringify({ configs: config }),
-    }),
-  testConnection: (service: "llm" | "image" | "video", configOverrides?: Record<string, string | null>) =>
-    fetchApi<{ success: boolean; message: string; details: string | null; status?: "valid" | "degraded" | "invalid" | null; capabilities?: { generate?: boolean | null; stream?: boolean | null } | null }>("/api/v1/config/test-connection", {
-      method: "POST",
-      body: JSON.stringify({ service, config_overrides: configOverrides }),
-    }),
-  revealValue: (key: string) =>
-    fetchApi<{ key: string; value: string | null }>("/api/v1/config/reveal", {
-      method: "POST",
-      body: JSON.stringify({ key }),
-    }),
+	get: () => fetchApi<import("~/types").ConfigItem[]>("/api/v1/config"),
+	update: (config: Record<string, import("~/types").ConfigValue>) =>
+		fetchApi<{
+			updated: number;
+			skipped: number;
+			restart_required: boolean;
+			restart_keys: string[];
+			message: string;
+		}>("/api/v1/config", {
+			method: "PUT",
+			body: JSON.stringify({ configs: config }),
+		}).then((res) => {
+			if ("ADMIN_TOKEN" in config) {
+				const token = config.ADMIN_TOKEN;
+				if (typeof token === "string" && token.length > 0) {
+					localStorage.setItem("openoii_admin_token", token);
+				} else {
+					localStorage.removeItem("openoii_admin_token");
+				}
+			}
+			return res;
+		}),
+	testConnection: (
+		service: "llm" | "image" | "video",
+		configOverrides?: Record<string, string | null>,
+	) =>
+		fetchApi<{
+			success: boolean;
+			message: string;
+			details: string | null;
+			status?: "valid" | "degraded" | "invalid" | null;
+			capabilities?: {
+				generate?: boolean | null;
+				stream?: boolean | null;
+			} | null;
+		}>("/api/v1/config/test-connection", {
+			method: "POST",
+			body: JSON.stringify({ service, config_overrides: configOverrides }),
+		}),
+	revealValue: (key: string) =>
+		fetchApi<{ key: string; value: string | null }>("/api/v1/config/reveal", {
+			method: "POST",
+			body: JSON.stringify({ key }),
+		}),
 };
