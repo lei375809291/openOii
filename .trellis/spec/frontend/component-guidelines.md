@@ -255,4 +255,64 @@ Required tests: `pnpm exec vitest run app/hooks/useCanvasLayout.test.ts app/comp
 - Variant-styled modal: `app/components/ui/ConfirmModal.tsx`.
 - Top-level error boundary: `app/components/ui/ErrorBoundary.tsx`.
 - Canvas section composite: `app/components/canvas/InfiniteCanvas.tsx` (+ tests).
+- Sensitive input with reveal flow: `app/components/settings/ConfigInput.tsx`.
 - Page wiring lazy-loaded routes: `app/App.tsx`.
+
+---
+
+## Sensitive Input Reveal Flow (ConfigInput)
+
+`ConfigInput.tsx` handles sensitive config fields (API keys, tokens) with a reveal/hide toggle.
+
+### Contract
+
+1. **Initial state**: `isRevealed=false`, input shows masked value (e.g., `sk-a******key`) from `formState`.
+2. **Reveal click**: calls `configApi.revealValue(key)` → gets real value → sets `isRevealed=true` → **syncs real value to `formState` via `onChange` synthetic event**.
+3. **After reveal**: input shows `value` prop (from `formState`, now the real value). User can edit.
+4. **Hide click**: sets `isRevealed=false`. Input still shows `value` prop (the edited value, not the original masked value).
+5. **Save**: `formState` contains the edited real value → sent to `configApi.update()`.
+
+### Critical: Reveal must sync to formState
+
+When revealing, the component must call `onChange` with a synthetic event to update `formState[key]`:
+
+```tsx
+const result = await configApi.revealValue(item.key);
+setIsRevealed(true);
+// MUST sync to formState so editing works
+if (result.value !== null) {
+  onChange({
+    target: { name: item.key, value: result.value },
+  } as React.ChangeEvent<HTMLInputElement>);
+}
+```
+
+**Why**: Without this sync, `formState[key]` remains the masked value. The input displays `revealedValue` (local state) but edits go to `formState` — a desync that makes editing invisible.
+
+### Display value logic
+
+```tsx
+// Correct: always use value prop (formState), not local revealedValue
+const displayValue = isRevealed ? value : isMasked ? value : '••••••••';
+```
+
+**Wrong**: `const displayValue = isRevealed ? revealedValue : ...` — this decouples display from formState, breaking controlled input behavior.
+
+### Test pattern
+
+Tests must simulate the controlled component flow:
+```tsx
+let currentValue = 'sk-a******key';
+const onChange = vi.fn((e) => { currentValue = e.target.value; });
+const { rerender } = render(<ConfigInput value={currentValue} onChange={onChange} />);
+
+// Reveal
+await user.click(eyeButton);
+await waitFor(() => expect(onChange).toHaveBeenCalled());
+
+// Simulate parent re-render with updated value
+rerender(<ConfigInput value={currentValue} onChange={onChange} />);
+
+// Now editing works
+await user.clear(screen.getByDisplayValue('sk-actual-key'));
+```

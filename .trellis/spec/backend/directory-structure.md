@@ -11,7 +11,7 @@ The backend is a FastAPI + SQLModel + LangGraph application. It follows a layere
 - **API layer** — thin HTTP/WS endpoints; only build runs and forward control signals.
 - **Schemas layer** — Pydantic request/response models.
 - **Models layer** — SQLModel ORM tables (single source of truth for DB schema).
-- **Services layer** — pure business logic, no HTTP concerns.
+- **Services layer** — pure business logic, no HTTP concerns. Includes `face_cropper.py` (InsightFace face detection/cropping for character consistency) and `image_composer.py` (reference image composition with face-aware fallback).
 - **Orchestration layer** — LangGraph state machine, persistence, runtime.
 - **Agents layer** — LLM agent implementations (orchestrator, plan, render, compose, review_rules).
 - **Tools layer** — demo MCP tools (MCP-style).

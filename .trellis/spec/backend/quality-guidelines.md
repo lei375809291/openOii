@@ -233,6 +233,7 @@ If you spot dead code, leave a `# TODO(<name>): unused, candidate for removal` r
 3. **Reading `.env` from a test by instantiating `Settings()`**. The `Settings` class is configured _not_ to auto-read `.env`; only `get_settings()` does. Tests should pass values explicitly.
 4. **Importing models inside `app/db/session.py:init_db` lazily and not adding the top-level `noqa` import** — schema misses tables.
 5. **Calling `await session.commit()` inside a service that the caller already commits**. Pick one layer to own the transaction; for routes the caller (route) owns it; for `delete_project_by_id` the service owns it because it does multi-step cascade.
+6. **Saving empty string to DB instead of deleting the row** — `config_service.upsert_configs` treats `""` as "delete", not "set to empty". If you want to clear a config value, pass `""` and the service deletes the DB row (falling back to `.env` value). Don't save empty strings to `configitem`.
 
 ---
 
@@ -240,5 +241,59 @@ If you spot dead code, leave a `# TODO(<name>): unused, candidate for removal` r
 
 - Clean route module: `app/api/v1/routes/projects.py`.
 - Clean service module: `app/services/project_deletion.py`.
+- CPU-bound service with lazy init: `app/services/face_cropper.py` (InsightFace singleton, graceful fallback on import failure).
 - Test module shape: `backend/tests/test_api/test_projects.py` (look for fixture overrides).
 - Conftest patterns: `backend/tests/conftest.py`.
+
+---
+
+## External ML Dependencies (InsightFace pattern)
+
+When adding CPU-bound ML dependencies (e.g., `insightface`, `onnxruntime`):
+
+1. **Lazy singleton init** — don't import at module level. Use a module-level `_APP = None` + `_INIT_ATTEMPTED = False` pattern:
+   ```python
+   _FACE_ANALYSIS_APP = None
+   _INIT_ATTEMPTED = False
+
+   def _get_face_analysis():
+       global _FACE_ANALYSIS_APP, _INIT_ATTEMPTED
+       if _FACE_ANALYSIS_APP is not None:
+           return _FACE_ANALYSIS_APP
+       if _INIT_ATTEMPTED:
+           return None
+       _INIT_ATTEMPTED = True
+       try:
+           from insightface.app import FaceAnalysis
+           app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+           app.prepare(ctx_id=-1, det_size=(640, 640))
+           _FACE_ANALYSIS_APP = app
+           return app
+       except Exception as e:
+           logger.warning("Failed to init InsightFace: %s", e)
+           return None
+   ```
+2. **Graceful fallback** — if the ML dependency fails to load, the calling code must fall back to a simpler approach (e.g., full-body image concatenation instead of face cropping).
+3. **Docker pre-download** — add a `RUN` step in Dockerfile to pre-download models at build time:
+   ```dockerfile
+   RUN uv run python -c "from app.services.face_cropper import _get_face_analysis; _get_face_analysis()" || true
+   ```
+4. **System deps** — opencv-python-headless needs `libgl1` and `libglib2.0-0` in the Dockerfile.
+5. **`uv sync` picks them up** — add to `pyproject.toml` dependencies, not a separate requirements file.
+
+---
+
+## Config Service: Empty Value Delete Contract
+
+`config_service.upsert_configs()` has specific behavior for empty values:
+
+| Input | DB State | Behavior |
+|-------|----------|----------|
+| `"actual_value"` | exists | Update value |
+| `"actual_value"` | not exists | Create new row |
+| `""` | exists | **Delete DB row** (fall back to `.env`) |
+| `""` | not exists | Skip (don't create empty row) |
+| `"******"` | exists with value `"secret"` | Skip (masked input detected) |
+| `None` | any | Skip |
+
+This enables the frontend "clear sensitive field" flow: user empties input → saves `""` → backend deletes DB row → next `list_effective` shows `.env` value (or nothing if not in `.env`).
