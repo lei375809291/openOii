@@ -145,9 +145,9 @@ class TestAgentIndex:
 
 def test_stage_helpers_and_state_building():
     assert _next_phase2_stage(None) is None
-    assert _next_phase2_stage("plan") == "plan_approval"
+    assert _next_phase2_stage("plan_characters") == "characters_approval"
     assert _resume_agent_for_stage(None) == "plan"
-    assert _resume_agent_for_stage("compose") == "compose"
+    assert _resume_agent_for_stage("compose_videos") == "compose"
     assert _video_generation_skipped_in_result({"video_generation_skipped": 1}) is True
     assert _video_generation_skipped_in_result([1, 2]) is False
     orchestrator = GenerationOrchestrator(
@@ -160,7 +160,9 @@ def test_stage_helpers_and_state_building():
         ws=MockWsManager(),
         session=None,
     )
-    state = orchestrator._build_phase2_state(project_id=1, run_id=2, thread_id="t1", start_stage="plan")
+    state = orchestrator._build_phase2_state(
+        project_id=1, run_id=2, thread_id="t1", start_stage="plan"
+    )
     assert state["current_stage"] == "plan"
     assert state["route_stage"] == "plan"
 
@@ -201,6 +203,7 @@ async def test_redis_helpers_round_trip(monkeypatch):
             return FakePubSub()
 
     fake = FakeRedis()
+
     async def _get_fake_redis():
         return fake
 
@@ -249,6 +252,7 @@ async def test_wait_for_confirm_redis_returns_true_from_key_and_timeout(monkeypa
             return FakePubSub()
 
     fake = FakeRedis()
+
     async def _get_fake_redis():
         return fake
 
@@ -323,6 +327,7 @@ async def test_wait_for_confirm_redis_times_out(monkeypatch):
             return FakePubSub()
 
     fake = FakeRedis()
+
     async def _get_fake_redis():
         return fake
 
@@ -335,12 +340,18 @@ async def test_cleanup_for_rerun_full_branch(monkeypatch):
     project = SimpleNamespace(id=1)
     session = FakeSession(project=project)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
     called = []
+
     async def delete_shots(project_id):
         called.append(("shots", project_id))
 
@@ -374,12 +385,18 @@ async def test_cleanup_for_rerun_incremental_branch(monkeypatch):
     project = SimpleNamespace(id=1)
     session = FakeSession(project=project)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
     called = []
+
     async def clear_chars(project_id):
         called.append(("clear_chars", project_id))
 
@@ -402,7 +419,12 @@ async def test_cleanup_for_rerun_incremental_branch(monkeypatch):
 @pytest.mark.asyncio
 async def test_cleanup_for_rerun_unsupported_start_agent_raises():
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=FakeSession(project=SimpleNamespace(id=1)),
     )
@@ -416,7 +438,12 @@ async def test_set_run_updates_and_commits():
     run = SimpleNamespace(id=1, updated_at=None, thread_id=None)
     session = FakeSession()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -433,7 +460,12 @@ async def test_set_run_updates_and_commits():
 async def test_log_persists_agent_message():
     session = FakeSession()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -451,12 +483,19 @@ async def test_build_agent_context_uses_provider_snapshot(monkeypatch):
     run = SimpleNamespace(id=2, provider_snapshot={"provider": "openai"}, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
-    ctx = orchestrator._build_agent_context(project=project, run=run, request=SimpleNamespace(notes=""))
+    ctx = orchestrator._build_agent_context(
+        project=project, run=run, request=SimpleNamespace(notes="")
+    )
 
     assert ctx.project is project
     assert ctx.run is run
@@ -469,7 +508,12 @@ async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch)
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -481,7 +525,10 @@ async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch)
 
     compiled_graph = FakeCompiledGraph(
         [
-            {"__interrupt__": [SimpleNamespace(value={"gate": "director"})], "video_generation_skipped": True},
+            {
+                "__interrupt__": [SimpleNamespace(value={"gate": "director"})],
+                "video_generation_skipped": True,
+            },
             {},
         ]
     )
@@ -505,12 +552,19 @@ async def test_invoke_phase2_graph_handles_interrupt_and_completion(monkeypatch)
 async def test_run_from_agent_returns_early_when_project_missing():
     session = FakeSession(project=None, run=None)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
-    await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="scriptwriter")
+    await orchestrator.run_from_agent(
+        project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="scriptwriter"
+    )
 
     assert session.commits == 0
 
@@ -522,7 +576,12 @@ async def test_run_from_agent_handles_failure_and_sends_failed(monkeypatch):
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -538,7 +597,9 @@ async def test_run_from_agent_handles_failure_and_sends_failed(monkeypatch):
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop_async)
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop_async)
 
-    await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="scriptwriter")
+    await orchestrator.run_from_agent(
+        project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="scriptwriter"
+    )
 
     assert session.rollbacks == 1
     assert ws.events[-1][1]["type"] == "run_failed"
@@ -551,7 +612,12 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -573,11 +639,23 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
         return False, "compose"
 
     monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", fake_recovery)
-    monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
+    monkeypatch.setattr(
+        "app.agents.orchestrator.build_postgres_checkpointer",
+        lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])),
+    )
     monkeypatch.setattr("app.agents.orchestrator.build_phase2_graph", lambda: FakeGraph())
-    monkeypatch.setattr("app.agents.orchestrator.build_stage_recovery_config", fake_build_stage_recovery_config)
+    monkeypatch.setattr(
+        "app.agents.orchestrator.build_stage_recovery_config", fake_build_stage_recovery_config
+    )
     monkeypatch.setattr(orchestrator, "_invoke_phase2_graph", fake_invoke)
-    monkeypatch.setattr(orchestrator, "_build_agent_context", lambda **kwargs: SimpleNamespace(project=project, run=run, session=session, user_feedback=None))
+    monkeypatch.setattr(
+        orchestrator,
+        "_build_agent_context",
+        lambda **kwargs: SimpleNamespace(
+            project=project, run=run, session=session, user_feedback=None
+        ),
+    )
+
     async def fake_set_run(run, **fields):
         for key, value in fields.items():
             setattr(run, key, value)
@@ -589,7 +667,9 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
     monkeypatch.setattr(orchestrator, "_set_run", fake_set_run)
     monkeypatch.setattr(orchestrator, "_log", fake_log)
     monkeypatch.setattr(orchestrator, "_agent_index", lambda name: 0)
-    monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", lambda run_id: fake_log())
+    monkeypatch.setattr(
+        "app.agents.orchestrator.clear_confirm_event_redis", lambda run_id: fake_log()
+    )
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", lambda run_id: fake_log())
 
     await orchestrator.resume_from_recovery(project_id=1, run_id=2)
@@ -606,13 +686,26 @@ async def test_run_from_agent_happy_path(monkeypatch):
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
 
-    ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None, rerun_mode=None, target_ids=None)
+    ctx = SimpleNamespace(
+        project=project,
+        run=run,
+        session=session,
+        user_feedback=None,
+        rerun_mode=None,
+        target_ids=None,
+    )
     monkeypatch.setattr(orchestrator, "_build_agent_context", lambda **kwargs: ctx)
+
     async def noop_async(*args, **kwargs):
         return None
 
@@ -630,7 +723,9 @@ async def test_run_from_agent_happy_path(monkeypatch):
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop_async)
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop_async)
 
-    await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="plan")
+    await orchestrator.run_from_agent(
+        project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="plan"
+    )
 
     assert ws.events[0][1]["type"] == "run_started"
     assert ws.events[0][1]["data"]["current_agent"] == "plan"
@@ -644,18 +739,32 @@ async def test_run_from_agent_review_branch(monkeypatch):
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
 
-    ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None, rerun_mode=None, target_ids=None)
+    ctx = SimpleNamespace(
+        project=project,
+        run=run,
+        session=session,
+        user_feedback=None,
+        rerun_mode=None,
+        target_ids=None,
+    )
+
     async def fake_review_run(_ctx):
         _ctx.rerun_mode = "incremental"
         _ctx.user_feedback = "notes"
         return {"start_agent": "scriptwriter", "mode": "incremental"}
 
     monkeypatch.setattr(orchestrator, "_build_agent_context", lambda **kwargs: ctx)
+
     async def noop_async(*args, **kwargs):
         return None
 
@@ -674,7 +783,9 @@ async def test_run_from_agent_review_branch(monkeypatch):
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop_async)
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop_async)
 
-    await orchestrator.run_from_agent(project_id=1, run_id=2, request=SimpleNamespace(notes="notes"), agent_name="review")
+    await orchestrator.run_from_agent(
+        project_id=1, run_id=2, request=SimpleNamespace(notes="notes"), agent_name="review"
+    )
 
     assert ctx.user_feedback == "notes"
     assert ctx.rerun_mode == "incremental"
@@ -686,14 +797,24 @@ async def test_cleanup_for_rerun_incremental_render(monkeypatch):
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
-    async def clear_chars(pid): cleared.append("chars")
-    async def clear_shots(pid): cleared.append("shots")
-    async def clear_videos(pid): cleared.append("videos")
+    async def clear_chars(pid):
+        cleared.append("chars")
+
+    async def clear_shots(pid):
+        cleared.append("shots")
+
+    async def clear_videos(pid):
+        cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
@@ -710,12 +831,18 @@ async def test_cleanup_for_rerun_incremental_compose(monkeypatch):
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
-    async def clear_videos(pid): cleared.append("videos")
+    async def clear_videos(pid):
+        cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
@@ -729,7 +856,12 @@ async def test_cleanup_for_rerun_incremental_unknown_raises():
     """Incremental mode: unknown agent raises ValueError."""
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -744,14 +876,24 @@ async def test_cleanup_for_rerun_full_render(monkeypatch):
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
-    async def clear_chars(pid): cleared.append("chars")
-    async def clear_shots(pid): cleared.append("shots")
-    async def clear_videos(pid): cleared.append("videos")
+    async def clear_chars(pid):
+        cleared.append("chars")
+
+    async def clear_shots(pid):
+        cleared.append("shots")
+
+    async def clear_videos(pid):
+        cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
     monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
@@ -768,12 +910,18 @@ async def test_cleanup_for_rerun_full_compose(monkeypatch):
     cleared = []
     session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
 
-    async def clear_videos(pid): cleared.append("videos")
+    async def clear_videos(pid):
+        cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
@@ -790,12 +938,18 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
 
     confirm_called = False
+
     async def fake_wait_for_confirm(*args):
         nonlocal confirm_called
         confirm_called = True
@@ -804,6 +958,7 @@ async def test_invoke_phase2_graph_auto_mode_skips_confirm(monkeypatch):
     monkeypatch.setattr(orchestrator, "_wait_for_confirm", fake_wait_for_confirm)
 
     auto_approval_called = False
+
     async def fake_send_auto_approval(*args, **kwargs):
         nonlocal auto_approval_called
         auto_approval_called = True
@@ -841,19 +996,31 @@ async def test_send_auto_approval_events_emits_awaiting_and_confirmed(monkeypatc
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
 
     fake_summary = SimpleNamespace(
-        model_dump=lambda *, mode=None: {"current_stage": "plan", "preserved_stages": []},
+        model_dump=lambda *, mode=None: {
+            "current_stage": "plan_characters",
+            "preserved_stages": [],
+        },
         preserved_stages=[],
     )
-    monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", lambda **kw: _async_return(fake_summary))
+    monkeypatch.setattr(
+        "app.agents.orchestrator.build_recovery_summary", lambda **kw: _async_return(fake_summary)
+    )
 
     agent_ctx = SimpleNamespace(
-        completion_info=SimpleNamespace(completed="plan done", details=None, next="next step", question="ok?"),
+        completion_info=SimpleNamespace(
+            completed="plan done", details=None, next="next step", question="ok?"
+        ),
     )
 
     await orchestrator._send_auto_approval_events(1, run, "plan", agent_ctx)
@@ -864,13 +1031,14 @@ async def test_send_auto_approval_events_emits_awaiting_and_confirmed(monkeypatc
     assert len(awaiting_evt) == 1
     assert len(confirmed_evt) == 1
     assert awaiting_evt[0][1]["data"]["auto_mode"] is True
-    assert awaiting_evt[0][1]["data"]["current_stage"] == "plan"
+    assert awaiting_evt[0][1]["data"]["current_stage"] == "plan_characters"
     assert confirmed_evt[0][1]["data"]["auto_mode"] is True
-    assert confirmed_evt[0][1]["data"]["stage"] == "render"
+    assert confirmed_evt[0][1]["data"]["stage"] == "plan_shots"
 
 
 def _async_return(val):
     import asyncio
+
     f = asyncio.Future()
     f.set_result(val)
     return f
@@ -883,7 +1051,12 @@ async def test_invoke_phase2_graph_invalid_gate_raises(monkeypatch):
     run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -914,7 +1087,12 @@ async def test_invoke_phase2_graph_no_gate_key_raises(monkeypatch):
     run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -945,7 +1123,12 @@ async def test_invoke_phase2_graph_non_dict_result_breaks(monkeypatch):
     run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -973,7 +1156,12 @@ async def test_run_phase2_graph_unsupported_agent_raises():
     run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -981,8 +1169,12 @@ async def test_run_phase2_graph_unsupported_agent_raises():
 
     with pytest.raises(ValueError, match="Unsupported agent"):
         await orchestrator._run_phase2_graph(
-            project=project, run=run, request=SimpleNamespace(notes=""),
-            ctx=ctx, agent_name="unknown_agent", auto_mode=False,
+            project=project,
+            run=run,
+            request=SimpleNamespace(notes=""),
+            ctx=ctx,
+            agent_name="unknown_agent",
+            auto_mode=False,
         )
 
 
@@ -993,7 +1185,12 @@ async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
     run = SimpleNamespace(id=2, thread_id=None)
     session = FakeSession(project=project, run=run)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -1002,13 +1199,23 @@ async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
     async def fake_invoke(**kwargs):
         return False, "compose"
 
-    monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])))
-    monkeypatch.setattr("app.agents.orchestrator.build_phase2_graph", lambda: SimpleNamespace(compile=lambda checkpointer=None: FakeCompiledGraph([{}])))
+    monkeypatch.setattr(
+        "app.agents.orchestrator.build_postgres_checkpointer",
+        lambda db: FakeCheckpointerCtx(FakeCompiledGraph([{}])),
+    )
+    monkeypatch.setattr(
+        "app.agents.orchestrator.build_phase2_graph",
+        lambda: SimpleNamespace(compile=lambda checkpointer=None: FakeCompiledGraph([{}])),
+    )
     monkeypatch.setattr(orchestrator, "_invoke_phase2_graph", fake_invoke)
 
     await orchestrator._run_phase2_graph(
-        project=project, run=run, request=SimpleNamespace(notes="user feedback text"),
-        ctx=ctx, agent_name="review", auto_mode=False,
+        project=project,
+        run=run,
+        request=SimpleNamespace(notes="user feedback text"),
+        ctx=ctx,
+        agent_name="review",
+        auto_mode=False,
     )
 
     assert ctx.user_feedback == "user feedback text"
@@ -1019,7 +1226,12 @@ async def test_resume_from_recovery_missing_project_returns():
     """resume_from_recovery returns early when project or run not found."""
     session = FakeSession(project=None, run=None)
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=session,
     )
@@ -1036,7 +1248,12 @@ async def test_wait_for_confirm_timeout(monkeypatch):
     session = FakeSession(project=project, run=run)
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -1071,7 +1288,12 @@ async def test_wait_for_confirm_with_user_feedback(monkeypatch):
     session = FakeSession(project=project, run=run, scalars_result=[msg])
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -1104,7 +1326,12 @@ async def test_wait_for_confirm_no_feedback_returns_none(monkeypatch):
     session = FakeSession(project=project, run=run, scalars_result=[])
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -1137,7 +1364,12 @@ async def test_wait_for_confirm_confirmed_uses_refreshed_recovery(monkeypatch):
     session = FakeSession(project=project, run=run, scalars_result=[])
     ws = MockWsManager()
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=ws,
         session=session,
     )
@@ -1164,9 +1396,16 @@ async def test_wait_for_confirm_confirmed_uses_refreshed_recovery(monkeypatch):
     monkeypatch.setattr("app.agents.orchestrator.wait_for_confirm_redis", fake_wait_confirm)
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop)
 
-    await orchestrator._wait_for_confirm(1, run, "plan", agent_ctx=SimpleNamespace(
-        completion_info=SimpleNamespace(completed="done", details=None, next="next", question="?"),
-    ))
+    await orchestrator._wait_for_confirm(
+        1,
+        run,
+        "plan",
+        agent_ctx=SimpleNamespace(
+            completion_info=SimpleNamespace(
+                completed="done", details=None, next="next", question="?"
+            ),
+        ),
+    )
 
     events = ws.events
     awaiting_evt = [e for e in events if e[1].get("type") == "run_awaiting_confirm"]
@@ -1175,5 +1414,5 @@ async def test_wait_for_confirm_confirmed_uses_refreshed_recovery(monkeypatch):
     assert len(confirmed_evt) == 1
     assert awaiting_evt[0][1]["data"]["recovery_summary"]["call"] == 1
     assert confirmed_evt[0][1]["data"]["recovery_summary"]["call"] == 2
-    assert confirmed_evt[0][1]["data"]["current_stage"] == "render"
-    assert confirmed_evt[0][1]["data"]["stage"] == "render"
+    assert confirmed_evt[0][1]["data"]["current_stage"] == "plan_shots"
+    assert confirmed_evt[0][1]["data"]["stage"] == "plan_shots"

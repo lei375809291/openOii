@@ -10,8 +10,10 @@ from app.orchestration.nodes import (
     _normalize_resume_value,
     _should_skip_stage,
     _stage_key,
-    route_after_plan_approval,
-    route_after_render_approval,
+    route_after_characters_approval,
+    route_after_shots_approval,
+    route_after_shot_images_approval,
+    route_after_compose_approval,
     route_after_review,
     route_from_start,
 )
@@ -23,17 +25,23 @@ from app.orchestration.state import (
 
 
 class TestStateHelpers:
-    def test_next_production_stage_plan(self):
-        assert next_production_stage("plan") == "render"
+    def test_next_production_stage_plan_characters(self):
+        assert next_production_stage("plan_characters") == "plan_shots"
 
-    def test_next_production_stage_render(self):
-        assert next_production_stage("render") == "compose"
+    def test_next_production_stage_plan_shots(self):
+        assert next_production_stage("plan_shots") == "render_characters"
 
-    def test_next_production_stage_compose(self):
-        assert next_production_stage("compose") is None
+    def test_next_production_stage_render_characters(self):
+        assert next_production_stage("render_characters") == "render_shots"
+
+    def test_next_production_stage_render_shots(self):
+        assert next_production_stage("render_shots") == "compose_videos"
+
+    def test_next_production_stage_compose_merge(self):
+        assert next_production_stage("compose_merge") is None
 
     def test_next_production_stage_approval_suffix(self):
-        assert next_production_stage("plan_approval") == "render"
+        assert next_production_stage("characters_approval") == "plan_shots"
 
     def test_next_production_stage_none(self):
         assert next_production_stage(None) is None
@@ -41,48 +49,62 @@ class TestStateHelpers:
     def test_next_production_stage_invalid(self):
         assert next_production_stage("review") is None
 
-    def test_workflow_progress_plan_start(self):
-        assert workflow_progress_for_stage("plan") == 0.0
+    def test_workflow_progress_plan_characters_start(self):
+        assert workflow_progress_for_stage("plan_characters") == 0.0
 
-    def test_workflow_progress_plan_half(self):
-        assert workflow_progress_for_stage("plan", within_stage=0.5) == pytest.approx(0.5 / 3)
+    def test_workflow_progress_plan_characters_half(self):
+        assert workflow_progress_for_stage("plan_characters", within_stage=0.5) == pytest.approx(
+            0.5 / 6
+        )
 
-    def test_workflow_progress_render_start(self):
-        assert workflow_progress_for_stage("render") == pytest.approx(1 / 3)
+    def test_workflow_progress_render_characters_start(self):
+        assert workflow_progress_for_stage("render_characters") == pytest.approx(2 / 6)
 
-    def test_workflow_progress_render_half(self):
-        assert workflow_progress_for_stage("render", within_stage=0.5) == pytest.approx(1.5 / 3)
+    def test_workflow_progress_compose_videos(self):
+        assert workflow_progress_for_stage("compose_videos") == pytest.approx(4 / 6)
 
-    def test_workflow_progress_compose(self):
-        assert workflow_progress_for_stage("compose") == pytest.approx(2 / 3)
-
-    def test_workflow_progress_compose_full(self):
-        assert workflow_progress_for_stage("compose", within_stage=1.0) == 1.0
+    def test_workflow_progress_compose_merge_full(self):
+        assert workflow_progress_for_stage("compose_merge", within_stage=1.0) == 1.0
 
     def test_workflow_progress_clamps(self):
-        assert workflow_progress_for_stage("plan", within_stage=2.0) == pytest.approx(1 / 3)
+        assert workflow_progress_for_stage("plan_characters", within_stage=2.0) == pytest.approx(
+            1 / 6
+        )
 
     def test_workflow_progress_unknown(self):
         assert workflow_progress_for_stage("unknown") == 0.0
 
     def test_production_stage_sequence(self):
-        assert PRODUCTION_STAGE_SEQUENCE == ("plan", "render", "compose")
+        assert PRODUCTION_STAGE_SEQUENCE == (
+            "plan_characters",
+            "plan_shots",
+            "render_characters",
+            "render_shots",
+            "compose_videos",
+            "compose_merge",
+        )
 
 
 class TestNodeHelpers:
     def test_stage_key(self):
-        assert _stage_key("plan") == "stage:plan"
-        assert _stage_key("render") == "stage:render"
-        assert _stage_key("compose") == "stage:compose"
+        assert _stage_key("plan_characters") == "stage:plan_characters"
+        assert _stage_key("render_characters") == "stage:render_characters"
+        assert _stage_key("compose_videos") == "stage:compose_videos"
 
     def test_should_skip_stage_no_lineage(self):
-        assert _should_skip_stage({}, "plan") is False
+        assert _should_skip_stage({}, "plan_characters") is False
 
     def test_should_skip_stage_with_lineage(self):
-        assert _should_skip_stage({"artifact_lineage": ["stage:plan"]}, "plan") is True
+        assert (
+            _should_skip_stage({"artifact_lineage": ["stage:plan_characters"]}, "plan_characters")
+            is True
+        )
 
     def test_should_skip_stage_different_stage(self):
-        assert _should_skip_stage({"artifact_lineage": ["stage:plan"]}, "render") is False
+        assert (
+            _should_skip_stage({"artifact_lineage": ["stage:plan_characters"]}, "render_characters")
+            is False
+        )
 
     def test_is_video_provider_invalid_none(self):
         assert _is_video_provider_invalid(None) is False
@@ -103,19 +125,19 @@ class TestNodeHelpers:
 class TestApprovalResults:
     def test_approval_result_no_feedback(self):
         result = _approval_result(
-            approval_stage="plan_approval",
-            history_key="plan",
-            next_stage="render",
+            approval_stage="characters_approval",
+            history_key="plan_characters",
+            next_stage="plan_shots",
             feedback="",
         )
         assert result["review_requested"] is False
-        assert result["route_stage"] == "render"
+        assert result["route_stage"] == "plan_shots"
 
     def test_approval_result_with_feedback(self):
         result = _approval_result(
-            approval_stage="plan_approval",
-            history_key="plan",
-            next_stage="render",
+            approval_stage="characters_approval",
+            history_key="plan_characters",
+            next_stage="plan_shots",
             feedback="fix the story",
         )
         assert result["review_requested"] is True
@@ -124,48 +146,53 @@ class TestApprovalResults:
 
     def test_auto_approval_result(self):
         result = _auto_approval_result(
-            approval_stage="render_approval",
-            history_key="render",
-            next_stage="compose",
+            approval_stage="shot_images_approval",
+            history_key="render_shots",
+            next_stage="compose_videos",
         )
         assert result["review_requested"] is False
-        assert result["route_stage"] == "compose"
+        assert result["route_stage"] == "compose_videos"
         assert result["approval_feedback"] == ""
 
 
 class TestRouteFunctions:
-    def test_route_from_start_plan(self):
-        assert route_from_start({"current_stage": "plan"}) == "plan"
+    def test_route_from_start_plan_characters(self):
+        assert route_from_start({"current_stage": "plan_characters"}) == "plan_characters"
 
-    def test_route_from_start_render(self):
-        assert route_from_start({"current_stage": "render"}) == "render"
+    def test_route_from_start_render_characters(self):
+        assert route_from_start({"current_stage": "render_characters"}) == "render_characters"
 
     def test_route_from_start_default(self):
-        assert route_from_start({}) == "plan"
+        assert route_from_start({}) == "plan_characters"
 
-    def test_route_after_plan_approval_no_review(self):
-        assert route_after_plan_approval({}) == "render"
+    def test_route_after_characters_approval_no_review(self):
+        assert route_after_characters_approval({}) == "plan_shots"
 
-    def test_route_after_plan_approval_with_review(self):
-        assert route_after_plan_approval({"review_requested": True}) == "review"
+    def test_route_after_characters_approval_with_review(self):
+        assert route_after_characters_approval({"review_requested": True}) == "review"
 
-    def test_route_after_plan_approval_route_stage_overrides(self):
-        assert route_after_plan_approval({"route_stage": "render"}) == "render"
+    def test_route_after_characters_approval_route_stage_overrides(self):
+        assert route_after_characters_approval({"route_stage": "plan_shots"}) == "plan_shots"
 
-    def test_route_after_render_approval_no_review(self):
-        assert route_after_render_approval({}) == "compose"
+    def test_route_after_shots_approval_no_review(self):
+        assert route_after_shots_approval({}) == "render_characters"
 
-    def test_route_after_render_approval_with_review(self):
-        assert route_after_render_approval({"review_requested": True}) == "review"
+    def test_route_after_shot_images_approval_no_review(self):
+        assert route_after_shot_images_approval({}) == "compose_videos"
+
+    def test_route_after_compose_approval_no_review(self):
+        from langgraph.graph import END
+
+        assert route_after_compose_approval({}) == END
 
     def test_route_after_review_default(self):
-        assert route_after_review({}) == "plan"
+        assert route_after_review({}) == "plan_characters"
 
     def test_route_after_review_render(self):
-        assert route_after_review({"route_stage": "render"}) == "render"
+        assert route_after_review({"route_stage": "render_characters"}) == "render_characters"
 
     def test_route_after_review_compose(self):
-        assert route_after_review({"route_stage": "compose"}) == "compose"
+        assert route_after_review({"route_stage": "compose_videos"}) == "compose_videos"
 
 
 class TestNormalizeResumeValue:

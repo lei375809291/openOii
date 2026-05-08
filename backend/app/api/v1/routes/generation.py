@@ -180,7 +180,7 @@ async def resume_project_run(
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    project = await get_or_404(session, Project, project_id)
+    await get_or_404(session, Project, project_id)
 
     run = await get_or_404(session, AgentRun, payload.run_id)
     if run.project_id != project_id:

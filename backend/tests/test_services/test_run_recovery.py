@@ -27,6 +27,7 @@ class FakeRun:
 
 # --- _thread_id_for_run ---
 
+
 def test_thread_id_with_id():
     run = FakeRun(id=42)
     assert _thread_id_for_run(run) == "agent-run-42"
@@ -39,10 +40,11 @@ def test_thread_id_pending():
 
 # --- _stage_index ---
 
+
 def test_stage_index_valid():
-    assert _stage_index("plan") == 0
-    assert _stage_index("render") == 2
-    assert _stage_index("review") == 5
+    assert _stage_index("plan_characters") == 0
+    assert _stage_index("render_characters") == 4
+    assert _stage_index("review") == 11
 
 
 def test_stage_index_unknown_returns_zero():
@@ -53,14 +55,15 @@ def test_stage_index_unknown_returns_zero():
 
 # --- _next_stage ---
 
+
 def test_next_stage_valid():
-    assert _next_stage("plan") == "plan_approval"
-    assert _next_stage("render") == "render_approval"
+    assert _next_stage("plan_characters") == "characters_approval"
+    assert _next_stage("render_characters") == "character_images_approval"
     assert _next_stage("review") is None
 
 
 def test_next_stage_unknown_returns_first():
-    assert _next_stage("unknown") == "plan_approval"
+    assert _next_stage("unknown") == "characters_approval"
 
 
 def test_next_stage_last_stage_returns_none():
@@ -69,8 +72,9 @@ def test_next_stage_last_stage_returns_none():
 
 # --- _safe_stage_name ---
 
+
 def test_safe_stage_name_valid():
-    assert _safe_stage_name("plan") == "plan"
+    assert _safe_stage_name("plan_characters") == "plan_characters"
     assert _safe_stage_name("review") == "review"
 
 
@@ -82,19 +86,20 @@ def test_safe_stage_name_invalid():
 
 # --- _stage_from_snapshot ---
 
+
 def test_stage_from_snapshot_current_stage():
-    snapshot = SimpleNamespace(values={"current_stage": "plan"})
-    assert _stage_from_snapshot(snapshot) == "plan"
+    snapshot = SimpleNamespace(values={"current_stage": "plan_characters"})
+    assert _stage_from_snapshot(snapshot) == "plan_characters"
 
 
 def test_stage_from_snapshot_route_stage_fallback():
-    snapshot = SimpleNamespace(values={"route_stage": "render"})
-    assert _stage_from_snapshot(snapshot) == "render"
+    snapshot = SimpleNamespace(values={"route_stage": "render_characters"})
+    assert _stage_from_snapshot(snapshot) == "render_characters"
 
 
 def test_stage_from_snapshot_stage_history_fallback():
-    snapshot = SimpleNamespace(values={"stage_history": ["plan", "render"]})
-    assert _stage_from_snapshot(snapshot) == "render"
+    snapshot = SimpleNamespace(values={"stage_history": ["plan_characters", "render_characters"]})
+    assert _stage_from_snapshot(snapshot) == "render_characters"
 
 
 def test_stage_from_snapshot_no_values():
@@ -113,11 +118,14 @@ def test_stage_from_snapshot_empty_history():
 
 
 def test_stage_from_snapshot_current_overrides_route():
-    snapshot = SimpleNamespace(values={"current_stage": "plan", "route_stage": "render"})
-    assert _stage_from_snapshot(snapshot) == "plan"
+    snapshot = SimpleNamespace(
+        values={"current_stage": "plan_characters", "route_stage": "render_characters"}
+    )
+    assert _stage_from_snapshot(snapshot) == "plan_characters"
 
 
 # --- _snapshot_values ---
+
 
 def test_snapshot_values_returns_first_valid():
     s1 = SimpleNamespace(values={"a": 1})
@@ -137,11 +145,12 @@ def test_snapshot_values_empty():
 
 # --- _normalize_stage_history ---
 
+
 def test_normalize_stage_history_filters_valid():
-    values = {"stage_history": ["plan", "render", "bogus"]}
+    values = {"stage_history": ["plan_characters", "render_characters", "bogus"]}
     result = _normalize_stage_history(values)
-    assert "plan" in result
-    assert "render" in result
+    assert "plan_characters" in result
+    assert "render_characters" in result
     assert "bogus" not in result
 
 
@@ -155,21 +164,26 @@ def test_normalize_stage_history_non_list():
 
 # --- _production_stage_for_approval ---
 
+
 def test_production_stage_for_approval_valid():
-    assert _production_stage_for_approval("plan_approval") == "plan"
-    assert _production_stage_for_approval("render_approval") == "render"
+    assert _production_stage_for_approval("characters_approval") == "plan_characters"
+    assert _production_stage_for_approval("shot_images_approval") == "render_shots"
 
 
 def test_production_stage_for_approval_non_approval():
-    assert _production_stage_for_approval("plan") is None
+    assert _production_stage_for_approval("plan_characters") is None
     assert _production_stage_for_approval("xyz") is None
 
 
 # --- _resume_target_stage ---
 
+
 def test_resume_target_review_returns_route_stage():
-    values = {"route_stage": "render"}
-    assert _resume_target_stage("review", values=values, completed_stages=["plan"]) == "render"
+    values = {"route_stage": "render_characters"}
+    assert (
+        _resume_target_stage("review", values=values, completed_stages=["plan_characters"])
+        == "render_characters"
+    )
 
 
 def test_resume_target_review_fallback_to_current():
@@ -178,44 +192,54 @@ def test_resume_target_review_fallback_to_current():
 
 
 def test_resume_target_approval_returns_current():
-    assert _resume_target_stage("plan_approval", values={}, completed_stages=[]) == "plan_approval"
+    assert (
+        _resume_target_stage("characters_approval", values={}, completed_stages=[])
+        == "characters_approval"
+    )
 
 
 def test_resume_target_completed_returns_next():
-    assert _resume_target_stage("plan", values={}, completed_stages=["plan"]) == "plan_approval"
+    assert (
+        _resume_target_stage("plan_characters", values={}, completed_stages=["plan_characters"])
+        == "characters_approval"
+    )
 
 
 def test_resume_target_not_completed_returns_current():
-    assert _resume_target_stage("plan", values={}, completed_stages=[]) == "plan"
+    assert (
+        _resume_target_stage("plan_characters", values={}, completed_stages=[]) == "plan_characters"
+    )
 
 
 # --- _infer_current_stage ---
 
+
 def test_infer_from_snapshot():
-    snapshot = SimpleNamespace(values={"current_stage": "render"})
-    assert _infer_current_stage(FakeRun(), [snapshot]) == "render"
+    snapshot = SimpleNamespace(values={"current_stage": "render_characters"})
+    assert _infer_current_stage(FakeRun(), [snapshot]) == "render_characters"
 
 
 def test_infer_from_agent():
-    assert _infer_current_stage(FakeRun(current_agent="plan"), []) == "plan"
+    assert _infer_current_stage(FakeRun(current_agent="plan"), []) == "plan_characters"
 
 
 def test_infer_default_plan():
-    assert _infer_current_stage(FakeRun(), []) == "plan"
+    assert _infer_current_stage(FakeRun(), []) == "plan_characters"
 
 
 # --- AGENT_TO_STAGE mapping ---
 
+
 def test_agent_to_stage_coverage():
-    assert AGENT_TO_STAGE["plan"] == "plan"
-    assert AGENT_TO_STAGE["render"] == "render"
-    assert AGENT_TO_STAGE["compose"] == "compose"
+    assert AGENT_TO_STAGE["plan"] == "plan_characters"
+    assert AGENT_TO_STAGE["render"] == "render_characters"
+    assert AGENT_TO_STAGE["compose"] == "compose_videos"
     assert AGENT_TO_STAGE["review"] == "review"
 
 
 def test_phase2_stage_order_length():
-    assert len(PHASE2_STAGE_ORDER) == 6
-    assert PHASE2_STAGE_ORDER[0] == "plan"
+    assert len(PHASE2_STAGE_ORDER) == 12
+    assert PHASE2_STAGE_ORDER[0] == "plan_characters"
     assert PHASE2_STAGE_ORDER[-1] == "review"
 
 
@@ -223,8 +247,8 @@ def test_phase2_stage_order_length():
 
 
 def test_snapshot_next_stage_returns_first():
-    snapshot = SimpleNamespace(next=("plan", "render"))
-    assert _snapshot_next_stage([snapshot]) == "plan"
+    snapshot = SimpleNamespace(next=("plan_characters", "render_characters"))
+    assert _snapshot_next_stage([snapshot]) == "plan_characters"
 
 
 def test_snapshot_next_stage_skips_invalid():

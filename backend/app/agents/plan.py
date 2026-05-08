@@ -229,13 +229,9 @@ class PlanAgent(BaseAgent):
         await ctx.session.flush()
         return new_char_count, new_shot_count
 
-    async def run(self, ctx: AgentContext) -> None:
+    async def _call_plan_llm(self, ctx: AgentContext) -> dict[str, Any]:
+        """Call LLM for planning and cache the result in ctx."""
         is_incremental = ctx.rerun_mode == "incremental"
-        if is_incremental:
-            await self.send_message(ctx, "正在增量更新规划...", progress=0.0, is_loading=True)
-        else:
-            await self.send_message(ctx, "正在规划创作方案...", progress=0.0, is_loading=True)
-
         payload: dict[str, Any] = {
             "project": {
                 "id": ctx.project.id,
@@ -256,35 +252,20 @@ class PlanAgent(BaseAgent):
             payload["existing_state"] = existing_state
 
         user_prompt = json.dumps(payload, ensure_ascii=False)
-
         resp = await self.call_llm(
             ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096
         )
         data = extract_json(resp.text)
 
-        user_message = data.get("user_message") or ""
-        visual_bible = data.get("visual_bible") or ""
-
+        # Apply project updates from LLM
         project_update = data.get("project_update") or {}
         updated_fields: dict = {}
         if isinstance(project_update, dict):
-            title = project_update.get("title")
-            style = project_update.get("style")
-            status = project_update.get("status")
-            summary = project_update.get("summary")
-
-            if isinstance(title, str) and title.strip():
-                ctx.project.title = title.strip()
-                updated_fields["title"] = ctx.project.title
-            if isinstance(style, str) and style.strip():
-                ctx.project.style = style.strip()
-                updated_fields["style"] = ctx.project.style
-            if isinstance(status, str) and status.strip():
-                ctx.project.status = status.strip()
-                updated_fields["status"] = ctx.project.status
-            if isinstance(summary, str) and summary.strip():
-                ctx.project.summary = summary.strip()
-                updated_fields["summary"] = ctx.project.summary
+            for key in ("title", "style", "status", "summary"):
+                val = project_update.get(key)
+                if isinstance(val, str) and val.strip():
+                    setattr(ctx.project, key, val.strip())
+                    updated_fields[key] = val.strip()
 
         if "status" not in updated_fields:
             ctx.project.status = "planning"
@@ -299,80 +280,54 @@ class PlanAgent(BaseAgent):
                 ctx.project.id,
                 {
                     "type": "project_updated",
-                    "data": {
-                        "project": {
-                            "id": ctx.project.id,
-                            **updated_fields,
-                        }
-                    },
+                    "data": {"project": {"id": ctx.project.id, **updated_fields}},
                 },
             )
 
-        lines = []
+        # Cache for run_shots()
+        ctx.plan_data = data
+        return data
 
-        story_breakdown = data.get("story_breakdown") or {}
-        logline = story_breakdown.get("logline")
-        if logline:
-            lines.append(f"故事概括：{logline}")
+    async def run_characters(self, ctx: AgentContext) -> None:
+        is_incremental = ctx.rerun_mode == "incremental"
+        if is_incremental:
+            await self.send_message(ctx, "正在增量更新角色...", progress=0.0, is_loading=True)
+        else:
+            await self.send_message(ctx, "正在规划角色设定...", progress=0.0, is_loading=True)
 
-        genre = story_breakdown.get("genre") or []
-        themes = story_breakdown.get("themes") or []
-        if genre or themes:
-            parts = []
-            if genre:
-                parts.append(f"类型：{', '.join(genre)}")
-            if themes:
-                parts.append(f"主题：{', '.join(themes)}")
-            lines.append(f"{' | '.join(parts)}")
-
-        if visual_bible:
-            lines.append(f"视觉指南：{visual_bible[:80]}")
+        data = await self._call_plan_llm(ctx)
+        user_message = data.get("user_message") or ""
 
         if is_incremental:
-            new_char_count, new_shot_count = await self._apply_incremental_changes(
-                ctx, data, visual_bible
-            )
+            visual_bible = data.get("visual_bible") or ""
+            new_char_count, _ = await self._apply_incremental_changes(ctx, data, visual_bible)
 
             char_res = await ctx.session.execute(
                 select(Character).where(Character.project_id == ctx.project.id)
             )
             final_chars = list(char_res.scalars().all())
-            shot_res = await ctx.session.execute(
-                select(Shot).where(Shot.project_id == ctx.project.id).order_by(Shot.order.asc())
-            )
-            final_shots = list(shot_res.scalars().all())
-
             for char in final_chars:
                 await self.send_character_event(ctx, char, "character_updated")
-            for shot in final_shots:
-                await self.send_shot_event(ctx, shot, "shot_updated")
 
             char_names = [c.name for c in final_chars]
-            if char_names:
-                lines.append(f"角色：{', '.join(char_names)}")
-            lines.append(f"{len(final_shots)} 个分镜")
-
-            summary = (
-                ctx.project.summary
-                or f"增量更新：{len(final_chars)}个角色、{len(final_shots)}个分镜"
-            )
             ctx.completion_info = CompletionInfo(
-                completed=user_message or "已完成创作方案增量更新",
-                details=f"更新后共 {len(final_chars)} 个角色、{len(final_shots)} 个分镜",
-                next="接下来将为角色和分镜生成参考图片",
-                question="增量更新后的方案是否符合预期？如需调整，请告诉我具体的修改意见。",
+                completed=user_message or "角色增量更新完成",
+                details=f"更新后共 {len(final_chars)} 个角色",
+                next="接下来生成分镜脚本",
+                question="角色设定是否满意？",
             )
             await self.send_message(
                 ctx,
-                user_message or "\n".join(lines) or "增量更新完成",
-                summary=summary,
+                user_message or f"角色更新完成（{len(final_chars)} 个）",
+                summary=f"{len(final_chars)} 个角色",
                 progress=1.0,
             )
             return
 
         raw_characters = data.get("characters") or []
+        lines: list[str] = []
+        new_characters: list[Character] = []
         if isinstance(raw_characters, list) and raw_characters:
-            new_characters: list[Character] = []
             char_names: list[str] = []
             for item in raw_characters:
                 if not isinstance(item, dict):
@@ -395,6 +350,56 @@ class PlanAgent(BaseAgent):
                 for character in new_characters:
                     await self.send_character_event(ctx, character, "character_created")
                 lines.append(f"角色：{', '.join(char_names)}")
+
+        ctx.completion_info = CompletionInfo(
+            completed=user_message or "角色设定已生成",
+            details=f"共 {len(new_characters) if isinstance(raw_characters, list) else 0} 个角色",
+            next="接下来生成分镜脚本",
+            question="角色设定是否满意？",
+        )
+        await self.send_message(
+            ctx, user_message or "\n".join(lines) or "角色规划完成", progress=1.0
+        )
+
+    async def run_shots(self, ctx: AgentContext) -> None:
+        data = getattr(ctx, "plan_data", None)
+        if not data:
+            raise RuntimeError(
+                "run_shots called without cached plan_data; run_characters must run first"
+            )
+
+        is_incremental = ctx.rerun_mode == "incremental"
+        visual_bible = data.get("visual_bible") or ""
+        user_message = data.get("user_message") or ""
+
+        if is_incremental:
+            await self.send_message(ctx, "正在增量更新分镜...", progress=0.0, is_loading=True)
+            _, new_shot_count = await self._apply_incremental_changes(ctx, data, visual_bible)
+
+            shot_res = await ctx.session.execute(
+                select(Shot).where(Shot.project_id == ctx.project.id).order_by(Shot.order.asc())
+            )
+            final_shots = list(shot_res.scalars().all())
+            for shot in final_shots:
+                await self.send_shot_event(ctx, shot, "shot_updated")
+
+            lines = [f"{len(final_shots)} 个分镜"]
+            summary = ctx.project.summary or f"{len(final_shots)}个分镜"
+            ctx.completion_info = CompletionInfo(
+                completed=user_message or "分镜增量更新完成",
+                details=f"更新后共 {len(final_shots)} 个分镜",
+                next="接下来为角色和分镜生成参考图片",
+                question="分镜是否符合预期？",
+            )
+            await self.send_message(
+                ctx,
+                user_message or "\n".join(lines) or "分镜更新完成",
+                summary=summary,
+                progress=1.0,
+            )
+            return
+
+        await self.send_message(ctx, "正在生成分镜脚本...", progress=0.0, is_loading=True)
 
         raw_shots = data.get("shots") or []
         if not isinstance(raw_shots, list) or not raw_shots:
@@ -447,8 +452,8 @@ class PlanAgent(BaseAgent):
             await self.send_shot_event(ctx, shot, "shot_created")
         await ctx.session.commit()
 
+        raw_characters = data.get("characters") or []
         char_count = len(raw_characters) if isinstance(raw_characters, list) else 0
-        lines.append(f"{len(new_shots)} 个分镜")
 
         summary = ctx.project.summary or f"{char_count}个角色，{len(new_shots)}个分镜"
         ctx.project.summary = summary
@@ -456,11 +461,16 @@ class PlanAgent(BaseAgent):
         ctx.session.add(ctx.project)
 
         ctx.completion_info = CompletionInfo(
-            completed=user_message or "已完成创作方案规划",
-            details=f"生成了 {char_count} 个角色设定和 {len(new_shots)} 个分镜脚本",
-            next="接下来将为角色和分镜生成参考图片",
-            question="创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
+            completed=user_message or "分镜脚本已生成",
+            details=f"共 {len(new_shots)} 个分镜",
+            next="接下来为角色和分镜生成参考图片",
+            question="分镜是否符合预期？",
         )
         await self.send_message(
-            ctx, user_message or "\n".join(lines) or "规划完成", summary=summary, progress=1.0
+            ctx, user_message or f"{len(new_shots)} 个分镜已生成", summary=summary, progress=1.0
         )
+
+    async def run(self, ctx: AgentContext) -> None:
+        """Legacy entry point — runs both sub-steps sequentially."""
+        await self.run_characters(ctx)
+        await self.run_shots(ctx)

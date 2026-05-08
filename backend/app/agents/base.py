@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 @dataclass
 class TargetIds:
     """精细化控制的目标 ID"""
+
     character_ids: list[int] = field(default_factory=list)
     shot_ids: list[int] = field(default_factory=list)
 
@@ -34,6 +35,7 @@ class TargetIds:
 @dataclass
 class CompletionInfo:
     """Agent 完成时的确认信息，由 agent 在 run() 结束时设置"""
+
     completed: str = ""
     details: str = ""
     next: str = ""
@@ -53,16 +55,24 @@ class AgentContext:
     user_feedback: str | None = None
     feedback_type: str | None = None  # "plan" | "character" | "shot" | "compose"
     entity_type: str | None = None  # "character" | "shot"
-    entity_id: int | None = None    # per-entity feedback target
+    entity_id: int | None = None  # per-entity feedback target
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID
     completion_info: CompletionInfo | None = None
+    plan_data: dict | None = None  # Cached LLM response from plan_characters for plan_shots
 
 
 class BaseAgent:
     name: str = "base"
 
-    async def send_message(self, ctx: AgentContext, content: str, summary: str | None = None, progress: float | None = None, is_loading: bool = False) -> None:
+    async def send_message(
+        self,
+        ctx: AgentContext,
+        content: str,
+        summary: str | None = None,
+        progress: float | None = None,
+        is_loading: bool = False,
+    ) -> None:
         """发送消息
 
         Args:
@@ -76,6 +86,8 @@ class BaseAgent:
             "agent": self.name,
             "role": "assistant",
             "content": content,
+            "project_id": ctx.project.id,
+            "run_id": ctx.run.id,
         }
         if summary is not None:
             data["summary"] = summary
@@ -104,29 +116,29 @@ class BaseAgent:
             {"type": "run_message", "data": data},
         )
 
-    async def send_character_event(self, ctx: AgentContext, character: Any, event_type: str = "character_created") -> None:
+    async def send_character_event(
+        self, ctx: AgentContext, character: Any, event_type: str = "character_created"
+    ) -> None:
         """发送角色创建/更新事件"""
         payload = CharacterRead.model_validate(character).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
             {
                 "type": event_type,
-                "data": {
-                    "character": payload
-                },
+                "data": {"character": payload},
             },
         )
 
-    async def send_shot_event(self, ctx: AgentContext, shot: Any, event_type: str = "shot_created") -> None:
+    async def send_shot_event(
+        self, ctx: AgentContext, shot: Any, event_type: str = "shot_created"
+    ) -> None:
         """发送分镜创建/更新事件"""
         payload = ShotRead.model_validate(shot).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
             {
                 "type": event_type,
-                "data": {
-                    "shot": payload
-                },
+                "data": {"shot": payload},
             },
         )
 
@@ -223,7 +235,9 @@ class BaseAgent:
         final: LLMResponse | None = None
         buffer = ""
 
-        async for event in ctx.llm.stream(messages=messages, system=system_prompt, tools=tools, max_tokens=max_tokens):
+        async for event in ctx.llm.stream(
+            messages=messages, system=system_prompt, tools=tools, max_tokens=max_tokens
+        ):
             event_type = event.get("type")
             if event_type == "text":
                 delta = event.get("text", "")
@@ -231,7 +245,9 @@ class BaseAgent:
                     continue
                 buffer += delta
                 # 只有明确要求时才流式推送（JSON 输出不适合直接展示给用户）
-                if stream_to_ws and (len(buffer) >= 80 or buffer.endswith(("\n", "。", ".", "!", "?", "！", "？"))):
+                if stream_to_ws and (
+                    len(buffer) >= 80 or buffer.endswith(("\n", "。", ".", "!", "?", "！", "？"))
+                ):
                     await self.send_message(ctx, buffer)
                     buffer = ""
             elif event_type == "final":

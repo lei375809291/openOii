@@ -33,20 +33,20 @@ from tests.factories import create_project, create_run
 
 class TestPureHelpers:
     def test_next_phase2_stage_known(self):
-        assert _next_phase2_stage("plan") == "plan_approval"
-        assert _next_phase2_stage("plan_approval") == "render"
-        assert _next_phase2_stage("render") == "render_approval"
+        assert _next_phase2_stage("plan_characters") == "characters_approval"
+        assert _next_phase2_stage("characters_approval") == "plan_shots"
+        assert _next_phase2_stage("render_characters") == "character_images_approval"
 
     def test_next_phase2_stage_unknown_returns_none(self):
         assert _next_phase2_stage("not-a-stage") is None
         assert _next_phase2_stage(None) is None
 
     def test_resume_agent_for_stage_known(self):
-        assert _resume_agent_for_stage("plan") == "plan"
-        assert _resume_agent_for_stage("plan_approval") == "plan"
-        assert _resume_agent_for_stage("render") == "render"
-        assert _resume_agent_for_stage("render_approval") == "render"
-        assert _resume_agent_for_stage("compose") == "compose"
+        assert _resume_agent_for_stage("plan_characters") == "plan"
+        assert _resume_agent_for_stage("characters_approval") == "plan"
+        assert _resume_agent_for_stage("render_characters") == "render"
+        assert _resume_agent_for_stage("character_images_approval") == "render"
+        assert _resume_agent_for_stage("compose_videos") == "compose"
 
     def test_resume_agent_for_unknown_stage_falls_back(self):
         assert _resume_agent_for_stage("unknown") == "plan"
@@ -306,9 +306,7 @@ async def test_cleanup_full_mode_plan_deletes_all(test_session, orch_with_sessio
 
 
 @pytest.mark.asyncio
-async def test_cleanup_full_mode_render_clears_images(
-    test_session, orch_with_session, monkeypatch
-):
+async def test_cleanup_full_mode_render_clears_images(test_session, orch_with_session, monkeypatch):
     orch, ws = orch_with_session
     project = await create_project(test_session)
     char = Character(project_id=project.id, name="A", description="d", image_url="u")
@@ -375,9 +373,7 @@ async def test_cleanup_incremental_mode_unknown_agent_raises(test_session, orch_
 
 
 @pytest.mark.asyncio
-async def test_cleanup_incremental_mode_plan_clears_assets(
-    test_session, orch_with_session
-):
+async def test_cleanup_incremental_mode_plan_clears_assets(test_session, orch_with_session):
     orch, ws = orch_with_session
     project = await create_project(test_session)
     char = Character(project_id=project.id, name="A", description="d", image_url="u")

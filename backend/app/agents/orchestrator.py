@@ -48,15 +48,26 @@ def _next_phase2_stage(stage: str | None) -> str | None:
 
 
 STAGE_AGENT_MAP = {
-    "plan": "plan",
-    "plan_approval": "plan",
-    "render": "render",
-    "render_approval": "render",
-    "compose": "compose",
+    "plan_characters": "plan",
+    "characters_approval": "plan",
+    "plan_shots": "plan",
+    "shots_approval": "plan",
+    "render_characters": "render",
+    "character_images_approval": "render",
+    "render_shots": "render",
+    "shot_images_approval": "render",
+    "compose_videos": "compose",
+    "compose_merge": "compose",
+    "compose_approval": "compose",
     "review": "review",
 }
 
-GRAPH_STAGE_FOR_AGENT = STAGE_AGENT_MAP
+GRAPH_STAGE_FOR_AGENT = {
+    "plan": "plan_characters",
+    "render": "render_characters",
+    "compose": "compose_videos",
+    "review": "review",
+}
 AGENT_STAGE_MAP = STAGE_AGENT_MAP
 RESUME_AGENT_FOR_STAGE = STAGE_AGENT_MAP
 
@@ -352,7 +363,11 @@ class GenerationOrchestrator:
         except Exception:
             pass
         await self.ws.send_event(
-            project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(error)}}
+            project_id,
+            {
+                "type": "run_failed",
+                "data": {"run_id": run_id, "project_id": project_id, "error": str(error)},
+            },
         )
 
     async def _complete_run(
@@ -364,9 +379,14 @@ class GenerationOrchestrator:
         video_generation_skipped: bool,
     ) -> None:
         await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
-        completed_data: dict = {"run_id": run_id, "current_stage": final_stage}
+        completed_data: dict = {
+            "run_id": run_id,
+            "project_id": project_id,
+            "current_stage": final_stage,
+        }
         if video_generation_skipped:
             completed_data["message"] = "视频未配置，已完成文本和图片生成"
+            completed_data["video_generation_pending"] = True
         await self.ws.send_event(project_id, {"type": "run_completed", "data": completed_data})
 
     async def _cleanup_run(self, run_id: int) -> None:

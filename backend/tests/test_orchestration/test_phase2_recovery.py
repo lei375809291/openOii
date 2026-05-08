@@ -77,15 +77,15 @@ async def test_resume_from_recovery_uses_run_provider_snapshot(test_session, tes
             project_id=run.project_id,
             run_id=run.id or 0,
             thread_id=f"agent-run-{run.id}",
-            current_stage="plan",
-            next_stage="render",
+            current_stage="plan_characters",
+            next_stage="render_characters",
             preserved_stages=[],
             stage_history=[],
             resumable=True,
         )
 
     async def _noop_invoke_phase2_graph(self, **_kwargs):
-        return False, "compose"
+        return False, "compose_videos"
 
     class _StubWs:
         async def send_event(self, _project_id: int, _event: dict) -> None:
@@ -154,15 +154,15 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
             project_id=run.project_id,
             run_id=run.id or 0,
             thread_id=f"agent-run-{run.id}",
-            current_stage="render",
-            next_stage="compose",
+            current_stage="render_characters",
+            next_stage="compose_videos",
             preserved_stages=[],
             stage_history=[],
             resumable=True,
         )
 
     async def _fake_invoke_phase2_graph(self, **_kwargs):
-        return True, "compose"
+        return True, "compose_videos"
 
     async def _noop_clear_confirm_event(_: int) -> None:
         return None
@@ -198,14 +198,14 @@ async def test_build_recovery_summary_keeps_approval_stage_as_resume_target(test
         return [
             SimpleNamespace(
                 values={
-                    "current_stage": "plan_approval",
-                    "stage_history": ["plan"],
+                    "current_stage": "characters_approval",
+                    "stage_history": ["plan_characters"],
                 }
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"plan": 2}
+        return {"plan_characters": 2}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -216,9 +216,9 @@ async def test_build_recovery_summary_keeps_approval_stage_as_resume_target(test
         run=run,
     )
 
-    assert summary.current_stage == "plan_approval"
-    assert summary.next_stage == "plan_approval"
-    assert summary.preserved_stages == ["plan"]
+    assert summary.current_stage == "characters_approval"
+    assert summary.next_stage == "characters_approval"
+    assert summary.preserved_stages == ["plan_characters"]
 
 
 @pytest.mark.asyncio
@@ -233,14 +233,14 @@ async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(
             SimpleNamespace(
                 values={
                     "current_stage": "review",
-                    "route_stage": "render",
-                    "stage_history": ["plan"],
+                    "route_stage": "render_characters",
+                    "stage_history": ["plan_characters"],
                 }
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"plan": 2, "render": 0}
+        return {"plan_characters": 2, "render_characters": 0}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -252,8 +252,8 @@ async def test_build_recovery_summary_uses_review_route_stage_for_resume_target(
     )
 
     assert summary.current_stage == "review"
-    assert summary.next_stage == "render"
-    assert summary.preserved_stages == ["plan"]
+    assert summary.next_stage == "render_characters"
+    assert summary.preserved_stages == ["plan_characters"]
 
 
 @pytest.mark.asyncio
@@ -267,15 +267,15 @@ async def test_build_recovery_summary_promotes_pending_approval_checkpoint_to_cu
         return [
             SimpleNamespace(
                 values={
-                    "current_stage": "plan",
-                    "stage_history": ["plan"],
+                    "current_stage": "plan_characters",
+                    "stage_history": ["plan_characters"],
                 },
-                next=("plan_approval",),
+                next=("characters_approval",),
             )
         ]
 
     async def _fake_stage_artifact_counts(_session, _run_id):
-        return {"plan": 2}
+        return {"plan_characters": 2}
 
     monkeypatch.setattr("app.services.run_recovery._checkpoint_history", _fake_checkpoint_history)
     monkeypatch.setattr("app.services.run_recovery._stage_artifact_counts", _fake_stage_artifact_counts)
@@ -286,6 +286,6 @@ async def test_build_recovery_summary_promotes_pending_approval_checkpoint_to_cu
         run=run,
     )
 
-    assert summary.current_stage == "plan_approval"
-    assert summary.next_stage == "plan_approval"
-    assert summary.preserved_stages == ["plan"]
+    assert summary.current_stage == "characters_approval"
+    assert summary.next_stage == "characters_approval"
+    assert summary.preserved_stages == ["plan_characters"]

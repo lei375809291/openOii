@@ -207,23 +207,47 @@ class RenderAgent(BaseAgent):
 
         return updated_count
 
+    async def run_characters(self, ctx: AgentContext) -> None:
+        """Render character images only (sub-step 1)."""
+        await self.send_message(ctx, "开始生成角色形象图...", progress=0.0, is_loading=True)
+        char_count = await self._render_characters(ctx)
+        ctx.completion_info = CompletionInfo(
+            completed=f"已生成 {char_count} 个角色形象图",
+            details="角色形象已渲染完成",
+            next="接下来渲染分镜画面",
+            question="角色形象是否满意？如果需要重新生成，请告诉我。",
+        )
+        await self.send_message(
+            ctx,
+            f"角色形象渲染完成！已生成 {char_count} 个角色形象图。",
+            summary=f"{char_count} 个角色形象图",
+            progress=1.0,
+        )
+
+    async def run_shots(self, ctx: AgentContext) -> None:
+        """Render shot storyboard images only (sub-step 2)."""
+        await self.send_message(ctx, "开始生成分镜首帧图...", progress=0.0, is_loading=True)
+        shot_count = await self._render_shots(ctx)
+        ctx.completion_info = CompletionInfo(
+            completed=f"已生成 {shot_count} 个分镜首帧图",
+            details="分镜画面已渲染完成",
+            next="接下来将根据分镜生成视频片段并合成",
+            question="分镜画面是否满意？如果需要重新生成，请告诉我。",
+        )
+        await self.send_message(
+            ctx,
+            f"分镜画面渲染完成！已生成 {shot_count} 个分镜首帧图。",
+            summary=f"{shot_count} 个分镜首帧图",
+            progress=1.0,
+        )
+
     async def run(self, ctx: AgentContext) -> None:
+        """Legacy entry point — runs both sub-steps sequentially."""
         await self.send_message(
             ctx,
             "开始渲染：先生成角色形象图，再使用角色图作为参考生成分镜图...",
             progress=0.0,
             is_loading=True,
         )
-
-        char_count = await self._render_characters(ctx)
-
-        shot_count = await self._render_shots(ctx)
-
-        summary = f"渲染完成：{char_count}个角色图，{shot_count}个分镜图"
-        ctx.completion_info = CompletionInfo(
-            completed=f"已生成 {char_count} 个角色形象图和 {shot_count} 个分镜首帧图",
-            details="角色形象和分镜画面均已渲染完成",
-            next="接下来将根据分镜生成视频片段并合成",
-            question="角色形象和分镜画面是否满意？如果需要重新生成，请告诉我。",
-        )
-        await self.send_message(ctx, "渲染完成！", summary=summary, progress=1.0)
+        await self.run_characters(ctx)
+        await self.run_shots(ctx)

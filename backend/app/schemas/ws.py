@@ -69,6 +69,7 @@ class RunCompletedEventData(BaseModel):
     project_id: int | None = None
     current_stage: str | None = None
     message: str | None = None
+    video_generation_pending: bool | None = None
 
 
 class RunFailedEventData(BaseModel):

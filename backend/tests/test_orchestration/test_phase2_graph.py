@@ -15,10 +15,13 @@ from app.orchestration.nodes import (
     _auto_approval_result,
     _approval_result,
     _manual_approval_node,
-    render_approval_node,
+    shot_images_approval_node,
     review_node,
-    route_after_plan_approval,
-    route_after_render_approval,
+    route_after_characters_approval,
+    route_after_shots_approval,
+    route_after_character_images_approval,
+    route_after_shot_images_approval,
+    route_after_compose_approval,
     route_after_review,
     route_from_start,
 )
@@ -60,32 +63,35 @@ def test_phase2_runtime_config_uses_persisted_run_thread_id() -> None:
 
 
 def test_route_helpers_fall_back_to_expected_stages() -> None:
-    assert route_after_plan_approval({}) == "render"
-    assert route_after_render_approval({}) == "compose"
-    assert route_after_review({}) == "plan"
-    assert route_from_start({}) == "plan"
+    assert route_after_characters_approval({}) == "plan_shots"
+    assert route_after_shots_approval({}) == "render_characters"
+    assert route_after_character_images_approval({}) == "render_shots"
+    assert route_after_shot_images_approval({}) == "compose_videos"
+    assert route_after_compose_approval({}) == "__end__"
+    assert route_after_review({}) == "plan_characters"
+    assert route_from_start({}) == "plan_characters"
 
 
 def test_approval_result_helpers_set_review_routing() -> None:
     approved = _approval_result(
-        approval_stage="plan_approval",
-        history_key="plan",
-        next_stage="render",
+        approval_stage="characters_approval",
+        history_key="plan_characters",
+        next_stage="plan_shots",
         feedback="",
     )
     revised = _approval_result(
-        approval_stage="plan_approval",
-        history_key="plan",
-        next_stage="render",
+        approval_stage="characters_approval",
+        history_key="plan_characters",
+        next_stage="plan_shots",
         feedback="needs work",
     )
     auto = _auto_approval_result(
-        approval_stage="plan_approval",
-        history_key="plan",
-        next_stage="render",
+        approval_stage="characters_approval",
+        history_key="plan_characters",
+        next_stage="plan_shots",
     )
 
-    assert approved["route_stage"] == "render"
+    assert approved["route_stage"] == "plan_shots"
     assert approved["review_requested"] is False
     assert revised["route_stage"] == "review"
     assert revised["review_requested"] is True
@@ -97,7 +103,12 @@ async def test_manual_approval_node_auto_mode_short_circuits() -> None:
     runtime = SimpleNamespace(
         context=SimpleNamespace(
             auto_mode=True,
-            agent_context=SimpleNamespace(project=SimpleNamespace(id=1), run=SimpleNamespace(id=1, thread_id=None), session=None, completion_info=None),
+            agent_context=SimpleNamespace(
+                project=SimpleNamespace(id=1),
+                run=SimpleNamespace(id=1, thread_id=None),
+                session=None,
+                completion_info=None,
+            ),
             orchestrator=SimpleNamespace(
                 _set_run=AsyncMock(return_value=SimpleNamespace()),
                 ws=SimpleNamespace(send_event=AsyncMock()),
@@ -108,14 +119,14 @@ async def test_manual_approval_node_auto_mode_short_circuits() -> None:
 
     result = await _manual_approval_node(
         runtime,
-        approval_stage="plan_approval",
-        history_key="plan",
+        approval_stage="characters_approval",
+        history_key="plan_characters",
         gate="plan",
         message="msg",
-        next_stage="render",
+        next_stage="plan_shots",
     )
 
-    assert result["route_stage"] == "render"
+    assert result["route_stage"] == "plan_shots"
     assert result["review_requested"] is False
 
 
@@ -124,7 +135,12 @@ async def test_manual_approval_node_normalizes_interrupt_resume(monkeypatch) -> 
     runtime = SimpleNamespace(
         context=SimpleNamespace(
             auto_mode=False,
-            agent_context=SimpleNamespace(project=SimpleNamespace(id=1), run=SimpleNamespace(id=1, thread_id=None), session=None, completion_info=None),
+            agent_context=SimpleNamespace(
+                project=SimpleNamespace(id=1),
+                run=SimpleNamespace(id=1, thread_id=None),
+                session=None,
+                completion_info=None,
+            ),
             orchestrator=SimpleNamespace(
                 _set_run=AsyncMock(return_value=SimpleNamespace()),
                 ws=SimpleNamespace(send_event=AsyncMock()),
@@ -137,11 +153,11 @@ async def test_manual_approval_node_normalizes_interrupt_resume(monkeypatch) -> 
 
     result = await _manual_approval_node(
         runtime,
-        approval_stage="plan_approval",
-        history_key="plan",
+        approval_stage="characters_approval",
+        history_key="plan_characters",
         gate="plan",
         message="msg",
-        next_stage="render",
+        next_stage="plan_shots",
     )
 
     assert result["approval_feedback"] == "ok"
@@ -153,7 +169,12 @@ async def test_manual_approval_node_routes_to_review_when_feedback_present(monke
     runtime = SimpleNamespace(
         context=SimpleNamespace(
             auto_mode=False,
-            agent_context=SimpleNamespace(project=SimpleNamespace(id=1), run=SimpleNamespace(id=1, thread_id=None), session=None, completion_info=None),
+            agent_context=SimpleNamespace(
+                project=SimpleNamespace(id=1),
+                run=SimpleNamespace(id=1, thread_id=None),
+                session=None,
+                completion_info=None,
+            ),
             orchestrator=SimpleNamespace(
                 _set_run=AsyncMock(return_value=SimpleNamespace()),
                 ws=SimpleNamespace(send_event=AsyncMock()),
@@ -166,11 +187,11 @@ async def test_manual_approval_node_routes_to_review_when_feedback_present(monke
 
     result = await _manual_approval_node(
         runtime,
-        approval_stage="plan_approval",
-        history_key="plan",
+        approval_stage="characters_approval",
+        history_key="plan_characters",
         gate="plan",
         message="msg",
-        next_stage="render",
+        next_stage="plan_shots",
     )
 
     assert result["review_requested"] is True
@@ -192,6 +213,18 @@ class _NoopAgent:
     def __init__(self, name: str, executed: list[str]) -> None:
         self.name = name
         self._executed = executed
+
+    async def run_characters(self, _ctx: Any) -> None:
+        self._executed.append(f"{self.name}_characters")
+
+    async def run_shots(self, _ctx: Any) -> None:
+        self._executed.append(f"{self.name}_shots")
+
+    async def run_videos(self, _ctx: Any) -> None:
+        self._executed.append(f"{self.name}_videos")
+
+    async def run_merge(self, _ctx: Any) -> None:
+        self._executed.append(f"{self.name}_merge")
 
     async def run(self, _ctx: Any) -> None:
         self._executed.append(self.name)
@@ -244,8 +277,8 @@ def _initial_state(start_stage: str) -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("start_stage", "expected_agents", "expected_gate"),
     [
-        ("plan", ["plan"], "plan"),
-        ("render", ["render"], "render"),
+        ("plan_characters", ["plan_characters"], "plan"),
+        ("render_characters", ["render_characters"], "render"),
     ],
 )
 async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
@@ -302,55 +335,54 @@ async def test_phase2_graph_compose_skips_to_end_without_interrupt() -> None:
             target_ids=None,
             completion_info=None,
         ),
-        start_stage="compose",  # type: ignore[arg-type]
+        start_stage="compose_videos",  # type: ignore[arg-type]
         auto_mode=False,
     )
 
     compiled = build_phase2_graph().compile()
     result = await compiled.ainvoke(
-        _initial_state("compose"),
+        _initial_state("compose_videos"),
         {"configurable": {"thread_id": "thread-compose-end"}},
         context=runtime_context,
     )
 
-    assert executed == ["compose"]
-    assert result.get("__interrupt__") is None or len(result.get("__interrupt__", [])) == 0
+    assert executed == ["compose_videos", "compose_merge"]
+    # compose_approval interrupts after both sub-steps
+    interrupts = result.get("__interrupt__") or []
+    assert interrupts
+    assert getattr(interrupts[0], "value", {})["gate"] == "compose"
 
 
 @pytest.mark.asyncio
-async def test_phase2_graph_auto_skips_compose_when_video_provider_invalid() -> None:
-    from app.orchestration.graph import build_phase2_graph
-    from app.orchestration.runtime import build_phase2_runtime_context
+async def test_compose_videos_skips_when_video_provider_invalid() -> None:
+    """When video provider is invalid, compose_videos node skips its work."""
+    from app.orchestration.nodes import compose_videos_node
 
     executed: list[str] = []
     orchestrator = _Orchestrator(executed)
-    runtime_context = build_phase2_runtime_context(
-        orchestrator=orchestrator,
-        agent_context=SimpleNamespace(
-            project=SimpleNamespace(id=1),
-            run=SimpleNamespace(
-                id=1,
-                resource_type=None,
-                resource_id=None,
-                provider_snapshot={"video": {"valid": False, "selected_key": "openai", "source": "default"}},
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(
+            auto_mode=False,
+            orchestrator=orchestrator,
+            agent_context=SimpleNamespace(
+                project=SimpleNamespace(id=1),
+                run=SimpleNamespace(
+                    id=1,
+                    resource_type=None,
+                    resource_id=None,
+                    provider_snapshot={"video": {"valid": False}},
+                ),
+                session=None,
+                target_ids=None,
+                completion_info=None,
             ),
-            session=None,
-            target_ids=None,
-            completion_info=None,
-        ),
-        start_stage="render",  # type: ignore[arg-type]
-        auto_mode=False,
+        )
     )
 
-    compiled = build_phase2_graph().compile()
-    result = await compiled.ainvoke(
-        _initial_state("render"),
-        {"configurable": {"thread_id": "thread-render-no-video"}},
-        context=runtime_context,
-    )
+    state = await compose_videos_node({}, runtime)
 
-    assert executed == ["render"]
-    assert result.get("current_stage") == "compose"
+    assert executed == []  # compose agent was never called
+    assert "stage:compose_videos" in state.get("artifact_lineage", [])
 
 
 def test_normalize_resume_value_handles_supported_shapes() -> None:
@@ -362,42 +394,68 @@ def test_normalize_resume_value_handles_supported_shapes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_render_approval_auto_routes_to_compose_when_video_invalid() -> None:
+async def test_shot_images_approval_auto_routes_to_compose_when_video_invalid() -> None:
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=None,
     )
     project = SimpleNamespace(id=1)
     run = SimpleNamespace(id=2, provider_snapshot={"video": {"valid": False}})
-    agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), target_ids=None, completion_info=None)
-    runtime = SimpleNamespace(context=SimpleNamespace(auto_mode=False, orchestrator=orchestrator, agent_context=agent_ctx))
+    agent_ctx = SimpleNamespace(
+        project=project, run=run, session=SimpleNamespace(), target_ids=None, completion_info=None
+    )
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(auto_mode=False, orchestrator=orchestrator, agent_context=agent_ctx)
+    )
 
-    state = await render_approval_node({}, runtime)
+    state = await shot_images_approval_node({}, runtime)
 
-    assert state["route_stage"] == "compose"
+    assert state["route_stage"] == "compose_videos"
 
 
 def test_route_helpers_prefer_route_stage_and_fallbacks():
-    assert route_from_start({}) == "plan"
-    assert route_after_review({}) == "plan"
-    assert route_after_plan_approval({}) == "render"
-    assert route_after_plan_approval({"review_requested": True}) == "review"
-    assert route_after_render_approval({}) == "compose"
-    assert route_after_render_approval({"review_requested": True}) == "review"
+    assert route_from_start({}) == "plan_characters"
+    assert route_after_review({}) == "plan_characters"
+    assert route_after_characters_approval({}) == "plan_shots"
+    assert route_after_characters_approval({"review_requested": True}) == "review"
+    assert route_after_shots_approval({}) == "render_characters"
+    assert route_after_shots_approval({"review_requested": True}) == "review"
+    assert route_after_shot_images_approval({}) == "compose_videos"
 
 
 @pytest.mark.asyncio
 async def test_review_node_routes_to_plan_and_cleans_up(monkeypatch):
     orchestrator = GenerationOrchestrator(
-        settings=Settings(database_url="sqlite+aiosqlite:///:memory:", anthropic_api_key="test", image_api_key="test", video_api_key="test"),
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
         ws=MockWsManager(),
         session=SimpleNamespace(refresh=lambda obj: None),
     )
     project = SimpleNamespace(id=1)
     run = SimpleNamespace(id=2)
-    agent_ctx = SimpleNamespace(project=project, run=run, session=SimpleNamespace(), user_feedback="keep it short", feedback_type="plan", rerun_mode=None, target_ids=None, completion_info=None)
-    runtime = SimpleNamespace(context=SimpleNamespace(orchestrator=orchestrator, agent_context=agent_ctx))
+    agent_ctx = SimpleNamespace(
+        project=project,
+        run=run,
+        session=SimpleNamespace(),
+        user_feedback="keep it short",
+        feedback_type="plan",
+        rerun_mode=None,
+        target_ids=None,
+        completion_info=None,
+    )
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(orchestrator=orchestrator, agent_context=agent_ctx)
+    )
 
     async def review_run(ctx):
         return {"start_agent": "plan", "mode": "incremental", "target_ids": None}
@@ -413,6 +471,7 @@ async def test_review_node_routes_to_plan_and_cleans_up(monkeypatch):
         cleaned["args"] = (project_id, start_agent, mode)
 
     monkeypatch.setattr(orchestrator, "_cleanup_for_rerun", fake_cleanup)
+
     async def fake_refresh(obj):
         return None
 
@@ -422,5 +481,5 @@ async def test_review_node_routes_to_plan_and_cleans_up(monkeypatch):
 
     assert cleaned["called"] is True
     assert cleaned["args"] == (1, "plan", "incremental")
-    assert state["route_stage"] == "plan"
+    assert state["route_stage"] == "plan_characters"
     assert state["route_mode"] == "incremental"

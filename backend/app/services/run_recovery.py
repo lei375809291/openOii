@@ -23,18 +23,24 @@ from app.schemas.project import (
 
 
 PHASE2_STAGE_ORDER: tuple[str, ...] = (
-    "plan",
-    "plan_approval",
-    "render",
-    "render_approval",
-    "compose",
+    "plan_characters",
+    "characters_approval",
+    "plan_shots",
+    "shots_approval",
+    "render_characters",
+    "character_images_approval",
+    "render_shots",
+    "shot_images_approval",
+    "compose_videos",
+    "compose_merge",
+    "compose_approval",
     "review",
 )
 
 AGENT_TO_STAGE: dict[str, str] = {
-    "plan": "plan",
-    "render": "render",
-    "compose": "compose",
+    "plan": "plan_characters",
+    "render": "render_characters",
+    "compose": "compose_videos",
     "review": "review",
 }
 
@@ -112,14 +118,24 @@ def _normalize_stage_history(values: dict[str, Any]) -> list[str]:
     return completed
 
 
+_APPROVAL_TO_PRODUCED_STAGE: dict[str, str] = {
+    "characters_approval": "plan_characters",
+    "shots_approval": "plan_shots",
+    "character_images_approval": "render_characters",
+    "shot_images_approval": "render_shots",
+    "compose_approval": "compose_merge",
+}
+
+
 def _production_stage_for_approval(stage: str | None) -> str | None:
-    if not isinstance(stage, str) or not stage.endswith("_approval"):
+    if not isinstance(stage, str):
         return None
-    production_stage = stage.removesuffix("_approval")
-    return production_stage if production_stage in PRODUCTION_STAGE_SEQUENCE else None
+    return _APPROVAL_TO_PRODUCED_STAGE.get(stage)
 
 
-def _resume_target_stage(current_stage: str, *, values: dict[str, Any], completed_stages: Sequence[str]) -> str | None:
+def _resume_target_stage(
+    current_stage: str, *, values: dict[str, Any], completed_stages: Sequence[str]
+) -> str | None:
     route_stage = _safe_stage_name(values.get("route_stage"))
 
     if current_stage == "review":
@@ -178,7 +194,7 @@ def _infer_current_stage(run: AgentRun, snapshots: Sequence[Any]) -> str:
     if mapped_stage is not None:
         return mapped_stage
 
-    return "plan"
+    return "plan_characters"
 
 
 async def build_recovery_summary(
