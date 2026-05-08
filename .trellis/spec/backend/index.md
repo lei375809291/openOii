@@ -19,6 +19,8 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Filled |
+| [WS Event Contracts](./ws-event-contracts.md) | WebSocket event schema alignment, cast pipeline, three-way contract | Filled |
+| [Orchestration Stages](./orchestration-stages.md) | LangGraph sub-stage architecture, approval gates, agent split pattern | Filled |
 
 ---
 
