@@ -377,3 +377,36 @@ Fixed settings UI (basic tab, config delete, ConfigInput reveal, test-connection
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Backend code simplification + test coverage 95%
+
+**Date**: 2026-05-08
+**Task**: Backend code simplification + test coverage 95%
+**Branch**: `main`
+
+### Summary
+
+Extracted get_or_404 helper in deps.py (eliminated ~54 lines of repeated session.get+404 across 4 route files). Extracted _raise_for_status helper in text.py (eliminated 48 lines of duplicate error-raising). Added 17 new tests covering get_or_404, upload_reference_image, download_final_video edge cases, resume mismatched project_id, text service probe retry/failure, and stream cached-capability fallback. Overall backend coverage: 94% → 95%. 969 tests pass (4 pre-existing failures in test_config.py).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43bc72a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
