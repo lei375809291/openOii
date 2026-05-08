@@ -443,3 +443,38 @@ Extracted get_or_404 helper in deps.py (eliminated ~54 lines of repeated session
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Refactor orchestration stages, WS event specs, and backend docs
+
+**Date**: 2026-05-09
+**Task**: Refactor orchestration stages, WS event specs, and backend docs
+**Branch**: `main`
+
+### Summary
+
+Refactored orchestration stages to accommodate new phase structure, added WS event contracts and orchestration sub-stage architecture specs, and updated backend documentation for improved code readability.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b42a75` | (see git log) |
+| `fc646e4` | (see git log) |
+| `15d609e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
