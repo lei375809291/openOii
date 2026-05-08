@@ -10,6 +10,7 @@ from app.api.deps import AdminDep, SessionDep
 from app.config import get_settings
 from app.schemas.config import (
     ConfigItemRead,
+    ConnectionCapabilities,
     ConfigUpdateRequest,
     ConfigUpdateResponse,
     RevealValueRequest,
@@ -210,7 +211,7 @@ async def _test_llm_connection(settings) -> TestConnectionResponse:
             ),
             details=details,
             status=probe.status,
-            capabilities={"generate": probe.generate, "stream": probe.stream},
+            capabilities=ConnectionCapabilities(generate=probe.generate, stream=probe.stream),
         )
     except Exception as e:
         return TestConnectionResponse(
@@ -218,7 +219,7 @@ async def _test_llm_connection(settings) -> TestConnectionResponse:
             message="连接失败",
             details=str(e)[:200],
             status="invalid",
-            capabilities={"generate": False, "stream": False},
+            capabilities=ConnectionCapabilities(generate=False, stream=False),
         )
 
 

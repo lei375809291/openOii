@@ -11,7 +11,10 @@ from app.api.v1.routes import config as config_routes
 from app.config import Settings
 from app.main import create_app
 from app.models.config_item import ConfigItem
-from app.schemas.config import TestConnectionResponse as ConfigTestConnectionResponse
+from app.schemas.config import (
+    ConnectionCapabilities,
+    TestConnectionResponse as ConfigTestConnectionResponse,
+)
 from app.services.text_capabilities import TextProviderCapability
 from tests.factories import create_config_item
 
@@ -239,7 +242,7 @@ async def test_test_llm_connection_reports_degraded_stream_capability(test_setti
 
     assert result.success is True
     assert result.status == "degraded"
-    assert result.capabilities == {"generate": True, "stream": False}
+    assert result.capabilities == ConnectionCapabilities(generate=True, stream=False)
     assert "部分可用" in result.message
 
 

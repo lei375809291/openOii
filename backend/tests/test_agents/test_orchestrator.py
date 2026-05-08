@@ -1416,3 +1416,83 @@ async def test_wait_for_confirm_confirmed_uses_refreshed_recovery(monkeypatch):
     assert confirmed_evt[0][1]["data"]["recovery_summary"]["call"] == 2
     assert confirmed_evt[0][1]["data"]["current_stage"] == "plan_shots"
     assert confirmed_evt[0][1]["data"]["stage"] == "plan_shots"
+
+
+@pytest.mark.asyncio
+async def test_invoke_phase2_graph_raises_when_compose_finishes_without_video(monkeypatch):
+    project = SimpleNamespace(id=1, status="planning", video_url=None)
+    run = SimpleNamespace(id=2, thread_id=None)
+    session = FakeSession(project=project, run=run)
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
+        ws=ws,
+        session=session,
+    )
+
+    compiled_graph = FakeCompiledGraph(
+        [
+            {"current_stage": "compose_merge"},
+            {},
+        ]
+    )
+
+    async def fake_blocking_clips(_session, _project):
+        return [{"shot_id": 99, "status": "failed"}]
+
+    monkeypatch.setattr(
+        "app.agents.orchestrator.collect_project_blocking_clips",
+        fake_blocking_clips,
+    )
+
+    with pytest.raises(RuntimeError, match="Compose finished without a usable final video"):
+        await orchestrator._invoke_phase2_graph(
+            project=project,
+            run=run,
+            ctx=SimpleNamespace(project=project),
+            compiled_graph=compiled_graph,
+            graph_config={"configurable": {"thread_id": "t1"}},
+            runtime_context=SimpleNamespace(),
+            initial_payload={"current_stage": "compose_videos"},
+            auto_mode=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_handle_run_failure_marks_project_failed_and_emits_project_updated(monkeypatch):
+    project = SimpleNamespace(id=1, status="planning", video_url=None)
+    run = SimpleNamespace(id=2, status="running", error=None)
+    session = FakeSession(project=project, run=run)
+    ws = MockWsManager()
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
+        ws=ws,
+        session=session,
+    )
+
+    async def fake_blocking_clips(_session, _project):
+        return [{"shot_id": 7, "status": "failed"}]
+
+    monkeypatch.setattr(
+        "app.agents.orchestrator.collect_project_blocking_clips",
+        fake_blocking_clips,
+    )
+
+    await orchestrator._handle_run_failure(1, run, 2, RuntimeError("boom"), context="Run")
+
+    assert run.status == "failed"
+    assert run.error == "boom"
+    assert project.status == "failed"
+    event_types = [event[1]["type"] for event in ws.events]
+    assert "project_updated" in event_types
+    assert event_types[-1] == "run_failed"

@@ -27,6 +27,7 @@ from app.orchestration.runtime import (
     build_stage_recovery_config,
 )
 from app.orchestration.state import Phase2Stage, next_production_stage, workflow_progress_for_stage
+from app.services.creative_control import collect_project_blocking_clips
 from app.services.file_cleaner import delete_files
 from app.services.image import ImageService
 from app.services.provider_resolution import settings_with_provider_snapshot
@@ -360,6 +361,27 @@ class GenerationOrchestrator:
                 run_id, agent="orchestrator", role="system", content=f"{context} failed: {error!r}"
             )
             await self._set_run(run, status="failed", error=str(error))
+
+            project = await self.session.get(Project, project_id)
+            if project is not None:
+                project.status = "failed"
+                self.session.add(project)
+                await self.session.commit()
+                blocking_clips = await collect_project_blocking_clips(self.session, project)
+                await self.ws.send_event(
+                    project_id,
+                    {
+                        "type": "project_updated",
+                        "data": {
+                            "project": {
+                                "id": project_id,
+                                "status": project.status,
+                                "video_url": project.video_url,
+                                "blocking_clips": blocking_clips,
+                            }
+                        },
+                    },
+                )
         except Exception:
             pass
         await self.ws.send_event(
@@ -650,6 +672,7 @@ class GenerationOrchestrator:
         payload: Any = initial_payload
         video_generation_skipped = False
         final_stage = "compose"
+        saw_compose_stage = False
         while True:
             logger.debug(
                 "[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__
@@ -662,7 +685,11 @@ class GenerationOrchestrator:
                 logger.warning("[graph] run=%s result not dict, breaking", run_pk)
                 break
 
-            final_stage = result.get("current_stage", final_stage)
+            result_stage = result.get("current_stage")
+            if isinstance(result_stage, str) and result_stage:
+                final_stage = result_stage
+                if result_stage.startswith("compose"):
+                    saw_compose_stage = True
 
             if _video_generation_skipped_in_result(result):
                 video_generation_skipped = True
@@ -708,6 +735,20 @@ class GenerationOrchestrator:
             payload = Command(resume={"action": action, "feedback": feedback})
 
         await self.session.refresh(ctx.project)
+
+        if saw_compose_stage and not video_generation_skipped and final_stage.startswith("compose"):
+            blocking_clips = await collect_project_blocking_clips(self.session, ctx.project)
+            project_video_url = getattr(ctx.project, "video_url", None)
+            if not project_video_url or blocking_clips:
+                reasons: list[str] = []
+                if not project_video_url:
+                    reasons.append("final project video_url is empty")
+                if blocking_clips:
+                    reasons.append(f"{len(blocking_clips)} blocking clips remain")
+                raise RuntimeError(
+                    "Compose finished without a usable final video: " + "; ".join(reasons)
+                )
+
         ctx.project.status = "ready"
         self.session.add(ctx.project)
         await self.session.commit()

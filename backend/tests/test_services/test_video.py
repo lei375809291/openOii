@@ -26,6 +26,13 @@ def test_build_url_and_retryable_status():
     assert svc._is_retryable_status(401) is False
 
 
+def test_build_poll_url_for_yunwu_video_create():
+    svc = VideoService(
+        make_settings(video_base_url="https://yunwu.ai/v1", video_endpoint="/video/create")
+    )
+    assert svc._build_poll_url("task_abc") == "https://yunwu.ai/v1/video/query?id=task_abc"
+
+
 def test_extract_url_returns_none_for_invalid_inputs():
     svc = VideoService(make_settings())
     assert svc._extract_url_from_text("") is None
@@ -118,6 +125,62 @@ async def test_generate_url_i2v_standard_mode(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_generate_url_standard_mode_polls_async_task(monkeypatch):
+    svc = VideoService(
+        make_settings(
+            video_base_url="https://yunwu.ai/v1",
+            video_endpoint="/video/create",
+            video_model="veo3.1-fast-components",
+        )
+    )
+
+    async def fake_generate(prompt, **kwargs):
+        return {"id": "task_abc", "status": "queued", "progress": 0}
+
+    async def fake_poll(task_id, *, poll_interval_s=5.0, max_polls=120):
+        assert task_id == "task_abc"
+        return {
+            "id": "task_abc",
+            "status": "completed",
+            "video_url": "https://cdn.example.com/out.mp4",
+        }
+
+    monkeypatch.setattr(svc, "generate", fake_generate)
+    monkeypatch.setattr(svc, "_poll_task_until_done", fake_poll)
+
+    result = await svc.generate_url(prompt="make a video")
+
+    assert result == "https://cdn.example.com/out.mp4"
+
+
+@pytest.mark.asyncio
+async def test_generate_url_i2v_standard_mode_polls_async_task(monkeypatch):
+    svc = VideoService(
+        make_settings(
+            video_base_url="https://yunwu.ai/v1",
+            video_endpoint="/video/create",
+            video_model="veo3.1-fast-components",
+        )
+    )
+
+    async def fake_post(url, payload):
+        assert payload["image"] == "aW1n"
+        return {"task_id": "task_xyz", "status": "processing", "progress": 0}
+
+    async def fake_poll(task_id, *, poll_interval_s=5.0, max_polls=120):
+        assert task_id == "task_xyz"
+        return {"status": "completed", "data": [{"url": "https://cdn.example.com/i2v.mp4"}]}
+
+    monkeypatch.setattr(svc, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(svc, "_poll_task_until_done", fake_poll)
+    object.__setattr__(svc.settings, "use_i2v", lambda: True)
+
+    result = await svc.generate_url(prompt="make a video", image_bytes=b"img")
+
+    assert result == "https://cdn.example.com/i2v.mp4"
+
+
+@pytest.mark.asyncio
 async def test_merge_urls_requires_videos():
     svc = VideoService(make_settings())
     with pytest.raises(RuntimeError, match="No video URLs"):
@@ -173,7 +236,9 @@ async def test_post_json_with_retry_returns_json_on_success(monkeypatch):
         async def post(self, url, headers, json):
             return FakeResponse()
 
-    monkeypatch.setattr("app.services.video.httpx.AsyncClient", lambda *args, **kwargs: FakeClient())
+    monkeypatch.setattr(
+        "app.services.video.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
+    )
 
     assert await svc._post_json_with_retry("https://example.com", {"prompt": "x"}) == {"ok": True}
 
@@ -210,9 +275,14 @@ async def test_post_stream_with_retry_collects_chunks(monkeypatch):
         def stream(self, *args, **kwargs):
             return FakeStream()
 
-    monkeypatch.setattr("app.services.video.httpx.AsyncClient", lambda *args, **kwargs: FakeClient())
+    monkeypatch.setattr(
+        "app.services.video.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
+    )
 
-    assert await svc._post_stream_with_retry("https://example.com", {"stream": True}) == "https://cdn.example.com/a.mp4"
+    assert (
+        await svc._post_stream_with_retry("https://example.com", {"stream": True})
+        == "https://cdn.example.com/a.mp4"
+    )
 
 
 @pytest.mark.asyncio
@@ -225,7 +295,9 @@ async def test_generate_url_uses_i2v_stream_path(monkeypatch):
 
     monkeypatch.setattr(svc, "_post_stream_with_retry", fake_stream)
 
-    assert await svc.generate_url(prompt="make", image_bytes=b"img") == "https://cdn.example.com/a.mp4"
+    assert (
+        await svc.generate_url(prompt="make", image_bytes=b"img") == "https://cdn.example.com/a.mp4"
+    )
 
 
 @pytest.mark.asyncio
@@ -261,9 +333,14 @@ async def test_post_stream_with_retry_collects_reasoning_content(monkeypatch):
         def stream(self, *args, **kwargs):
             return FakeStream()
 
-    monkeypatch.setattr("app.services.video.httpx.AsyncClient", lambda *args, **kwargs: FakeClient())
+    monkeypatch.setattr(
+        "app.services.video.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
+    )
 
-    assert await svc._post_stream_with_retry("https://example.com", {"stream": True}) == "https://cdn.example.com/a.mp4"
+    assert (
+        await svc._post_stream_with_retry("https://example.com", {"stream": True})
+        == "https://cdn.example.com/a.mp4"
+    )
 
 
 @pytest.mark.asyncio
@@ -277,9 +354,16 @@ async def test_merge_urls_returns_first_url_and_rejects_empty(monkeypatch):
         async def merge_videos(self, urls):
             return "https://cdn.example.com/merged.mp4"
 
-    monkeypatch.setattr("app.services.video.VideoService.merge_urls", lambda self, video_urls: FakeMerger().merge_videos(video_urls), raising=False)
+    monkeypatch.setattr(
+        "app.services.video.VideoService.merge_urls",
+        lambda self, video_urls: FakeMerger().merge_videos(video_urls),
+        raising=False,
+    )
 
-    assert await svc.merge_urls(["https://a.mp4", "https://b.mp4"]) == "https://cdn.example.com/merged.mp4"
+    assert (
+        await svc.merge_urls(["https://a.mp4", "https://b.mp4"])
+        == "https://cdn.example.com/merged.mp4"
+    )
 
 
 # --- _post_json_with_retry error paths ---

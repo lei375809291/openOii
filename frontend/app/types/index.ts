@@ -215,6 +215,43 @@ export interface RunAwaitingConfirmEventData {
 	auto_mode?: boolean;
 }
 
+export interface RunStartedEventData {
+	run_id: number;
+	project_id?: number;
+	provider_snapshot?: ProjectProviderSettings | null;
+	current_stage?: string | null;
+	stage?: string | null;
+	next_stage?: string | null;
+	progress?: number;
+	current_agent?: string | null;
+	recovery_summary?: RecoverySummaryRead | null;
+	preserved_stages?: string[];
+}
+
+export interface RunCompletedEventData {
+	run_id?: number;
+	project_id?: number;
+	current_stage?: string | null;
+	current_agent?: string | null;
+	message?: string | null;
+	video_generation_pending?: boolean | null;
+}
+
+export interface RunFailedEventData {
+	run_id?: number;
+	project_id?: number;
+	error?: string | null;
+	agent?: string | null;
+	current_stage?: string | null;
+}
+
+export interface RunCancelledEventData {
+	run_id?: number;
+	project_id?: number;
+	run_ids?: number[];
+	cancelled_count?: number;
+}
+
 export interface RunConfirmedEventData {
 	run_id: number;
 	project_id?: number;

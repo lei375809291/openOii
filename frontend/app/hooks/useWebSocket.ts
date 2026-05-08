@@ -3,17 +3,17 @@ import { useEditorStore, type RunMode } from "~/stores/editorStore";
 import type {
 	Character,
 	ProjectUpdatedPayload,
-	ProjectProviderSettings,
-	RecoverySummaryRead,
 	RunAwaitingConfirmEventData,
+	RunCompletedEventData,
 	RunConfirmedEventData,
+	RunFailedEventData,
 	RunProgressEventData,
+	RunStartedEventData,
 	Shot,
 	WsEvent,
-	WorkflowStage,
 } from "~/types";
 import { toast } from "~/utils/toast";
-import { isWorkflowStage } from "~/utils/workflowStage";
+import { resolveEventStage } from "~/utils/workflowStage";
 import { getWsBase } from "~/utils/runtimeBase";
 
 const WS_BASE = getWsBase();
@@ -239,14 +239,6 @@ function cleanupStaleMessages(
 	}
 }
 
-function resolveEventStage(
-	data: Record<string, unknown>,
-): WorkflowStage | undefined {
-	const stage = data.stage ?? data.current_stage;
-	if (isWorkflowStage(stage)) return stage;
-	return undefined;
-}
-
 function applyStage(
 	store: ReturnType<typeof useEditorStore.getState>,
 	data: Record<string, unknown>,
@@ -280,7 +272,8 @@ export function applyWsEvent(
 			break;
 		}
 
-		case "run_started":
+		case "run_started": {
+			const d = event.data as unknown as RunStartedEventData;
 			store.setGenerating(true);
 			store.setProgress(0);
 			store.addMessage({
@@ -290,24 +283,19 @@ export function applyWsEvent(
 				content: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 				timestamp: new Date().toISOString(),
 			});
-			store.setCurrentRunId(event.data.run_id as number);
-			store.setCurrentAgent(
-				(event.data.current_agent as string | null) ?? null,
-			);
+			store.setCurrentRunId(d.run_id);
+			store.setCurrentAgent(d.current_agent ?? null);
 			store.setAwaitingConfirm(false);
 			store.setRecoveryGate(null);
 			applyStage(store, event.data);
-			if (event.data.recovery_summary) {
-				store.setRecoverySummary(
-					event.data.recovery_summary as RecoverySummaryRead,
-				);
+			if (d.recovery_summary) {
+				store.setRecoverySummary(d.recovery_summary);
 			}
-			if (Object.hasOwn(event.data, "provider_snapshot")) {
-				store.setCurrentRunProviderSnapshot(
-					event.data.provider_snapshot as ProjectProviderSettings | null,
-				);
+			if (Object.hasOwn(d, "provider_snapshot")) {
+				store.setCurrentRunProviderSnapshot(d.provider_snapshot ?? null);
 			}
 			break;
+		}
 
 		case "run_progress": {
 			const p = event.data as unknown as RunProgressEventData;
@@ -392,50 +380,52 @@ export function applyWsEvent(
 
 		case "run_completed": {
 			clearLoadingStates(store);
-			const completedAgent = (event.data?.current_agent as string) || "";
+			const d = event.data as unknown as RunCompletedEventData;
+			const completedAgent = d.current_agent || "";
 			if (completedAgent) cleanupStaleMessages(store, completedAgent);
 			cleanupStaleMessages(store, "system");
 			store.resetRunState();
 			store.setProgress(1);
-			const completedStage = event.data?.current_stage as string | undefined;
-			if (completedStage && isWorkflowStage(completedStage)) {
-				store.setCurrentStage(completedStage);
+			const stage = resolveEventStage(event.data);
+			if (stage) {
+				store.setCurrentStage(stage);
+			} else if (d.video_generation_pending) {
+				store.setCurrentStage("render");
 			} else {
 				store.setCurrentStage("compose");
 			}
-			if (
-				typeof event.data?.message === "string" &&
-				event.data.message.trim()
-			) {
+			if (typeof d.message === "string" && d.message.trim()) {
 				store.addMessage({
 					id: generateMessageId(),
 					agent: "system",
 					role: "assistant",
-					content: event.data.message,
+					content: d.message,
 					timestamp: new Date().toISOString(),
 				});
 			}
 			break;
 		}
 
-		case "run_failed":
+		case "run_failed": {
 			clearLoadingStates(store);
+			const d = event.data as unknown as RunFailedEventData;
 			store.resetRunState();
 			store.addMessage({
 				id: generateMessageId(),
 				agent: "system",
 				role: "error",
-				content: `生成失败: ${event.data.error}`,
+				content: `生成失败: ${d.error}`,
 				timestamp: new Date().toISOString(),
 			});
 			toast.error({
 				title: "生成失败",
-				message: (event.data.error as string) || "未知错误",
+				message: d.error || "未知错误",
 				duration: 5000,
 			});
 			break;
+		}
 
-		case "run_cancelled":
+		case "run_cancelled": {
 			clearLoadingStates(store);
 			store.resetRunState();
 			store.setProgress(0);
@@ -447,6 +437,7 @@ export function applyWsEvent(
 				timestamp: new Date().toISOString(),
 			});
 			break;
+		}
 
 		case "character_created":
 		case "character_updated":
@@ -500,12 +491,9 @@ export function applyWsEvent(
 					summary: (v) => store.setProjectSummary(v),
 					story: (v) => store.setProjectStory(v),
 					style: (v) => store.setProjectStyle(v),
-					target_shot_count: (v) =>
-						store.setProjectTargetShotCount(v),
-					character_hints: (v) =>
-						store.setProjectCharacterHints(v),
-					reference_images: (v) =>
-						store.setProjectReferenceImages(v),
+					target_shot_count: (v) => store.setProjectTargetShotCount(v),
+					character_hints: (v) => store.setProjectCharacterHints(v),
+					reference_images: (v) => store.setProjectReferenceImages(v),
 					blocking_clips: (v) => store.setBlockingClips(v),
 				};
 				for (const [key, setter] of Object.entries(fieldSetters)) {
