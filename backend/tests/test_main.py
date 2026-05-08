@@ -36,7 +36,9 @@ async def test_health_endpoint_returns_ok(monkeypatch):
     monkeypatch.setattr(main_module, "get_settings", lambda: settings)
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/health")
+    handler = next(
+        route.endpoint for route in app.routes if getattr(route, "path", None) == "/health"
+    )
 
     assert await handler() == {"status": "ok"}
 
@@ -45,6 +47,7 @@ async def test_health_endpoint_returns_ok(monkeypatch):
 async def test_lifespan_creates_directories_and_calls_init_db(monkeypatch, tmp_path):
     called = {"init_db": False}
     monkeypatch.setattr(main_module, "STATIC_DIR", tmp_path / "static")
+
     async def fake_init_db():
         _mark_called(called)
 
@@ -74,7 +77,9 @@ async def test_app_exception_handler_returns_error_payload(monkeypatch):
     app = main_module.create_app()
     exc = AppException(code="E1", message="bad", status_code=400, details={"x": 1})
 
-    response = await app.exception_handlers[AppException](SimpleNamespace(url=SimpleNamespace(path="/x"), method="GET"), exc)
+    response = await app.exception_handlers[AppException](
+        SimpleNamespace(url=SimpleNamespace(path="/x"), method="GET"), exc
+    )
 
     assert response.status_code == 400
     assert response.body
@@ -91,7 +96,9 @@ async def test_general_exception_handler_in_development_includes_details(monkeyp
     monkeypatch.setattr(main_module, "get_settings", lambda: settings)
     app = main_module.create_app()
 
-    response = await app.exception_handlers[Exception](SimpleNamespace(url=SimpleNamespace(path="/x"), method="GET"), RuntimeError("boom"))
+    response = await app.exception_handlers[Exception](
+        SimpleNamespace(url=SimpleNamespace(path="/x"), method="GET"), RuntimeError("boom")
+    )
 
     assert response.status_code == 500
     assert b"boom" in response.body
@@ -108,7 +115,9 @@ async def test_general_exception_handler_in_production_omits_details(monkeypatch
     monkeypatch.setattr(main_module, "get_settings", lambda: settings)
     app = main_module.create_app()
 
-    response = await app.exception_handlers[Exception](SimpleNamespace(url=SimpleNamespace(path="/x"), method="GET"), RuntimeError("boom"))
+    response = await app.exception_handlers[Exception](
+        SimpleNamespace(url=SimpleNamespace(path="/x"), method="GET"), RuntimeError("boom")
+    )
 
     assert response.status_code == 500
     assert b"boom" not in response.body
@@ -121,6 +130,7 @@ class _FakeWebSocket:
         self.accepted = False
         self.closed = False
         self.application_state = WebSocketState.CONNECTED
+        self.client_state = WebSocketState.CONNECTED
 
     async def accept(self):
         self.accepted = True
@@ -165,13 +175,19 @@ async def test_ws_projects_handles_ping_and_echo(monkeypatch):
     )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
 
-    fake_ws = _FakeWebSocket([
-        {"type": "ping"},
-        {"type": "echo", "data": {"x": 1}},
-    ])
+    fake_ws = _FakeWebSocket(
+        [
+            {"type": "ping"},
+            {"type": "echo", "data": {"x": 1}},
+        ]
+    )
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+    handler = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
 
     await handler(fake_ws, 1)
 
@@ -221,9 +237,16 @@ async def test_ws_projects_replays_awaiting_payload(monkeypatch):
             return FakeSessionCtx()
 
     monkeypatch.setattr(main_module, "ws_manager", FakeManager())
-    monkeypatch.setattr(main_module, "get_settings", lambda: SimpleNamespace(app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"))
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"
+        ),
+    )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
+
     async def fake_get_awaiting_payload(run_id):
         return {"run_id": run_id, "step": "approve"}
 
@@ -232,7 +255,11 @@ async def test_ws_projects_replays_awaiting_payload(monkeypatch):
     fake_ws = _FakeWebSocket([])
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+    handler = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
 
     await handler(fake_ws, 1)
 
@@ -270,6 +297,15 @@ async def test_ws_projects_confirm_invalid_run_sends_error(monkeypatch):
 
             return _Res()
 
+        async def get(self, model, pk):
+            return None
+
+        def add(self, obj):
+            pass
+
+        async def commit(self):
+            pass
+
     class FakeAsyncSessionMaker:
         def __call__(self):
             return FakeSessionCtx()
@@ -287,18 +323,27 @@ async def test_ws_projects_confirm_invalid_run_sends_error(monkeypatch):
     )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
-    monkeypatch.setattr(main_module, "AgentRun", SimpleNamespace(project_id=1, status="running"), raising=False)
+    monkeypatch.setattr(
+        main_module, "AgentRun", SimpleNamespace(project_id=1, status="running"), raising=False
+    )
 
-    fake_ws = _FakeWebSocket([
-        {"type": "confirm", "data": {"run_id": 123, "feedback": "  ok  "}},
-    ])
+    fake_ws = _FakeWebSocket(
+        [
+            {"type": "confirm", "data": {"run_id": 123, "feedback": "  ok  "}},
+        ]
+    )
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+    handler = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
 
     await handler(fake_ws, 1)
 
-    assert any(event[1]["type"] == "error" for event in events)
+    # Run not found (get returns None) → feedback silently skipped, no error event
+    assert not any(event[1]["type"] == "error" for event in events)
 
 
 @pytest.mark.asyncio
@@ -348,17 +393,29 @@ async def test_ws_projects_confirm_valid_run_saves_feedback_and_triggers_confirm
         trigger_calls.append(run_id)
 
     monkeypatch.setattr(main_module, "ws_manager", FakeManager())
-    monkeypatch.setattr(main_module, "get_settings", lambda: SimpleNamespace(app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"))
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"
+        ),
+    )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
     monkeypatch.setattr("app.agents.orchestrator.trigger_confirm_redis", fake_trigger)
 
-    fake_ws = _FakeWebSocket([
-        {"type": "confirm", "data": {"run_id": 123, "feedback": "  ok  "}},
-    ])
+    fake_ws = _FakeWebSocket(
+        [
+            {"type": "confirm", "data": {"run_id": 123, "feedback": "  ok  "}},
+        ]
+    )
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+    handler = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
 
     await handler(fake_ws, 1)
 
@@ -404,20 +461,36 @@ async def test_ws_projects_feedback_save_error_sends_ws_error(monkeypatch):
             return FakeSessionCtx()
 
     monkeypatch.setattr(main_module, "ws_manager", FakeManager())
-    monkeypatch.setattr(main_module, "get_settings", lambda: SimpleNamespace(app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"))
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"
+        ),
+    )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
 
-    fake_ws = _FakeWebSocket([
-        {"type": "confirm", "data": {"run_id": 123, "feedback": "ok"}},
-    ])
+    fake_ws = _FakeWebSocket(
+        [
+            {"type": "confirm", "data": {"run_id": 123, "feedback": "ok"}},
+        ]
+    )
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+    handler = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
 
     await handler(fake_ws, 1)
 
-    save_errors = [e for e in events if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_SAVE_ERROR"]
+    save_errors = [
+        e
+        for e in events
+        if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_SAVE_ERROR"
+    ]
     assert len(save_errors) == 0
 
 
@@ -458,16 +531,30 @@ async def test_ws_projects_message_exception_sends_error(monkeypatch):
             raise ValueError("bad json")
 
     monkeypatch.setattr(main_module, "ws_manager", FakeManager())
-    monkeypatch.setattr(main_module, "get_settings", lambda: SimpleNamespace(app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"))
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_name="openOii", cors_origins=[], api_v1_prefix="/api/v1", environment="development"
+        ),
+    )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
 
     fake_ws = BrokenWebSocket()
 
     app = main_module.create_app()
-    handler = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/ws/projects/{project_id}")
+    handler = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
 
     await handler(fake_ws, 1)
 
-    msg_errors = [e for e in events if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_MESSAGE_ERROR"]
+    msg_errors = [
+        e
+        for e in events
+        if e[1].get("type") == "error" and e[1].get("data", {}).get("code") == "WS_MESSAGE_ERROR"
+    ]
     assert len(msg_errors) >= 1

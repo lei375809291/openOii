@@ -12,14 +12,14 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 ## Guidelines Index
 
-| Guide | Description | Status |
-|-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | Filled |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Filled |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | Filled |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Filled |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Filled |
-| [WS Event Contracts](./ws-event-contracts.md) | WebSocket event schema alignment, cast pipeline, three-way contract | Filled |
+| Guide                                             | Description                                                           | Status |
+| ------------------------------------------------- | --------------------------------------------------------------------- | ------ |
+| [Directory Structure](./directory-structure.md)   | Module organization and file layout                                   | Filled |
+| [Database Guidelines](./database-guidelines.md)   | ORM patterns, queries, migrations                                     | Filled |
+| [Error Handling](./error-handling.md)             | Error types, handling strategies                                      | Filled |
+| [Quality Guidelines](./quality-guidelines.md)     | Code standards, forbidden patterns                                    | Filled |
+| [Logging Guidelines](./logging-guidelines.md)     | Structured logging, log levels                                        | Filled |
+| [WS Event Contracts](./ws-event-contracts.md)     | WebSocket event schema alignment, cast pipeline, three-way contract   | Filled |
 | [Orchestration Stages](./orchestration-stages.md) | LangGraph sub-stage architecture, approval gates, agent split pattern | Filled |
 
 ---

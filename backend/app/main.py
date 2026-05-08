@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from app.api.v1.router import api_router
 from app.config import get_settings
@@ -24,6 +25,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     import logging
+
     log = logging.getLogger("openOii.lifespan")
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "videos").mkdir(parents=True, exist_ok=True)
@@ -109,7 +111,6 @@ def create_app() -> FastAPI:
             get_awaiting_payload,
             trigger_confirm_redis,
         )
-        from starlette.websockets import WebSocketDisconnect
 
         try:
             await ws_manager.connect(project_id, websocket)
@@ -140,7 +141,9 @@ def create_app() -> FastAPI:
                         else:
                             from app.agents.orchestrator import STAGE_AGENT_MAP
 
-                            mapped_stage = STAGE_AGENT_MAP.get(run.current_agent or "", run.current_agent or "plan")
+                            mapped_stage = STAGE_AGENT_MAP.get(
+                                run.current_agent or "", run.current_agent or "plan"
+                            )
                             await ws_manager.send_event(
                                 project_id,
                                 {
@@ -159,6 +162,14 @@ def create_app() -> FastAPI:
                 logger.warning(f"Failed to replay state for project {project_id}: {e}")
 
             while True:
+                # Pre-check: if the socket is no longer connected, exit cleanly.
+                if websocket.client_state != WebSocketState.CONNECTED:
+                    logger.info(
+                        f"WebSocket client_state is {websocket.client_state.name}, "
+                        f"exiting loop for project {project_id}"
+                    )
+                    break
+
                 try:
                     msg = await websocket.receive_json()
                     msg_type = msg.get("type")
@@ -206,18 +217,38 @@ def create_app() -> FastAPI:
                 except WebSocketDisconnect:
                     logger.info(f"WebSocket disconnected for project {project_id}")
                     break
+                except RuntimeError as e:
+                    # Starlette raises RuntimeError when receive_json/send_json
+                    # is called on a socket whose underlying connection is gone
+                    # (e.g. client closed browser).  Treat as a disconnect.
+                    if "not connected" in str(e).lower():
+                        logger.info(f"WebSocket not connected for project {project_id}: {e}")
+                        break
+                    # Unexpected RuntimeError — log and re-raise.
+                    logger.error(
+                        f"WebSocket runtime error for project {project_id}: {e}", exc_info=True
+                    )
+                    break
                 except Exception as e:
                     logger.error(f"WebSocket message error: {e}", exc_info=True)
-                    await ws_manager.send_event(
-                        project_id,
-                        {
-                            "type": "error",
-                            "data": {
-                                "code": "WS_MESSAGE_ERROR",
-                                "message": "消息处理失败",
+                    # Try to notify the client, but break if it fails — don't
+                    # spin in an infinite loop on a dead connection.
+                    try:
+                        await ws_manager.send_event(
+                            project_id,
+                            {
+                                "type": "error",
+                                "data": {
+                                    "code": "WS_MESSAGE_ERROR",
+                                    "message": "消息处理失败",
+                                },
                             },
-                        },
-                    )
+                        )
+                    except Exception:
+                        logger.info(
+                            f"Failed to send error event, breaking WS loop for project {project_id}"
+                        )
+                        break
         except Exception as e:
             logger.error(f"WebSocket connection error: {e}", exc_info=True)
             try:

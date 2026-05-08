@@ -269,7 +269,7 @@ async def test_test_connection_rejects_unknown_override_field(async_client):
         "/api/v1/config/test-connection",
         json={
             "service": "llm",
-            "config_overrides": {"TEXT_BASE_URL": "https://example.com"},
+            "config_overrides": {"NOT_A_REAL_FIELD": "nope"},
         },
     )
 

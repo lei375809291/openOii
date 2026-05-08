@@ -134,8 +134,28 @@ export function SettingsModal() {
 			return;
 		}
 
+		// Only send overrides for fields relevant to the current service.
+		// The backend rejects non-whitelisted override keys with 400.
+		const servicePrefixes: Record<string, string[]> = {
+			llm: ["text_", "anthropic_"],
+			image: ["image_", "enable_image_to_image"],
+			video: [
+				"video_",
+				"doubao_",
+				"enable_image_to_video",
+				"video_image_mode",
+				"video_inline_local_images",
+			],
+		};
+
+		const prefixes = servicePrefixes[service];
+		const relevantEntries = Object.entries(formState).filter(([key]) => {
+			const lower = key.toLowerCase();
+			return prefixes.some((p) => lower.startsWith(p) || lower === p);
+		});
+
 		const normalizedFormState = Object.fromEntries(
-			Object.entries(formState).map(([key, value]) => [
+			relevantEntries.map(([key, value]) => [
 				key,
 				value === null ? null : String(value),
 			]),

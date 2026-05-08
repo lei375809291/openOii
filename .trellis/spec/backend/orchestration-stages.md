@@ -28,11 +28,11 @@ plan_characters → characters_approval → plan_shots → shots_approval
 
 ### Stage Categories
 
-| Category | Stages | Behavior |
-|----------|--------|----------|
-| **Production** | `plan_characters`, `plan_shots`, `render_characters`, `render_shots`, `compose_videos`, `compose_merge` | Runs agent sub-method |
-| **Approval** | `characters_approval`, `shots_approval`, `character_images_approval`, `shot_images_approval`, `compose_approval` | Interrupts for user confirmation |
-| **Review** | `review` | Routes feedback to appropriate production stage |
+| Category       | Stages                                                                                                           | Behavior                                        |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Production** | `plan_characters`, `plan_shots`, `render_characters`, `render_shots`, `compose_videos`, `compose_merge`          | Runs agent sub-method                           |
+| **Approval**   | `characters_approval`, `shots_approval`, `character_images_approval`, `shot_images_approval`, `compose_approval` | Interrupts for user confirmation                |
+| **Review**     | `review`                                                                                                         | Routes feedback to appropriate production stage |
 
 ### Key Mappings
 
@@ -116,6 +116,7 @@ def _resolve_base_stage(stage: str) -> str | None:
 ```
 
 **Mapping**:
+
 - `"plan_characters"` → `"plan_characters"` (identity)
 - `"characters_approval"` → `"plan_characters"` (via `_APPROVAL_TO_PRODUCED_STAGE`)
 - `"shot_images_approval"` → `"render_shots"`
@@ -152,14 +153,14 @@ ctx.plan_data: dict | None = None  # Set by run_characters(), read by run_shots(
 
 ## 5. Validation & Error Matrix
 
-| Scenario | Result |
-|----------|--------|
-| `run_shots()` called without `ctx.plan_data` | `RuntimeError` raised |
-| Video provider invalid at `compose_videos` | Node skips work, adds to `artifact_lineage` |
-| Approval with feedback | Routes to `review` node |
-| Approval without feedback | Routes to next production stage |
-| `auto_mode=True` | Approval returns immediately without interrupt |
-| Stage in `artifact_lineage` | Production node skips (already done) |
+| Scenario                                     | Result                                         |
+| -------------------------------------------- | ---------------------------------------------- |
+| `run_shots()` called without `ctx.plan_data` | `RuntimeError` raised                          |
+| Video provider invalid at `compose_videos`   | Node skips work, adds to `artifact_lineage`    |
+| Approval with feedback                       | Routes to `review` node                        |
+| Approval without feedback                    | Routes to next production stage                |
+| `auto_mode=True`                             | Approval returns immediately without interrupt |
+| Stage in `artifact_lineage`                  | Production node skips (already done)           |
 
 ---
 
@@ -247,6 +248,7 @@ PHASE2_STAGE_ORDER = ("plan_characters", "characters_approval", "plan_shots", ..
 ### Correct: Keeping all mappings in sync
 
 When adding/modifying stages, update ALL of:
+
 1. `PRODUCTION_STAGE_SEQUENCE` in `state.py`
 2. `PHASE2_STAGE_ORDER` in `run_recovery.py`
 3. `AGENT_TO_STAGE` in `run_recovery.py`
@@ -263,6 +265,7 @@ When adding/modifying stages, update ALL of:
 **Context**: User wanted "manual mode confirms every small step."
 
 **Options**:
+
 1. Per-character/per-shot approval (extremely granular, many interrupts)
 2. Per-sub-stage approval (one interrupt per agent phase)
 3. Per-agent approval (original 2-gate design)
@@ -276,6 +279,7 @@ When adding/modifying stages, update ALL of:
 **Context**: Plan agent's LLM returns both characters and shots in one response, but they're now consumed in separate sub-steps.
 
 **Options**:
+
 1. Call LLM twice (once per sub-step) — wastes tokens, may get inconsistent results
 2. Cache response on `AgentContext` — simple, shared mutable state
 3. Store in LangGraph state — requires state schema changes

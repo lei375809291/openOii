@@ -321,10 +321,13 @@ describe("SettingsModal", () => {
 			expect(configApi.testConnection).toHaveBeenCalledWith(
 				"llm",
 				expect.objectContaining({
-					DATABASE_URL: "postgresql://localhost:5432/test",
 					TEXT_PROVIDER: "anthropic",
 				}),
 			);
+			// DATABASE_URL is not relevant to llm service and should not be sent
+			const overrides = vi.mocked(configApi.testConnection).mock.calls[0][1];
+			expect(overrides).not.toHaveProperty("DATABASE_URL");
+			expect(overrides).not.toHaveProperty("REDIS_URL");
 			expect(screen.getByText("连接测试成功")).toBeInTheDocument();
 			expect(screen.getByText("连接测试通过")).toBeInTheDocument();
 			expect(screen.getByText("service is reachable")).toBeInTheDocument();

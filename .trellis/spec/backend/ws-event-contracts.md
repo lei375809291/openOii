@@ -34,11 +34,11 @@ orchestrator/agent calls send_event(project_id, dict)
 
 ### Three-Way Contract
 
-| Layer | File | Responsibility |
-|-------|------|----------------|
-| **Producer** | `orchestrator.py`, `base.py`, `nodes.py` | Sends dict with correct fields |
-| **Schema** | `app/schemas/ws.py` `_EVENT_DATA_MODELS` | Validates/strips fields |
-| **Consumer** | `frontend/app/hooks/useWebSocket.ts` `applyWsEvent` | Reads `event.data` fields |
+| Layer        | File                                                | Responsibility                 |
+| ------------ | --------------------------------------------------- | ------------------------------ |
+| **Producer** | `orchestrator.py`, `base.py`, `nodes.py`            | Sends dict with correct fields |
+| **Schema**   | `app/schemas/ws.py` `_EVENT_DATA_MODELS`            | Validates/strips fields        |
+| **Consumer** | `frontend/app/hooks/useWebSocket.ts` `applyWsEvent` | Reads `event.data` fields      |
 
 **All three must agree on field names and types.** A mismatch at any layer causes silent data loss.
 
@@ -66,10 +66,10 @@ _EVENT_DATA_MODELS: dict[str, type[BaseModel]] = {
 ```typescript
 // frontend/app/types/index.ts
 export interface RunProgressEventData {
-    run_id: number;
-    project_id?: number;
-    current_agent?: string | null;
-    // ... must match Pydantic fields exactly
+  run_id: number;
+  project_id?: number;
+  current_agent?: string | null;
+  // ... must match Pydantic fields exactly
 }
 ```
 
@@ -104,13 +104,13 @@ export interface RunProgressEventData {
 
 ## 5. Validation & Error Matrix
 
-| Scenario | Result | Detection |
-|----------|--------|-----------|
-| Orchestrator sends field not in Pydantic model | Field silently dropped | Cast output ≠ input |
-| Pydantic model has field orchestrator never sends | Field always None/default | Frontend reads undefined |
-| Event type not in `_EVENT_DATA_MODELS` | Raw dict passes through unvalidated | All fields survive (may have wrong types) |
-| Event type not in frontend `WsEventType` | TypeScript compile error | `tsc --noEmit` |
-| Frontend reads field that was dropped by cast | `undefined` at runtime | No error, silent wrong behavior |
+| Scenario                                          | Result                              | Detection                                 |
+| ------------------------------------------------- | ----------------------------------- | ----------------------------------------- |
+| Orchestrator sends field not in Pydantic model    | Field silently dropped              | Cast output ≠ input                       |
+| Pydantic model has field orchestrator never sends | Field always None/default           | Frontend reads undefined                  |
+| Event type not in `_EVENT_DATA_MODELS`            | Raw dict passes through unvalidated | All fields survive (may have wrong types) |
+| Event type not in frontend `WsEventType`          | TypeScript compile error            | `tsc --noEmit`                            |
+| Frontend reads field that was dropped by cast     | `undefined` at runtime              | No error, silent wrong behavior           |
 
 ---
 
@@ -217,7 +217,7 @@ await ws.send_event(pid, {"type": "run_started", "data": {"new_field": "value"}}
 
 ```typescript
 // Don't cast blindly
-const data = event.data as any;  // no type safety
+const data = event.data as any; // no type safety
 
 // Do use typed interface
 const data = event.data as RunStartedEventData;

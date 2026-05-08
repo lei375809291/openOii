@@ -61,6 +61,7 @@ def _is_safe_url(url: str) -> bool:
 _ALLOWED_OVERRIDE_FIELDS = {
     # 文本生成
     "anthropic_api_key",
+    "anthropic_auth_token",
     "anthropic_base_url",
     "anthropic_model",
     "text_api_key",
@@ -81,6 +82,7 @@ _ALLOWED_OVERRIDE_FIELDS = {
     "video_model",
     "video_endpoint",
     "video_provider",
+    "video_mode",
     "enable_image_to_video",
     "video_image_mode",
     "video_inline_local_images",
