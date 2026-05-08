@@ -41,9 +41,23 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
 }
 
-export function Button({ variant = "primary", size = "md", className, children, ...props }: ButtonProps) {
+export function Button({
+  variant = "primary",
+  size = "md",
+  className,
+  children,
+  ...props
+}: ButtonProps) {
   return (
-    <button className={clsx("btn-doodle", variantStyles[variant], sizeStyles[size], className)} {...props}>
+    <button
+      className={clsx(
+        "btn-doodle",
+        variantStyles[variant],
+        sizeStyles[size],
+        className,
+      )}
+      {...props}
+    >
       {children}
     </button>
   );
@@ -202,20 +216,20 @@ Required tests: `pnpm exec vitest run app/hooks/useCanvasLayout.test.ts app/comp
 
 ## Forbidden Patterns
 
-| Pattern | Why |
-|---|---|
-| `React.FC` / `React.FunctionComponent` | Adds implicit `children`; the team uses explicit prop types. |
-| `defaultProps` | Use destructuring defaults. |
-| `useEffect` to derive state from props | Compute during render; cache with `useMemo` if expensive. |
-| Inline `style={{ color: "#fff" }}` | Use Tailwind classes / theme tokens. |
-| Direct DOM manipulation (`document.querySelector`, raw `addEventListener`) inside render | Use refs + `useEffect` cleanup; for canvas events use the existing `canvasEvents.ts` helper. |
-| `dangerouslySetInnerHTML` without sanitization | Don't accept HTML from users; if unavoidable, sanitize with DOMPurify. |
-| Calling axios / fetch directly | Go through `services/api.ts`. |
-| Storing base64 data URIs in project fields | Use `projectsApi.uploadReference(projectId, file)` → backend stores file in `static/references/` → returns URL path. DB only stores path, not base64. |
-| Reading from a Zustand store inside a deep ref / class | Use the hook in a function component. |
-| Passing entire store objects as props | Pass the slice you need or use a selector. |
-| Full-subscription Zustand calls (`useStore()` without selector) | Use `useStore(useShallow(s => ({ field1, field2 })))` for precise subscriptions. |
-| Using emoji characters (↻✎✓★▸💡🔊⚠️) as UI icons | Use `SvgIcon` component — emoji render inconsistently across OS, fail accessibility, can't be styled. |
+| Pattern                                                                                  | Why                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `React.FC` / `React.FunctionComponent`                                                   | Adds implicit `children`; the team uses explicit prop types.                                                                                          |
+| `defaultProps`                                                                           | Use destructuring defaults.                                                                                                                           |
+| `useEffect` to derive state from props                                                   | Compute during render; cache with `useMemo` if expensive.                                                                                             |
+| Inline `style={{ color: "#fff" }}`                                                       | Use Tailwind classes / theme tokens.                                                                                                                  |
+| Direct DOM manipulation (`document.querySelector`, raw `addEventListener`) inside render | Use refs + `useEffect` cleanup; for canvas events use the existing `canvasEvents.ts` helper.                                                          |
+| `dangerouslySetInnerHTML` without sanitization                                           | Don't accept HTML from users; if unavoidable, sanitize with DOMPurify.                                                                                |
+| Calling axios / fetch directly                                                           | Go through `services/api.ts`.                                                                                                                         |
+| Storing base64 data URIs in project fields                                               | Use `projectsApi.uploadReference(projectId, file)` → backend stores file in `static/references/` → returns URL path. DB only stores path, not base64. |
+| Reading from a Zustand store inside a deep ref / class                                   | Use the hook in a function component.                                                                                                                 |
+| Passing entire store objects as props                                                    | Pass the slice you need or use a selector.                                                                                                            |
+| Full-subscription Zustand calls (`useStore()` without selector)                          | Use `useStore(useShallow(s => ({ field1, field2 })))` for precise subscriptions.                                                                      |
+| Using emoji characters (↻✎✓★▸💡🔊⚠️) as UI icons                                         | Use `SvgIcon` component — emoji render inconsistently across OS, fail accessibility, can't be styled.                                                 |
 
 ---
 
@@ -293,7 +307,7 @@ if (result.value !== null) {
 
 ```tsx
 // Correct: always use value prop (formState), not local revealedValue
-const displayValue = isRevealed ? value : isMasked ? value : '••••••••';
+const displayValue = isRevealed ? value : isMasked ? value : "••••••••";
 ```
 
 **Wrong**: `const displayValue = isRevealed ? revealedValue : ...` — this decouples display from formState, breaking controlled input behavior.
@@ -301,10 +315,15 @@ const displayValue = isRevealed ? value : isMasked ? value : '••••••
 ### Test pattern
 
 Tests must simulate the controlled component flow:
+
 ```tsx
-let currentValue = 'sk-a******key';
-const onChange = vi.fn((e) => { currentValue = e.target.value; });
-const { rerender } = render(<ConfigInput value={currentValue} onChange={onChange} />);
+let currentValue = "sk-a******key";
+const onChange = vi.fn((e) => {
+  currentValue = e.target.value;
+});
+const { rerender } = render(
+  <ConfigInput value={currentValue} onChange={onChange} />,
+);
 
 // Reveal
 await user.click(eyeButton);
@@ -314,5 +333,5 @@ await waitFor(() => expect(onChange).toHaveBeenCalled());
 rerender(<ConfigInput value={currentValue} onChange={onChange} />);
 
 // Now editing works
-await user.clear(screen.getByDisplayValue('sk-actual-key'));
+await user.clear(screen.getByDisplayValue("sk-actual-key"));
 ```

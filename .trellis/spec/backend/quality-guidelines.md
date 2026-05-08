@@ -84,21 +84,21 @@ Use `SettingsDep` (from `app.api.deps`) inside routes. Inside `get_settings()`-a
 
 ## Forbidden Patterns
 
-| Pattern | Why |
-|---|---|
-| Bare `except:` | Hides KeyboardInterrupt / SystemExit. Catch specific exceptions. |
-| Empty `except Exception: pass` | Silent failure. The only acceptable case is a final-WS-send that we know may fail because the client disconnected. |
-| `print(...)` for diagnostics | Use `logger`. `print` ends up in stdout without level / context. |
-| `# type: ignore` without a reason | If you must use it, add a comment: `# type: ignore[...]  # reason`. |
-| `os.getenv("FOO")` inside business code | Add a field to `Settings` and access via `settings.foo`. |
-| Sync HTTP calls in request path (`requests`, blocking `httpx.Client`) | Use `httpx.AsyncClient` or `aiohttp`. |
-| Sync DB calls in request path | Async sessions only. |
-| Importing `app.api.*` from `app/services/*` | Services must be HTTP-agnostic. |
-| Top-level side effects in modules | Modules should only declare; effects belong in `lifespan` / explicit init. |
-| Catching exception and re-raising as `HTTPException` from a service | Use `AppException` subclasses; let routes / global handler do HTTP. |
-| Hardcoded magic strings repeated in 3+ places | Lift to a constant or enum. |
-| Defining local `utcnow()` in any module | Use `from app.db.utils import utcnow` — single canonical source. |
-| Using LLM for deterministic routing decisions | Use `app.agents.review_rules` — rule-based validation/routing; reserve LLM calls for creative tasks only. |
+| Pattern                                                               | Why                                                                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Bare `except:`                                                        | Hides KeyboardInterrupt / SystemExit. Catch specific exceptions.                                                   |
+| Empty `except Exception: pass`                                        | Silent failure. The only acceptable case is a final-WS-send that we know may fail because the client disconnected. |
+| `print(...)` for diagnostics                                          | Use `logger`. `print` ends up in stdout without level / context.                                                   |
+| `# type: ignore` without a reason                                     | If you must use it, add a comment: `# type: ignore[...]  # reason`.                                                |
+| `os.getenv("FOO")` inside business code                               | Add a field to `Settings` and access via `settings.foo`.                                                           |
+| Sync HTTP calls in request path (`requests`, blocking `httpx.Client`) | Use `httpx.AsyncClient` or `aiohttp`.                                                                              |
+| Sync DB calls in request path                                         | Async sessions only.                                                                                               |
+| Importing `app.api.*` from `app/services/*`                           | Services must be HTTP-agnostic.                                                                                    |
+| Top-level side effects in modules                                     | Modules should only declare; effects belong in `lifespan` / explicit init.                                         |
+| Catching exception and re-raising as `HTTPException` from a service   | Use `AppException` subclasses; let routes / global handler do HTTP.                                                |
+| Hardcoded magic strings repeated in 3+ places                         | Lift to a constant or enum.                                                                                        |
+| Defining local `utcnow()` in any module                               | Use `from app.db.utils import utcnow` — single canonical source.                                                   |
+| Using LLM for deterministic routing decisions                         | Use `app.agents.review_rules` — rule-based validation/routing; reserve LLM calls for creative tasks only.          |
 
 ---
 
@@ -252,6 +252,7 @@ If you spot dead code, leave a `# TODO(<name>): unused, candidate for removal` r
 When adding CPU-bound ML dependencies (e.g., `insightface`, `onnxruntime`):
 
 1. **Lazy singleton init** — don't import at module level. Use a module-level `_APP = None` + `_INIT_ATTEMPTED = False` pattern:
+
    ```python
    _FACE_ANALYSIS_APP = None
    _INIT_ATTEMPTED = False
@@ -273,6 +274,7 @@ When adding CPU-bound ML dependencies (e.g., `insightface`, `onnxruntime`):
            logger.warning("Failed to init InsightFace: %s", e)
            return None
    ```
+
 2. **Graceful fallback** — if the ML dependency fails to load, the calling code must fall back to a simpler approach (e.g., full-body image concatenation instead of face cropping).
 3. **Docker pre-download** — add a `RUN` step in Dockerfile to pre-download models at build time:
    ```dockerfile
@@ -287,13 +289,13 @@ When adding CPU-bound ML dependencies (e.g., `insightface`, `onnxruntime`):
 
 `config_service.upsert_configs()` has specific behavior for empty values:
 
-| Input | DB State | Behavior |
-|-------|----------|----------|
-| `"actual_value"` | exists | Update value |
-| `"actual_value"` | not exists | Create new row |
-| `""` | exists | **Delete DB row** (fall back to `.env`) |
-| `""` | not exists | Skip (don't create empty row) |
-| `"******"` | exists with value `"secret"` | Skip (masked input detected) |
-| `None` | any | Skip |
+| Input            | DB State                     | Behavior                                |
+| ---------------- | ---------------------------- | --------------------------------------- |
+| `"actual_value"` | exists                       | Update value                            |
+| `"actual_value"` | not exists                   | Create new row                          |
+| `""`             | exists                       | **Delete DB row** (fall back to `.env`) |
+| `""`             | not exists                   | Skip (don't create empty row)           |
+| `"******"`       | exists with value `"secret"` | Skip (masked input detected)            |
+| `None`           | any                          | Skip                                    |
 
 This enables the frontend "clear sensitive field" flow: user empties input → saves `""` → backend deletes DB row → next `list_effective` shows `.env` value (or nothing if not in `.env`).

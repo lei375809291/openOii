@@ -1,7 +1,12 @@
 import { ArrowPathIcon, StopIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+	Link,
+	useNavigate,
+	useParams,
+	useSearchParams,
+} from "react-router-dom";
 import { ChatDrawer } from "~/components/chat/ChatDrawer";
 import { TopBar } from "~/components/layout/TopBar";
 import { StagePipeline } from "~/components/layout/StagePipeline";
@@ -13,10 +18,7 @@ import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
-import type {
-	ProjectProviderSettings,
-	RecoveryControlRead,
-} from "~/types";
+import type { ProjectProviderSettings, RecoveryControlRead } from "~/types";
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
 import { isWorkflowStage } from "~/utils/workflowStage";
@@ -34,14 +36,16 @@ export function ProjectPage() {
 		awaitingConfirm: storeAwaitingConfirm,
 		recoveryControl: storeRecoveryControl,
 		runMode: storeRunMode,
-	} = useEditorStore(useShallow((s) => ({
-		isGenerating: s.isGenerating,
-		currentRunId: s.currentRunId,
-		currentStage: s.currentStage,
-		awaitingConfirm: s.awaitingConfirm,
-		recoveryControl: s.recoveryControl,
-		runMode: s.runMode,
-	})));
+	} = useEditorStore(
+		useShallow((s) => ({
+			isGenerating: s.isGenerating,
+			currentRunId: s.currentRunId,
+			currentStage: s.currentStage,
+			awaitingConfirm: s.awaitingConfirm,
+			recoveryControl: s.recoveryControl,
+			runMode: s.runMode,
+		})),
+	);
 	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
 	const hasRecovery = Boolean(storeRecoveryControl);
 	const [assetsOpen, setAssetsOpen] = useState(false);
@@ -164,7 +168,8 @@ export function ProjectPage() {
 					content: msg.content,
 					timestamp: msg.created_at,
 					progress: msg.progress ?? undefined,
-					isLoading: msg.is_loading,
+					// 从数据库加载的消息不再显示为加载中
+					isLoading: false,
 				});
 			});
 		}
@@ -172,7 +177,9 @@ export function ProjectPage() {
 
 	const generateMutation = useMutation({
 		mutationFn: ({ requestToken }: { requestToken: number }) =>
-			projectsApi.generate(projectId, { auto_mode: storeRunMode === "yolo" }).then((run) => ({ run, requestToken })),
+			projectsApi
+				.generate(projectId, { auto_mode: storeRunMode === "yolo" })
+				.then((run) => ({ run, requestToken })),
 		onSuccess: ({ run, requestToken }) => {
 			if (requestToken !== generateRequestTokenRef.current) return;
 			syncStoreWithActiveRun(run);
@@ -189,11 +196,15 @@ export function ProjectPage() {
 				const control = apiError?.response as RecoveryControlRead | undefined;
 				if (control) {
 					useEditorStore.getState().setRecoveryControl(control);
-					useEditorStore.getState().setRecoverySummary(control.recovery_summary);
+					useEditorStore
+						.getState()
+						.setRecoverySummary(control.recovery_summary);
 					useEditorStore.getState().setCurrentRunId(control.active_run.id);
 					useEditorStore.getState().setGenerating(control.state === "active");
 					if (control.state === "active") {
-						useEditorStore.getState().setCurrentAgent(control.active_run.current_agent);
+						useEditorStore
+							.getState()
+							.setCurrentAgent(control.active_run.current_agent);
 						useEditorStore.getState().setProgress(control.active_run.progress);
 					}
 				} else {
@@ -220,7 +231,13 @@ export function ProjectPage() {
 	const storeCurrentAgent = useEditorStore((s) => s.currentAgent);
 
 	const feedbackMutation = useMutation({
-		mutationFn: (content: string) => projectsApi.feedback(projectId, content, undefined, storeCurrentAgent ?? "plan"),
+		mutationFn: (content: string) =>
+			projectsApi.feedback(
+				projectId,
+				content,
+				undefined,
+				storeCurrentAgent ?? "plan",
+			),
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
 			const isConflict =
@@ -327,8 +344,13 @@ export function ProjectPage() {
 	};
 
 	const handleCancel = () => {
-		const activeRunId = storeCurrentRunId ?? storeRecoveryControl?.active_run.id ?? null;
-		if (!activeRunId && !storeIsGenerating && storeRecoveryControl?.state !== "active") {
+		const activeRunId =
+			storeCurrentRunId ?? storeRecoveryControl?.active_run.id ?? null;
+		if (
+			!activeRunId &&
+			!storeIsGenerating &&
+			storeRecoveryControl?.state !== "active"
+		) {
 			return;
 		}
 		generateRequestTokenRef.current += 1;
@@ -403,21 +425,21 @@ export function ProjectPage() {
 
 	return (
 		<div className="h-screen flex flex-col bg-base-100 font-sans overflow-hidden">
-				<TopBar
-					onToggleAssets={() => setAssetsOpen((v) => !v)}
-					onToggleHistory={() => setHistoryOpen((v) => !v)}
-					assetsOpen={assetsOpen}
-					historyOpen={historyOpen}
-					projectId={projectId}
-				/>
-				<StagePipeline
-					currentStage={storeCurrentStage}
-					isGenerating={storeIsGenerating}
-					awaitingConfirm={storeAwaitingConfirm}
-					hasRecovery={hasRecovery}
-					onResume={handleResume}
-					onCancel={handleCancel}
-				/>
+			<TopBar
+				onToggleAssets={() => setAssetsOpen((v) => !v)}
+				onToggleHistory={() => setHistoryOpen((v) => !v)}
+				assetsOpen={assetsOpen}
+				historyOpen={historyOpen}
+				projectId={projectId}
+			/>
+			<StagePipeline
+				currentStage={storeCurrentStage}
+				isGenerating={storeIsGenerating}
+				awaitingConfirm={storeAwaitingConfirm}
+				hasRecovery={hasRecovery}
+				onResume={handleResume}
+				onCancel={handleCancel}
+			/>
 
 			<div className="flex-1 flex overflow-hidden">
 				<div className="flex-1 relative overflow-hidden">
@@ -436,7 +458,11 @@ export function ProjectPage() {
 			</div>
 
 			<AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
-			<HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} onNavigate={(id) => navigate(`/projects/${id}`)} />
+			<HistoryDrawer
+				open={historyOpen}
+				onClose={() => setHistoryOpen(false)}
+				onNavigate={(id) => navigate(`/project/${id}`)}
+			/>
 		</div>
 	);
 }

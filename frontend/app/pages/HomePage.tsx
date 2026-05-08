@@ -202,7 +202,7 @@ export function HomePage() {
 			<HistoryDrawer
 				open={historyOpen}
 				onClose={() => setHistoryOpen(false)}
-				onNavigate={(id) => navigate(`/projects/${id}`)}
+				onNavigate={(id) => navigate(`/project/${id}`)}
 			/>
 			<div className="flex flex-col items-center justify-center p-4 sm:p-6 halftone-bg-accent min-h-[calc(100vh-40px)]">
 				<main className="w-full max-w-2xl mx-auto">

@@ -18,7 +18,9 @@ async def delete_project_files(session: AsyncSession, project: Project, project_
     delete_file(project.video_url)
 
     character_project_id_col = cast(InstrumentedAttribute[int], cast(object, Character.project_id))
-    chars_res = await session.execute(select(Character).where(character_project_id_col == project_id))
+    chars_res = await session.execute(
+        select(Character).where(character_project_id_col == project_id)
+    )
     chars = chars_res.scalars().all()
     delete_files([c.image_url for c in chars])
 
@@ -31,6 +33,14 @@ async def delete_project_files(session: AsyncSession, project: Project, project_
 
 async def delete_project_data(session: AsyncSession, project_id: int) -> None:
     """删除项目关联的所有数据库记录"""
+    # 删除 assets（source_project_id 引用 project.id）
+    from app.models.asset import Asset
+
+    asset_source_project_id_col = cast(
+        InstrumentedAttribute[int | None], cast(object, Asset.source_project_id)
+    )
+    await session.execute(delete(Asset).where(asset_source_project_id_col == project_id))
+
     message_project_id_col = cast(InstrumentedAttribute[int], cast(object, Message.project_id))
     await session.execute(delete(Message).where(message_project_id_col == project_id))
 

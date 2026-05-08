@@ -56,7 +56,9 @@ class VideoService:
         async with httpx.AsyncClient(timeout=self.settings.request_timeout_s) as client:
             for attempt in range(self.max_retries + 1):
                 try:
-                    res = await client.post(url, headers=self.settings.video_headers(), json=payload)
+                    res = await client.post(
+                        url, headers=self.settings.video_headers(), json=payload
+                    )
                     if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
                         await asyncio.sleep(delay_s)
                         delay_s = min(delay_s * 2, 8.0)
@@ -73,7 +75,9 @@ class VideoService:
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 8.0)
 
-        raise RuntimeError(f"Video generation request failed after retries: {last_exc}") from last_exc
+        raise RuntimeError(
+            f"Video generation request failed after retries: {last_exc}"
+        ) from last_exc
 
     async def _post_stream_with_retry(self, url: str, payload: dict[str, Any]) -> str:
         """流式请求，收集所有 chunk 并提取最终 URL"""
@@ -90,7 +94,10 @@ class VideoService:
                     async with client.stream(
                         "POST", url, headers=self.settings.video_headers(), json=payload
                     ) as res:
-                        if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
+                        if (
+                            self._is_retryable_status(res.status_code)
+                            and attempt < self.max_retries
+                        ):
                             await asyncio.sleep(delay_s)
                             delay_s = min(delay_s * 2, 8.0)
                             continue
@@ -121,7 +128,9 @@ class VideoService:
                                         err = json.loads(data_str)
                                         raise RuntimeError(f"Stream error: {err}")
                                     except json.JSONDecodeError:
-                                        logger.debug("Non-JSON error line in stream: %s", data_str[:100])
+                                        logger.debug(
+                                            "Non-JSON error line in stream: %s", data_str[:100]
+                                        )
                                 else:
                                     logger.debug("Skipping non-JSON line in video stream: %s", e)
                                 continue
@@ -138,7 +147,9 @@ class VideoService:
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 8.0)
 
-        raise RuntimeError(f"Video generation stream failed after retries: {last_exc}") from last_exc
+        raise RuntimeError(
+            f"Video generation stream failed after retries: {last_exc}"
+        ) from last_exc
 
     async def generate(
         self,
@@ -158,16 +169,39 @@ class VideoService:
                 **kwargs,
             }
         else:
-            payload: dict[str, Any] = {
-                "model": self.settings.video_model,
-                "prompt": prompt,
-                "duration": duration,
-                **kwargs,
-            }
+            # 根据模型类型使用不同参数格式
+            model_lower = self.settings.video_model.lower()
+            if "grok" in model_lower:
+                # grok-videos 使用 seconds 和 size 参数
+                payload: dict[str, Any] = {
+                    "model": self.settings.video_model,
+                    "prompt": prompt,
+                    "seconds": int(duration),
+                    "size": "16:9",
+                    **kwargs,
+                }
+            elif "veo" in model_lower:
+                # veo3 使用 duration (integer) 和 aspect_ratio 参数
+                payload: dict[str, Any] = {
+                    "model": self.settings.video_model,
+                    "prompt": prompt,
+                    "duration": int(duration),
+                    "aspect_ratio": "16:9",
+                    **kwargs,
+                }
+            else:
+                payload = {
+                    "model": self.settings.video_model,
+                    "prompt": prompt,
+                    "duration": duration,
+                    **kwargs,
+                }
 
         return await self._post_json_with_retry(url, payload)
 
-    async def generate_url(self, *, prompt: str, image_bytes: bytes | None = None, **kwargs: Any) -> str:
+    async def generate_url(
+        self, *, prompt: str, image_bytes: bytes | None = None, **kwargs: Any
+    ) -> str:
         """生成视频并返回 URL
 
         Args:
@@ -196,11 +230,9 @@ class VideoService:
                                 {"type": "text", "text": prompt},
                                 {
                                     "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/png;base64,{image_base64}"
-                                    }
-                                }
-                            ]
+                                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                                },
+                            ],
                         }
                     ],
                     "stream": True,

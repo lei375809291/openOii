@@ -221,12 +221,16 @@ function cleanupStaleMessages(
 	const currentMessages = useEditorStore.getState().messages;
 	const cleaned = currentMessages.filter((msg) => {
 		if (msg.agent !== completedAgent) return true;
+		// 移除确认/继续执行的临时消息
 		if (
 			msg.role === "info" &&
 			(msg.content.includes("已确认") || msg.content.includes("继续执行"))
 		)
 			return false;
+		// 移除空消息
 		if (!msg.content?.trim() && !msg.summary) return false;
+		// 移除加载中的进度消息（临时消息）
+		if (msg.isLoading) return false;
 		return true;
 	});
 	if (cleaned.length !== currentMessages.length) {
