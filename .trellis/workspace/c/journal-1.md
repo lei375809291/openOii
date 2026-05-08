@@ -410,3 +410,36 @@ Extracted get_or_404 helper in deps.py (eliminated ~54 lines of repeated session
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 前后端对齐审查 + 手动模式细粒度确认
+
+**Date**: 2026-05-08
+**Task**: 前后端对齐审查 + 手动模式细粒度确认
+**Branch**: `main`
+
+### Summary
+
+1) 全面审查前后端接口对齐：修复 WS 事件 schema 缺失字段（RunStartedEventData/RunCompletedEventData/RunProgressEventData 补齐 project_id 等），run_message 事件补发 project_id+run_id，run_failed 补发 project_id，run_completed 补发 video_generation_pending。修复 generation.py unused lint error。2) 手动模式从 2 个审批门拆为 5 个子阶段确认点：plan_characters→characters_approval→plan_shots→shots_approval→render_characters→character_images_approval→render_shots→shot_images_approval→compose_videos→compose_merge→compose_approval。拆分 plan/render/compose agent 为子方法（run_characters/run_shots/run_videos/run_merge），重写 graph/nodes/state/run_recovery，同步所有相关测试。后端 971 passed (4 pre-existing config failures)，前端 356 passed。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b42a75` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
