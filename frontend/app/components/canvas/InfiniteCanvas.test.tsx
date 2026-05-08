@@ -100,8 +100,7 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 								sectionTitle: "角色",
 							},
 						},
-						{
-						},
+						{},
 						{
 							id: "shape:storyboard-section",
 							type: "storyboard-section",
@@ -118,8 +117,7 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 								placeholderText: "",
 							},
 						},
-						{
-						},
+						{},
 					]
 				: []),
 		],
@@ -339,6 +337,7 @@ vi.mock("~/services/api", () => ({
 	},
 	assetsApi: {
 		createFromCharacter: vi.fn(() => Promise.resolve({})),
+		createFromShot: vi.fn(() => Promise.resolve({})),
 	},
 	getStaticUrl: (path: string | null | undefined) => path,
 }));

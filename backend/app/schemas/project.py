@@ -274,12 +274,16 @@ class MessageRead(BaseModel):
 
 class AssetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    asset_type: Literal["character", "scene", "style"]
+    asset_type: Literal["character", "scene"]
     description: str | None = None
     image_url: str | None = None
     metadata_json: str | None = None
     source_project_id: int | None = None
     tags: str | None = None
+
+
+class UseAssetInProjectRequest(BaseModel):
+    project_id: int
 
 
 class AssetRead(BaseModel):

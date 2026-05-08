@@ -293,9 +293,15 @@ export const charactersApi = {
 
 // Assets API
 export const assetsApi = {
-	list: (assetType?: string) => {
-		const params = assetType ? `?asset_type=${assetType}` : "";
-		return fetchApi<import("~/types").AssetList>(`/api/v1/assets${params}`);
+	list: (opts?: { assetType?: string; search?: string; tag?: string }) => {
+		const params = new URLSearchParams();
+		if (opts?.assetType) params.set("asset_type", opts.assetType);
+		if (opts?.search) params.set("search", opts.search);
+		if (opts?.tag) params.set("tag", opts.tag);
+		const qs = params.toString();
+		return fetchApi<import("~/types").AssetList>(
+			`/api/v1/assets${qs ? `?${qs}` : ""}`,
+		);
 	},
 	create: (data: import("~/types").AssetCreatePayload) =>
 		fetchApi<import("~/types").Asset>("/api/v1/assets", {
@@ -307,6 +313,18 @@ export const assetsApi = {
 			`/api/v1/assets/from-character/${characterId}`,
 			{
 				method: "POST",
+			},
+		),
+	createFromShot: (shotId: number) =>
+		fetchApi<import("~/types").Asset>(`/api/v1/assets/from-shot/${shotId}`, {
+			method: "POST",
+		}),
+	useInProject: (assetId: number, projectId: number) =>
+		fetchApi<import("~/types").Character | import("~/types").Shot>(
+			`/api/v1/assets/${assetId}/use-in-project`,
+			{
+				method: "POST",
+				body: JSON.stringify({ project_id: projectId }),
 			},
 		),
 	delete: (id: number) =>

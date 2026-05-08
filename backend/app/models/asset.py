@@ -11,7 +11,7 @@ class Asset(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
-    asset_type: str = Field(index=True)  # "character" | "scene" | "style"
+    asset_type: str = Field(index=True)  # "character" | "scene"
     description: Optional[str] = None
     image_url: Optional[str] = None
     metadata_json: Optional[str] = None  # 额外元数据 (color palette, tags, etc.)

@@ -457,7 +457,11 @@ export function ProjectPage() {
 				/>
 			</div>
 
-			<AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
+			<AssetDrawer
+				open={assetsOpen}
+				onClose={() => setAssetsOpen(false)}
+				projectId={project.id}
+			/>
 			<HistoryDrawer
 				open={historyOpen}
 				onClose={() => setHistoryOpen(false)}

@@ -183,6 +183,22 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 				return;
 			}
 
+			if (
+				data.action === "add-to-assets" &&
+				data.entityType === "shot" &&
+				data.entityId
+			) {
+				assetsApi
+					.createFromShot(data.entityId)
+					.then(() => {
+						toast.success({ title: "资产库", message: "已保存为场景资产" });
+					})
+					.catch(() => {
+						toast.error({ title: "资产库", message: "保存失败" });
+					});
+				return;
+			}
+
 			if (data.action === "approve") {
 				const request =
 					data.entityType === "character"
