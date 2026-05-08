@@ -342,3 +342,38 @@ Added InsightFace face cropping for character consistency in storyboard generati
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Settings fixes, video API, font bundling, progress cleanup
+
+**Date**: 2026-05-08
+**Task**: Settings fixes, video API, font bundling, progress cleanup
+**Branch**: `main`
+
+### Summary
+
+Fixed settings UI (basic tab, config delete, ConfigInput reveal, test-connection whitelist). Fixed HistoryDrawer navigation. Added video service support for grok-videos and veo3 models. Bundled fonts locally with @fontsource. Cleaned up progress messages on completion. Fixed project deletion cascade. Fixed URL safety check for empty values.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e07488c` | (see git log) |
+| `14d6086` | (see git log) |
+| `9d7c0f7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
