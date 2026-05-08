@@ -168,8 +168,8 @@ async def test_start_project_task_registers_created_task(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_generate_project_success(async_client, test_session, monkeypatch):
-    expected_snapshot = _provider_resolution_deterministic().as_project_provider_settings().model_dump(
-        mode="json"
+    expected_snapshot = (
+        _provider_resolution_deterministic().as_project_provider_settings().model_dump(mode="json")
     )
     monkeypatch.setattr(generation_routes.asyncio, "create_task", _immediate_task)
     monkeypatch.setattr(
@@ -201,7 +201,9 @@ async def test_generate_project_returns_provider_precheck_failed_without_creatin
     monkeypatch.setattr(
         generation_routes,
         "resolve_project_provider_settings_async",
-        lambda project, settings: _return_resolution(project, settings, _invalid_provider_resolution()),
+        lambda project, settings: _return_resolution(
+            project, settings, _invalid_provider_resolution()
+        ),
     )
 
     project = await create_project(test_session)
@@ -351,8 +353,11 @@ async def test_feedback_project_success(async_client, test_session, monkeypatch)
     run = await test_session.get(AgentRun, data["run_id"])
     assert run is not None
     assert run.status == "queued"
-    assert run.provider_snapshot == _provider_resolution_deterministic().as_project_provider_settings().model_dump(
-        mode="json"
+    assert (
+        run.provider_snapshot
+        == _provider_resolution_deterministic()
+        .as_project_provider_settings()
+        .model_dump(mode="json")
     )
 
     from app.models.message import Message
@@ -399,3 +404,18 @@ async def test_review_rule_engine_routes_shot_feedback_to_render(test_session, t
 
     assert routing["start_agent"] == "render"
     assert routing["mode"] == "incremental"
+
+
+@pytest.mark.asyncio
+async def test_resume_run_mismatched_project_id(async_client, test_session):
+    """Resume a run that belongs to a different project → 404."""
+    project = await create_project(test_session)
+    other_project = await create_project(test_session)
+    run = await create_run(test_session, project_id=other_project.id, status="failed")
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/resume",
+        json={"run_id": run.id},
+    )
+    assert res.status_code == 404
+    assert "Run not found" in res.json()["detail"]

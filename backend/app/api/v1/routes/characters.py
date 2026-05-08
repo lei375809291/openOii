@@ -10,7 +10,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.base import TargetIds
 from app.agents.render import RenderAgent
-from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
+from app.api.deps import SessionDep, SettingsDep, WsManagerDep, get_or_404, require_run_id
 from app.config import Settings
 from app.models.agent_run import AgentRun
 from app.models.project import Character, Project
@@ -49,9 +49,7 @@ async def update_character(
     session: AsyncSession = SessionDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    character = await session.get(Character, character_id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
+    character = await get_or_404(session, Character, character_id)
 
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
@@ -74,9 +72,7 @@ async def approve_character(
     session: AsyncSession = SessionDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    character = await session.get(Character, character_id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
+    character = await get_or_404(session, Character, character_id)
 
     character.freeze_approval()
     session.add(character)
@@ -108,12 +104,8 @@ async def regenerate_character(
             status_code=400, detail="Character regeneration only supports type=image"
         )
 
-    character = await session.get(Character, character_id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
-    project = await session.get(Project, character.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    character = await get_or_404(session, Character, character_id)
+    project = await get_or_404(session, Project, character.project_id)
     project_id = character.project_id
 
     # 检查是否有针对该角色的运行中任务（细粒度锁）
@@ -201,9 +193,7 @@ async def delete_character(
     session: AsyncSession = SessionDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    character = await session.get(Character, character_id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
+    character = await get_or_404(session, Character, character_id)
 
     project_id = character.project_id
 

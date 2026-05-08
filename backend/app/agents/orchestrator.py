@@ -124,6 +124,7 @@ def get_awaiting_payload_key(run_id: int) -> str:
 async def store_awaiting_payload(run_id: int, payload: dict) -> None:
     """记录当前 run 在 gate 等待，附带 run_awaiting_confirm 事件 payload"""
     import json as _json
+
     try:
         r = await get_redis()
         await r.set(get_awaiting_payload_key(run_id), _json.dumps(payload), ex=7200)
@@ -141,6 +142,7 @@ async def clear_awaiting_payload(run_id: int) -> None:
 
 async def get_awaiting_payload(run_id: int) -> dict | None:
     import json as _json
+
     try:
         r = await get_redis()
         raw = await r.get(get_awaiting_payload_key(run_id))
@@ -338,6 +340,39 @@ class GenerationOrchestrator:
         self.session.add(msg)
         await self.session.commit()
 
+    async def _handle_run_failure(
+        self, project_id: int, run: AgentRun, run_id: int, error: Exception, context: str = "Run"
+    ) -> None:
+        await self.session.rollback()
+        try:
+            await self._log(
+                run_id, agent="orchestrator", role="system", content=f"{context} failed: {error!r}"
+            )
+            await self._set_run(run, status="failed", error=str(error))
+        except Exception:
+            pass
+        await self.ws.send_event(
+            project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(error)}}
+        )
+
+    async def _complete_run(
+        self,
+        project_id: int,
+        run: AgentRun,
+        run_id: int,
+        final_stage: str,
+        video_generation_skipped: bool,
+    ) -> None:
+        await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
+        completed_data: dict = {"run_id": run_id, "current_stage": final_stage}
+        if video_generation_skipped:
+            completed_data["message"] = "视频未配置，已完成文本和图片生成"
+        await self.ws.send_event(project_id, {"type": "run_completed", "data": completed_data})
+
+    async def _cleanup_run(self, run_id: int) -> None:
+        await clear_confirm_event_redis(run_id)
+        await clear_awaiting_payload(run_id)
+
     async def _wait_for_confirm(
         self, project_id: int, run: AgentRun, agent_name: str, agent_ctx: AgentContext | None = None
     ) -> str | None:
@@ -430,7 +465,9 @@ class GenerationOrchestrator:
                     "gate": agent_name,
                     "current_stage": post_approval_stage,
                     "stage": post_approval_stage,
-                    "next_stage": _next_phase2_stage(post_approval_stage) if post_approval_stage else None,
+                    "next_stage": _next_phase2_stage(post_approval_stage)
+                    if post_approval_stage
+                    else None,
                     "recovery_summary": confirmed_recovery.model_dump(mode="json"),
                 },
             },
@@ -520,7 +557,9 @@ class GenerationOrchestrator:
                     "gate": agent_name,
                     "current_stage": post_approval_stage,
                     "stage": post_approval_stage,
-                    "next_stage": _next_phase2_stage(post_approval_stage) if post_approval_stage else None,
+                    "next_stage": _next_phase2_stage(post_approval_stage)
+                    if post_approval_stage
+                    else None,
                     "recovery_summary": confirmed_recovery.model_dump(mode="json"),
                     "auto_mode": True,
                 },
@@ -592,9 +631,13 @@ class GenerationOrchestrator:
         video_generation_skipped = False
         final_stage = "compose"
         while True:
-            logger.debug("[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__)
+            logger.debug(
+                "[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__
+            )
             result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
-            logger.debug("[graph] run=%s ainvoke returned result_type=%s", run_pk, type(result).__name__)
+            logger.debug(
+                "[graph] run=%s ainvoke returned result_type=%s", run_pk, type(result).__name__
+            )
             if not isinstance(result, dict):
                 logger.warning("[graph] run=%s result not dict, breaking", run_pk)
                 break
@@ -623,14 +666,23 @@ class GenerationOrchestrator:
             if not isinstance(gate_agent, str) or not gate_agent.strip():
                 raise RuntimeError("LangGraph approval gate did not include a valid gate name")
 
-            logger.debug("[graph] run=%s interrupt gate=%s auto_mode=%s", run_pk, gate_agent, auto_mode)
+            logger.debug(
+                "[graph] run=%s interrupt gate=%s auto_mode=%s", run_pk, gate_agent, auto_mode
+            )
             feedback = ""
             action = "approve"
             if not auto_mode:
-                feedback = await self._wait_for_confirm(project_pk, run, gate_agent.strip(), agent_ctx=ctx) or ""
+                feedback = (
+                    await self._wait_for_confirm(project_pk, run, gate_agent.strip(), agent_ctx=ctx)
+                    or ""
+                )
             else:
-                await self._send_auto_approval_events(project_pk, run, gate_agent.strip(), agent_ctx=ctx)
-            logger.debug("[graph] run=%s resume with feedback=%r action=%s", run_pk, feedback, action)
+                await self._send_auto_approval_events(
+                    project_pk, run, gate_agent.strip(), agent_ctx=ctx
+                )
+            logger.debug(
+                "[graph] run=%s resume with feedback=%r action=%s", run_pk, feedback, action
+            )
             if feedback:
                 action = "feedback"
             payload = Command(resume={"action": action, "feedback": feedback})
@@ -786,37 +838,11 @@ class GenerationOrchestrator:
                     auto_mode=auto_mode,
                 )
 
-            await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
-            await self.ws.send_event(
-                project_id,
-                {
-                    "type": "run_completed",
-                    "data": {
-                        "run_id": run_id,
-                        "current_stage": final_stage,
-                        **(
-                            {"message": "视频未配置，已完成文本和图片生成"}
-                            if video_generation_skipped
-                            else {}
-                        ),
-                    },
-                },
-            )
+            await self._complete_run(project_id, run, run_id, final_stage, video_generation_skipped)
         except Exception as e:
-            await self.session.rollback()
-            try:
-                await self._log(
-                    run_id, agent="orchestrator", role="system", content=f"Resume failed: {e!r}"
-                )
-                await self._set_run(run, status="failed", error=str(e))
-            except Exception:
-                pass
-            await self.ws.send_event(
-                project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(e)}}
-            )
+            await self._handle_run_failure(project_id, run, run_id, e, context="Resume")
         finally:
-            await clear_confirm_event_redis(run_id)
-            await clear_awaiting_payload(run_id)
+            await self._cleanup_run(run_id)
 
     async def run_from_agent(
         self,
@@ -956,38 +982,11 @@ class GenerationOrchestrator:
                 auto_mode=auto_mode,
             )
 
-            await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
-            await self.ws.send_event(
-                project_id,
-                {
-                    "type": "run_completed",
-                    "data": {
-                        "run_id": run_id,
-                        "current_stage": final_stage,
-                        **(
-                            {"message": "视频未配置，已完成文本和图片生成"}
-                            if video_generation_skipped
-                            else {}
-                        ),
-                    },
-                },
-            )
+            await self._complete_run(project_id, run, run_id, final_stage, video_generation_skipped)
         except Exception as e:
-            # 先 rollback 以清理可能的脏状态
-            await self.session.rollback()
-            try:
-                await self._log(
-                    run_id, agent="orchestrator", role="system", content=f"Run failed: {e!r}"
-                )
-                await self._set_run(run, status="failed", error=str(e))
-            except Exception:
-                pass  # 如果日志记录也失败，忽略
-            await self.ws.send_event(
-                project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(e)}}
-            )
+            await self._handle_run_failure(project_id, run, run_id, e, context="Run")
         finally:
-            await clear_confirm_event_redis(run_id)
-            await clear_awaiting_payload(run_id)
+            await self._cleanup_run(run_id)
 
     async def run(
         self, *, project_id: int, run_id: int, request: GenerateRequest, auto_mode: bool = False

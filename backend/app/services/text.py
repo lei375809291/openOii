@@ -59,6 +59,38 @@ class TextService:
     def _is_retryable_status(self, status_code: int) -> bool:
         return status_code in {408, 429, 500, 502, 503, 504}
 
+    def _raise_for_status(
+        self,
+        last_exc: Exception | None,
+        last_status: int | None,
+        last_body: str | None,
+        context: str = "Text generation request",
+    ) -> None:
+        """Raise the appropriate TextServiceError subclass based on status code."""
+        if last_status in (401, 403):
+            raise TextServiceAuthError(
+                f"Authentication failed (HTTP {last_status})",
+                status_code=last_status,
+                response_body=last_body,
+            ) from last_exc
+        if last_status == 429:
+            raise TextServiceRateLimitError(
+                f"Rate limit exceeded (HTTP {last_status})",
+                status_code=last_status,
+                response_body=last_body,
+            ) from last_exc
+        if last_status and last_status >= 500:
+            raise TextServiceServerError(
+                f"Server error (HTTP {last_status})",
+                status_code=last_status,
+                response_body=last_body,
+            ) from last_exc
+        raise TextServiceError(
+            f"{context} failed after {self.max_retries} retries",
+            status_code=last_status,
+            response_body=last_body,
+        ) from last_exc
+
     def _is_chat_endpoint(self) -> bool:
         return "/chat/completions" in self.settings.text_endpoint
 
@@ -93,31 +125,7 @@ class TextService:
                         break
                     await asyncio.sleep(0.5 * (2**attempt))
 
-        # 根据状态码抛出不同的异常
-        if last_status in (401, 403):
-            raise TextServiceAuthError(
-                f"Authentication failed (HTTP {last_status})",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
-        elif last_status == 429:
-            raise TextServiceRateLimitError(
-                f"Rate limit exceeded (HTTP {last_status})",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
-        elif last_status and last_status >= 500:
-            raise TextServiceServerError(
-                f"Server error (HTTP {last_status})",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
-        else:
-            raise TextServiceError(
-                f"Text generation request failed after {self.max_retries} retries",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
+        self._raise_for_status(last_exc, last_status, last_body)
 
     async def _post_stream_with_retry(
         self, url: str, payload: dict[str, Any]
@@ -208,31 +216,7 @@ class TextService:
                     await asyncio.sleep(delay_s + jitter)
                     delay_s = min(delay_s * 2, 30.0)
 
-        # 根据状态码抛出不同的异常
-        if last_status == 401 or last_status == 403:
-            raise TextServiceAuthError(
-                f"Authentication failed (HTTP {last_status})",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
-        elif last_status == 429:
-            raise TextServiceRateLimitError(
-                f"Rate limit exceeded (HTTP {last_status})",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
-        elif last_status and last_status >= 500:
-            raise TextServiceServerError(
-                f"Server error (HTTP {last_status})",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
-        else:
-            raise TextServiceError(
-                f"Text generation stream failed after {self.max_retries} retries",
-                status_code=last_status,
-                response_body=last_body,
-            ) from last_exc
+        self._raise_for_status(last_exc, last_status, last_body, context="Text generation stream")
 
     def _extract_text_from_response(self, data: dict[str, Any]) -> str:
         choices = data.get("choices", [])
@@ -353,7 +337,9 @@ class TextService:
         return f"文本 Provider 流式不可用，已自动回退非流式生成。原始错误：{detail[:200]}"
 
     def _should_fallback_from_stream(self, exc: TextServiceError) -> bool:
-        if isinstance(exc, (TextServiceAuthError, TextServiceRateLimitError, TextServiceServerError)):
+        if isinstance(
+            exc, (TextServiceAuthError, TextServiceRateLimitError, TextServiceServerError)
+        ):
             return False
         return str(exc).startswith("Text generation stream failed after")
 
@@ -396,7 +382,9 @@ class TextService:
             text_endpoint=self.settings.text_endpoint,
             anthropic_base_url=self.settings.anthropic_base_url,
             anthropic_model=self.settings.anthropic_model,
-            secret=self.settings.text_api_key or self.settings.anthropic_api_key or self.settings.anthropic_auth_token,
+            secret=self.settings.text_api_key
+            or self.settings.anthropic_api_key
+            or self.settings.anthropic_auth_token,
         )
 
     async def probe(self) -> TextProviderCapability:
@@ -504,7 +492,11 @@ class TextService:
         )
 
         cached_capability = get_cached_provider_capability(self._capability_cache_key())
-        if cached_capability is not None and cached_capability.generate and not cached_capability.stream:
+        if (
+            cached_capability is not None
+            and cached_capability.generate
+            and not cached_capability.stream
+        ):
             fallback_payload = dict(payload)
             fallback_payload["stream"] = False
             response = await self._generate_from_payload(fallback_payload)

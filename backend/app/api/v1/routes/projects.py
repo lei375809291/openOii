@@ -9,21 +9,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.api.deps import SessionDep, SettingsDep
+from app.api.deps import SessionDep, SettingsDep, get_or_404
 from app.config import Settings
 from app.db.utils import utcnow
 from app.models.message import Message
 from app.models.project import Character, Project, Shot
 from app.schemas.project import (
-     CharacterRead,
-     MessageRead,
-     ProjectCreate,
-     ProjectBatchDeleteRequest,
-     ProjectProviderSettingsRead,
-     ProjectListRead,
-     ProjectRead,
-     ProjectUpdate,
-     ShotRead,
+    CharacterRead,
+    MessageRead,
+    ProjectCreate,
+    ProjectBatchDeleteRequest,
+    ProjectProviderSettingsRead,
+    ProjectListRead,
+    ProjectRead,
+    ProjectUpdate,
+    ShotRead,
 )
 from app.services.file_cleaner import get_local_path
 from app.services.project_deletion import delete_project_by_id, delete_projects_by_ids
@@ -32,7 +32,9 @@ from app.services.provider_resolution import resolve_project_provider_settings_a
 router = APIRouter()
 
 
-async def _project_provider_settings(project: Project, settings: Settings) -> ProjectProviderSettingsRead:
+async def _project_provider_settings(
+    project: Project, settings: Settings
+) -> ProjectProviderSettingsRead:
     return (
         await resolve_project_provider_settings_async(project, settings, probe_mode="cache_only")
     ).as_project_provider_settings()
@@ -100,16 +102,14 @@ async def get_project(
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
 ):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_or_404(session, Project, project_id)
     return await _project_read_model(project, settings)
 
 
 @router.get("/{project_id}/final-video")
 async def download_final_video(project_id: int, session: AsyncSession = SessionDep):
-    project = await session.get(Project, project_id)
-    if not project or not project.video_url:
+    project = await get_or_404(session, Project, project_id, detail="Final video not found")
+    if not project.video_url:
         raise HTTPException(status_code=404, detail="Final video not found")
 
     path = get_local_path(project.video_url)
@@ -127,9 +127,7 @@ async def update_project(
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
 ):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_or_404(session, Project, project_id)
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
         if k == "style":
@@ -150,7 +148,9 @@ async def delete_project(project_id: int, session: AsyncSession = SessionDep):
 
 
 @router.post("/batch-delete", status_code=status.HTTP_204_NO_CONTENT)
-async def batch_delete_projects(payload: ProjectBatchDeleteRequest, session: AsyncSession = SessionDep):
+async def batch_delete_projects(
+    payload: ProjectBatchDeleteRequest, session: AsyncSession = SessionDep
+):
     await delete_projects_by_ids(session, payload.ids)
     return None
 
@@ -164,9 +164,7 @@ async def upload_reference_image(
     import uuid
     from pathlib import Path
 
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_or_404(session, Project, project_id)
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are accepted")
@@ -200,9 +198,7 @@ async def upload_reference_image(
 
 @router.get("/{project_id}/characters", response_model=list[CharacterRead])
 async def list_characters(project_id: int, session: AsyncSession = SessionDep):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await get_or_404(session, Project, project_id)
     character_project_id_col = cast(InstrumentedAttribute[int], cast(object, Character.project_id))
     res = await session.execute(select(Character).where(character_project_id_col == project_id))
     return [CharacterRead.model_validate(c) for c in res.scalars().all()]
@@ -210,9 +206,7 @@ async def list_characters(project_id: int, session: AsyncSession = SessionDep):
 
 @router.get("/{project_id}/shots", response_model=list[ShotRead])
 async def list_shots(project_id: int, session: AsyncSession = SessionDep):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await get_or_404(session, Project, project_id)
     shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
     shot_order_col = cast(InstrumentedAttribute[int], cast(object, Shot.order))
     res = await session.execute(
@@ -224,9 +218,7 @@ async def list_shots(project_id: int, session: AsyncSession = SessionDep):
 @router.get("/{project_id}/messages", response_model=list[MessageRead])
 async def list_messages(project_id: int, session: AsyncSession = SessionDep):
     """获取项目的所有消息记录"""
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await get_or_404(session, Project, project_id)
     message_project_id_col = cast(InstrumentedAttribute[int], cast(object, Message.project_id))
     message_created_at_col = cast(InstrumentedAttribute[datetime], cast(object, Message.created_at))
     res = await session.execute(

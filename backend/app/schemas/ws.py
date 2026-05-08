@@ -56,8 +56,6 @@ class RunStartedEventData(BaseModel):
 
 
 class RunMessageEventData(BaseModel):
-    run_id: int | None = None
-    project_id: int | None = None
     agent: str | None = None
     role: str | None = None
     content: str = ""
@@ -90,8 +88,6 @@ class RunCancelledEventData(BaseModel):
 
 class DataClearedEventData(BaseModel):
     cleared_types: list[str] = Field(default_factory=list)
-    start_agent: str | None = None
-    mode: str | None = None
 
 
 class ErrorEventData(BaseModel):
@@ -152,6 +148,13 @@ class ShotUpdatedEventData(BaseModel):
     shot: ShotRead
 
 
+class BlockingClipPayload(BaseModel):
+    shot_id: int
+    order: int
+    status: str
+    reason: str
+
+
 class ProjectUpdatedPayload(BaseModel):
     id: int
     title: str | None = None
@@ -164,7 +167,7 @@ class ProjectUpdatedPayload(BaseModel):
     character_hints: list[str] | None = None
     creation_mode: str | None = None
     reference_images: list[str] | None = None
-    blocking_clips: list[dict[str, Any]] | None = None
+    blocking_clips: list[BlockingClipPayload] | None = None
 
 
 class ProjectUpdatedEventData(BaseModel):

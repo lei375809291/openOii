@@ -336,7 +336,9 @@ async def test_batch_delete_projects(async_client, test_session):
     project2 = await create_project(test_session, title="Project 2")
     project3 = await create_project(test_session, title="Project 3")
 
-    res = await async_client.post("/api/v1/projects/batch-delete", json={"ids": [project1.id, project2.id]})
+    res = await async_client.post(
+        "/api/v1/projects/batch-delete", json={"ids": [project1.id, project2.id]}
+    )
 
     assert res.status_code == 204
 
@@ -394,3 +396,94 @@ async def test_get_final_video_download(async_client, test_session, monkeypatch,
     assert res.status_code == 200
     content_disposition = res.headers.get("content-disposition", "")
     assert "merged-final.mp4" in content_disposition
+
+
+@pytest.mark.asyncio
+async def test_get_final_video_no_video_url(async_client, test_session):
+    """404 when project has no video_url."""
+    project = await create_project(test_session)
+    project.video_url = None
+    test_session.add(project)
+    await test_session.commit()
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}/final-video")
+    assert res.status_code == 404
+    assert "Final video not found" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_get_final_video_file_missing(async_client, test_session, monkeypatch):
+    """404 when video_url points to a non-existent file."""
+    project = await create_project(test_session)
+    project.video_url = "http://cdn.example.com/static/videos/missing.mp4"
+    test_session.add(project)
+    await test_session.commit()
+
+    from app.api.v1.routes import projects as projects_routes
+
+    monkeypatch.setattr(projects_routes, "get_local_path", lambda url: None)
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}/final-video")
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upload_reference_image(async_client, test_session):
+    """Upload a reference image and verify it's added to the project."""
+    project = await create_project(test_session)
+
+    # 1x1 red PNG
+    import base64
+
+    tiny_png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+    )
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/upload-reference",
+        files={"file": ("test.png", tiny_png, "image/png")},
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert "url" in data
+    assert data["url"].startswith("/static/references/")
+    assert len(data["reference_images"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_upload_reference_image_rejects_non_image(async_client, test_session):
+    """Reject non-image file types."""
+    project = await create_project(test_session)
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/upload-reference",
+        files={"file": ("test.txt", b"hello", "text/plain")},
+    )
+
+    assert res.status_code == 400
+    assert "Only image files" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_upload_reference_image_rejects_oversize(async_client, test_session):
+    """Reject images over 10MB."""
+    project = await create_project(test_session)
+
+    # 11MB of zeros pretending to be PNG
+    big_content = b"\x89PNG" + b"\x00" * (11 * 1024 * 1024)
+
+    res = await async_client.post(
+        f"/api/v1/projects/{project.id}/upload-reference",
+        files={"file": ("big.png", big_content, "image/png")},
+    )
+
+    assert res.status_code == 400
+    assert "10MB" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_get_final_video_project_not_found(async_client):
+    """404 when project doesn't exist."""
+    res = await async_client.get("/api/v1/projects/999999/final-video")
+    assert res.status_code == 404

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore, type RunMode } from "~/stores/editorStore";
 import type {
 	Character,
+	ProjectUpdatedPayload,
 	ProjectProviderSettings,
 	RecoverySummaryRead,
 	RunAwaitingConfirmEventData,
@@ -488,55 +489,28 @@ export function applyWsEvent(
 		}
 
 		case "project_updated": {
-			const projectData = event.data.project as
-				| {
-						video_url?: string;
-						title?: string;
-						status?: string;
-						summary?: string;
-						story?: string;
-						style?: string;
-						target_shot_count?: number;
-						character_hints?: string[];
-						reference_images?: string[];
-						blocking_clips?: Array<{
-							shot_id: number;
-							order: number;
-							status: string;
-							reason: string;
-						}>;
-				  }
-				| undefined;
-			if (projectData) {
-				if (projectData.video_url !== undefined) {
-					store.setProjectVideoUrl(projectData.video_url || null);
-				}
-				if (projectData.status !== undefined) {
-					store.setProjectStatus(projectData.status);
-				}
-				if (projectData.title !== undefined) {
-					store.setProjectTitle(projectData.title);
-				}
-				if (projectData.summary !== undefined) {
-					store.setProjectSummary(projectData.summary);
-				}
-				if (projectData.story !== undefined) {
-					store.setProjectStory(projectData.story);
-				}
-				if (projectData.style !== undefined) {
-					store.setProjectStyle(projectData.style);
-				}
-				if (projectData.target_shot_count !== undefined) {
-					store.setProjectTargetShotCount(projectData.target_shot_count);
-				}
-				if (projectData.character_hints !== undefined) {
-					store.setProjectCharacterHints(projectData.character_hints);
-				}
-				if (projectData.reference_images !== undefined) {
-					store.setProjectReferenceImages(projectData.reference_images);
-				}
-				if (projectData.blocking_clips !== undefined) {
-					store.setBlockingClips(projectData.blocking_clips || null);
+			const pd = event.data.project as ProjectUpdatedPayload | undefined;
+			if (pd) {
+				const fieldSetters: Partial<
+					Record<keyof ProjectUpdatedPayload, (v: never) => void>
+				> = {
+					video_url: (v) => store.setProjectVideoUrl(v || null),
+					status: (v) => store.setProjectStatus(v),
+					title: (v) => store.setProjectTitle(v),
+					summary: (v) => store.setProjectSummary(v),
+					story: (v) => store.setProjectStory(v),
+					style: (v) => store.setProjectStyle(v),
+					target_shot_count: (v) =>
+						store.setProjectTargetShotCount(v),
+					character_hints: (v) =>
+						store.setProjectCharacterHints(v),
+					reference_images: (v) =>
+						store.setProjectReferenceImages(v),
+					blocking_clips: (v) => store.setBlockingClips(v),
+				};
+				for (const [key, setter] of Object.entries(fieldSetters)) {
+					const val = pd[key as keyof ProjectUpdatedPayload];
+					if (val !== undefined) setter!(val as never);
 				}
 			}
 			store.setProjectUpdatedAt(Date.now());

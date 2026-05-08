@@ -207,6 +207,7 @@ export interface RunAwaitingConfirmEventData {
 	stage?: string | null;
 	next_stage?: string | null;
 	recovery_summary: RecoverySummaryRead;
+	preserved_stages?: string[];
 	message?: string | null;
 	completed?: string | null;
 	next_step?: string | null;

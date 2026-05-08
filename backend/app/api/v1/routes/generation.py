@@ -13,14 +13,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.agents.orchestrator import GenerationOrchestrator
-from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
+from app.api.deps import SessionDep, SettingsDep, WsManagerDep, get_or_404, require_run_id
 from app.config import Settings
 from app.db.session import async_session_maker
 from app.exceptions import BusinessError
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Project
-from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest, ProviderResolution, ResumeRequest
+from app.schemas.project import (
+    AgentRunRead,
+    FeedbackRequest,
+    GenerateRequest,
+    ProviderResolution,
+    ResumeRequest,
+)
 from app.services.generation_entry import decide_generation_entry
 from app.services.provider_resolution import resolve_project_provider_settings_async
 from app.services.run_recovery import build_recovery_control_surface
@@ -44,6 +50,7 @@ async def _start_project_task(project_id: int, coro: Coroutine[object, object, N
 
     task.add_done_callback(_log_task_result)
     task_manager.register(project_id, task)
+
 
 def _agent_run_thread_id(run: AgentRun) -> str:
     return f"agent-run-{run.id}" if run.id is not None else "agent-run-pending"
@@ -80,9 +87,7 @@ async def generate_project(
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_or_404(session, Project, project_id)
 
     active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
     resumable_run = await _latest_run_for_project(session, project_id, ("failed", "cancelled"))
@@ -175,12 +180,10 @@ async def resume_project_run(
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_or_404(session, Project, project_id)
 
-    run = await session.get(AgentRun, payload.run_id)
-    if not run or run.project_id != project_id:
+    run = await get_or_404(session, AgentRun, payload.run_id)
+    if run.project_id != project_id:
         raise HTTPException(status_code=404, detail="Run not found")
 
     if run.status in ("queued", "running") and task_manager.is_running(project_id):
@@ -216,9 +219,7 @@ async def cancel_project_run(
     ws: ConnectionManager = WsManagerDep,
 ):
     """取消项目的当前运行任务"""
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await get_or_404(session, Project, project_id)
 
     # 先取消实际的后台任务
     task_cancelled = task_manager.cancel(project_id)
@@ -248,7 +249,11 @@ async def cancel_project_run(
         project_id,
         {
             "type": "run_cancelled",
-            "data": {"project_id": project_id, "cancelled_count": cancelled_count, "run_ids": [r.id for r in runs]},
+            "data": {
+                "project_id": project_id,
+                "cancelled_count": cancelled_count,
+                "run_ids": [r.id for r in runs],
+            },
         },
     )
 
@@ -264,9 +269,7 @@ async def feedback_project(
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_or_404(session, Project, project_id)
 
     active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
     if active_run is not None:

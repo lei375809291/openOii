@@ -11,7 +11,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from app.agents.base import TargetIds
 from app.agents.render import RenderAgent
 from app.agents.compose import ComposeAgent
-from app.api.deps import SessionDep, SettingsDep, WsManagerDep, require_run_id
+from app.api.deps import SessionDep, SettingsDep, WsManagerDep, get_or_404, require_run_id
 from app.config import Settings
 from app.models.agent_run import AgentRun
 from app.models.project import Character, Project, Shot, ShotCharacterBinding
@@ -107,9 +107,7 @@ async def update_shot(
     session: AsyncSession = SessionDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    shot = await session.get(Shot, shot_id)
-    if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
+    shot = await get_or_404(session, Shot, shot_id)
 
     project_id = shot.project_id
 
@@ -144,9 +142,7 @@ async def approve_shot(
     session: AsyncSession = SessionDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    shot = await session.get(Shot, shot_id)
-    if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
+    shot = await get_or_404(session, Shot, shot_id)
 
     _validate_shot_approval_ready(shot)
     await _validate_shot_character_ids(session, shot.project_id, list(shot.character_ids))
@@ -176,13 +172,8 @@ async def regenerate_shot(
     if payload is None:
         payload = RegenerateRequest(type="video")
 
-    shot = await session.get(Shot, shot_id)
-    if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
-
-    project = await session.get(Project, shot.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    shot = await get_or_404(session, Shot, shot_id)
+    project = await get_or_404(session, Project, shot.project_id)
     project_id = shot.project_id
 
     # 检查是否有针对该分镜的运行中任务（细粒度锁）
@@ -289,9 +280,7 @@ async def delete_shot(
     session: AsyncSession = SessionDep,
     ws: ConnectionManager = WsManagerDep,
 ):
-    shot = await session.get(Shot, shot_id)
-    if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
+    shot = await get_or_404(session, Shot, shot_id)
 
     project_id = shot.project_id
 

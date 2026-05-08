@@ -61,3 +61,40 @@ async def test_require_admin_no_header():
         with pytest.raises(HTTPException) as exc_info:
             await require_admin(x_admin_token=None)
         assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_get_or_404_returns_object(test_session):
+    from app.api.deps import get_or_404
+    from app.models.project import Project
+
+    project = Project(title="Test", story="s", style="anime", status="draft")
+    test_session.add(project)
+    await test_session.commit()
+    await test_session.refresh(project)
+
+    assert project.id is not None
+    result = await get_or_404(test_session, Project, project.id)
+    assert result.id == project.id
+
+
+@pytest.mark.asyncio
+async def test_get_or_404_raises_404(test_session):
+    from app.api.deps import get_or_404
+    from app.models.project import Project
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_or_404(test_session, Project, 999999)
+    assert exc_info.value.status_code == 404
+    assert "Project not found" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_or_404_custom_detail(test_session):
+    from app.api.deps import get_or_404
+    from app.models.project import Project
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_or_404(test_session, Project, 999999, detail="Custom message")
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Custom message"
