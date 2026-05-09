@@ -1,14 +1,29 @@
+# openOii
+
 <div align="center">
   <img src="./doc/logo.png" width="180" alt="openOii logo" />
 
-**故事想法 → 多智能体协作 → 漫剧成片**
+  <p><strong>故事想法 → 多智能体协作 → 漫剧成片</strong></p>
+  <p>一个以 LangGraph 为核心的 AI 漫剧生成学习项目。</p>
 
+  <p>
+    <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+" />
+    <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=111827" alt="React 18" />
+    <img src="https://img.shields.io/badge/LangGraph-Orchestration-6D28D9?style=flat-square" alt="LangGraph" />
+  </p>
+
+  <p>
+    <a href="#快速开始">快速开始</a> ·
+    <a href="#界面预览">界面预览</a> ·
+    <a href="#技术栈">技术栈</a>
+  </p>
 </div>
 
-openOii 是一个 **LangGraph 学习项目**：把故事创意串成规划、角色/分镜生成、视频生成与合成的完整链路，并用无限画布展示过程与结果。
+openOii 把故事创意串成 **规划、角色/分镜生成、视频生成与合成** 的完整链路，并用无限画布展示过程与结果。
 
 > [!WARNING]
-> 这是一个 **学习 / 演示项目**，重点是验证 LangGraph 编排、多阶段生成、恢复执行与前后端协作。
+> 这是一个 **LangGraph 学习 / 演示项目**，重点是验证多阶段编排、恢复执行、实时进度与前后端协作。
 > **不适合直接用于工业生产环境**。
 
 ## 你能看到什么
@@ -21,17 +36,27 @@ openOii 是一个 **LangGraph 学习项目**：把故事创意串成规划、角
 
 ## 界面预览
 
-### 首页
-
-![openOii home](./doc/screenshot-home.png)
-
-### 画布与生成流程
-
-![openOii canvas](./doc/screenshot-canvas.png)
-
-### 配置面板
-
-![openOii config](./doc/screenshot-config.png)
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="./doc/screenshot-home.png" alt="openOii 首页" />
+      <br />
+      <sub><strong>首页 · 故事输入与风格选择</strong></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./doc/screenshot-canvas.png" alt="openOii 画布与生成流程" />
+      <br />
+      <sub><strong>画布 · 角色、分镜与生成流程</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="./doc/screenshot-config.png" alt="openOii 配置面板" />
+      <br />
+      <sub><strong>配置面板 · 在线管理模型与基础服务</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ## 技术栈
 

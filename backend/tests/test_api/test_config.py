@@ -763,6 +763,17 @@ async def test_test_connection_does_not_require_admin_token(
     app.dependency_overrides[get_ws_manager] = override_get_ws
     monkeypatch.setattr(api_deps, "get_settings", lambda: test_settings)
 
+    async def _fake_test_llm_connection(_settings):
+        return ConfigTestConnectionResponse(
+            success=True,
+            message="LLM 服务连接成功",
+            details="stubbed",
+            status="valid",
+            capabilities=ConnectionCapabilities(generate=True, stream=True),
+        )
+
+    monkeypatch.setattr(config_routes, "_test_llm_connection", _fake_test_llm_connection)
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post(

@@ -2,7 +2,6 @@
 
 ## 先看这个
 - openOii 是“故事想法 → 漫剧成片”的长链路生成应用；改动生成、恢复、进度推送时，优先保 resumability 和现有执行流。
-- 先走 GSD：小改动用 `/gsd-quick`，排障用 `/gsd-debug`，阶段执行用 `/gsd-execute-phase`。`.planning/` 已入库；除非用户明确要求，否则不要绕过。
 - 这是双包仓库，没有根级统一脚本：后端在 `backend/` 用 `uv`，前端在 `frontend/` 用 `pnpm`。
 - 当前 GitHub Actions 只有镜像构建/推送：`.github/workflows/docker-publish.yml`。本地要自己跑测试/构建，CI 不会替你兜底。
 

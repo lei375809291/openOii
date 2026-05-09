@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, status
@@ -282,14 +283,14 @@ async def _test_video_connection(settings) -> TestConnectionResponse:
                 # 豆包服务使用 generate_url 方法
                 await service.generate_url(prompt="test", duration=5, ratio="16:9")
             else:
-                # OpenAI 兼容服务使用 generate 方法
-                # 传递配置中的时长参数
-                duration = (
-                    settings.doubao_video_duration
-                    if hasattr(settings, "doubao_video_duration") and settings.doubao_video_duration
-                    else 6
-                )
-                await service.generate(prompt="test", duration=duration)
+                # OpenAI 兼容服务优先走 generate 方法。
+                # 这里只做连通性探测，依赖服务默认最小时长即可，避免把
+                # 具体 provider 参数约束耦合进测试连接逻辑。
+                service_any: Any = service
+                if callable(getattr(service_any, "generate", None)):
+                    await service_any.generate(prompt="test")
+                else:
+                    await service.generate_url(prompt="test")
 
             # 成功
             return TestConnectionResponse(
