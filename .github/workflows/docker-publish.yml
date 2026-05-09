@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 env:
@@ -14,7 +14,33 @@ env:
   IMAGE_BASENAME: openoii
 
 jobs:
+  # Step 1: detect which service(s) changed
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  # Step 2: build only the changed service(s)
   build-and-push:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      || needs.changes.outputs.backend == 'true'
+      || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,16 +48,27 @@ jobs:
 
     strategy:
       matrix:
-        service: [backend, frontend]
+        include:
+          - service: backend
+            should_build: ${{ needs.changes.outputs.backend }}
+          - service: frontend
+            should_build: ${{ needs.changes.outputs.frontend }}
 
     steps:
+      - name: Skip if unchanged
+        if: matrix.should_build != 'true' && github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+        run: echo "No changes in ${{ matrix.service }}, skipping" && exit 0
+
       - name: Checkout repository
+        if: matrix.should_build == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
+        if: matrix.should_build == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: matrix.should_build == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -39,6 +76,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata for Docker
+        if: matrix.should_build == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -52,6 +90,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
+        if: matrix.should_build == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.service }}

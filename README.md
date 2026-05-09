@@ -1,7 +1,7 @@
 # openOii
 
 <div align="center">
-  <img src="./doc/logo.png" width="180" alt="openOii logo" />
+  <img src="./doc/logo.png?v=2" width="180" alt="openOii logo" />
 
   <p><strong>故事想法 → 多智能体协作 → 漫剧成片</strong></p>
   <p>一个以 LangGraph 为核心的 AI 漫剧生成学习项目。</p>
