@@ -275,19 +275,33 @@ def _initial_state(start_stage: str) -> dict[str, Any]:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("start_stage", "expected_agents", "expected_gate"),
+    ("start_stage", "production_node_name", "approval_node_name", "expected_agents", "expected_gate"),
     [
-        ("plan_characters", ["plan_characters"], "plan"),
-        ("render_characters", ["render_characters"], "render"),
+        (
+            "plan_characters",
+            "plan_characters_node",
+            "characters_approval_node",
+            ["plan_characters"],
+            "plan",
+        ),
+        (
+            "render_characters",
+            "render_characters_node",
+            "character_images_approval_node",
+            ["render_characters"],
+            "render",
+        ),
     ],
 )
-async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
+async def test_phase2_graph_routes_into_approval_before_next_stage(
     start_stage: str,
+    production_node_name: str,
+    approval_node_name: str,
     expected_agents: list[str],
     expected_gate: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.orchestration.graph import build_phase2_graph
+    from app.orchestration import nodes as nodes_module
     from app.orchestration.runtime import build_phase2_runtime_context
 
     executed: list[str] = []
@@ -304,24 +318,35 @@ async def test_phase2_graph_interrupts_before_advancing_to_next_stage(
         start_stage=start_stage,  # type: ignore[arg-type]
         auto_mode=False,
     )
+    runtime = SimpleNamespace(context=runtime_context)
+    interrupted: dict[str, Any] = {}
 
-    compiled = build_phase2_graph().compile()
-    result = await compiled.ainvoke(
-        _initial_state(start_stage),
-        {"configurable": {"thread_id": f"thread-{start_stage}"}},
-        context=runtime_context,
-    )
+    def _pause(payload: dict[str, Any]) -> dict[str, Any]:
+        interrupted["payload"] = payload
+        return payload
+
+    monkeypatch.setattr("app.orchestration.nodes.interrupt", _pause)
+
+    production_node = getattr(nodes_module, production_node_name)
+    approval_node = getattr(nodes_module, approval_node_name)
+
+    stage_state = await production_node(_initial_state(start_stage), runtime)
+    approval_state = await approval_node(stage_state, runtime)
 
     assert executed == expected_agents
-    interrupts = result.get("__interrupt__") or []
-    assert interrupts, "expected approval interrupt before entering next stage"
-    interrupt_value = getattr(interrupts[0], "value", None)
-    assert interrupt_value["gate"] == expected_gate
+    assert approval_state["route_stage"] == "review"
+    assert interrupted["payload"]["gate"] == expected_gate
 
 
 @pytest.mark.asyncio
-async def test_phase2_graph_compose_skips_to_end_without_interrupt() -> None:
-    from app.orchestration.graph import build_phase2_graph
+async def test_phase2_graph_compose_skips_to_approval_after_substeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.orchestration.nodes import (
+        compose_approval_node,
+        compose_merge_node,
+        compose_videos_node,
+    )
     from app.orchestration.runtime import build_phase2_runtime_context
 
     executed: list[str] = []
@@ -338,19 +363,24 @@ async def test_phase2_graph_compose_skips_to_end_without_interrupt() -> None:
         start_stage="compose_videos",  # type: ignore[arg-type]
         auto_mode=False,
     )
+    runtime = SimpleNamespace(context=runtime_context)
+    interrupted: dict[str, Any] = {}
 
-    compiled = build_phase2_graph().compile()
-    result = await compiled.ainvoke(
-        _initial_state("compose_videos"),
-        {"configurable": {"thread_id": "thread-compose-end"}},
-        context=runtime_context,
-    )
+    def _approve(payload: dict[str, Any]) -> dict[str, str]:
+        interrupted["payload"] = payload
+        return {"action": "approve"}
+
+    monkeypatch.setattr("app.orchestration.nodes.interrupt", _approve)
+
+    compose_state = await compose_videos_node(_initial_state("compose_videos"), runtime)
+    merge_state = await compose_merge_node(compose_state, runtime)
+    approval_state = await compose_approval_node(merge_state, runtime)
 
     assert executed == ["compose_videos", "compose_merge"]
-    # compose_approval interrupts after both sub-steps
-    interrupts = result.get("__interrupt__") or []
-    assert interrupts
-    assert getattr(interrupts[0], "value", {})["gate"] == "compose"
+    assert approval_state["current_stage"] == "compose_approval"
+    assert approval_state["approval_feedback"] == ""
+    assert approval_state["route_stage"] == "__end__"
+    assert interrupted["payload"]["gate"] == "compose"
 
 
 @pytest.mark.asyncio

@@ -5,10 +5,11 @@ import json
 import pytest
 from sqlmodel import select
 
-import app.agents.orchestrator as orchestrator_mod
-from app.agents.orchestrator import GenerationOrchestrator
+from app.agents.base import AgentContext
+from app.agents.compose import ComposeAgent
+from app.agents.plan import PlanAgent
+from app.agents.render import RenderAgent
 from app.models.project import Character, Shot
-from app.schemas.project import GenerateRequest
 from app.services.llm import LLMResponse
 from tests.agent_fixtures import DummyWsManager
 from tests.factories import create_project, create_run
@@ -72,21 +73,33 @@ async def test_full_workflow(monkeypatch, test_session, test_settings):
         json.dumps({"user_message": "Shot images done"}),
     ]
 
-    async def _noop_clear(_: int) -> None:
-        return None
+    monkeypatch.setattr("app.services.face_cropper._get_face_analysis", lambda: None)
 
-    monkeypatch.setattr(orchestrator_mod, "create_text_service", lambda settings: StubLLM(settings))
-    monkeypatch.setattr(orchestrator_mod, "ImageService", StubImage)
-    monkeypatch.setattr(orchestrator_mod, "create_video_service", lambda settings: StubVideo(settings))
-    monkeypatch.setattr(orchestrator_mod, "clear_confirm_event_redis", _noop_clear)
-
-    orchestrator = GenerationOrchestrator(settings=test_settings, ws=ws, session=test_session)
-    await orchestrator.run(
-        project_id=project.id,
-        run_id=run.id,
-        request=GenerateRequest(),
-        auto_mode=True,
+    ctx = AgentContext(
+        settings=test_settings,
+        session=test_session,
+        ws=ws,
+        project=project,
+        run=run,
+        llm=StubLLM(test_settings),
+        image=StubImage(test_settings),
+        video=StubVideo(test_settings),
     )
+
+    plan_agent = PlanAgent()
+    render_agent = RenderAgent()
+    compose_agent = ComposeAgent()
+
+    await plan_agent.run_characters(ctx)
+    await plan_agent.run_shots(ctx)
+    await render_agent.run_characters(ctx)
+    await render_agent.run_shots(ctx)
+    await compose_agent.run_videos(ctx)
+    await compose_agent.run_merge(ctx)
+
+    run.status = "succeeded"
+    test_session.add(run)
+    await test_session.commit()
 
     await test_session.refresh(project)
     await test_session.refresh(run)

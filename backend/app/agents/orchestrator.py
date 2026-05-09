@@ -400,11 +400,13 @@ class GenerationOrchestrator:
         final_stage: str,
         video_generation_skipped: bool,
     ) -> None:
+        completed_agent = getattr(run, "current_agent", None)
         await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
         completed_data: dict = {
             "run_id": run_id,
             "project_id": project_id,
             "current_stage": final_stage,
+            "current_agent": completed_agent,
         }
         if video_generation_skipped:
             completed_data["message"] = "视频未配置，已完成文本和图片生成"

@@ -186,15 +186,19 @@ class TestRunMessageEventData:
 
 
 class TestRunCompletedEventData:
-    def test_with_current_stage(self):
+    def test_with_current_stage_and_agent(self):
         d = RunCompletedEventData.model_validate(
             {
                 "run_id": 1,
+                "project_id": 10,
                 "current_stage": "compose",
+                "current_agent": "compose",
                 "message": "done",
             }
         )
         assert d.current_stage == "compose"
+        assert d.current_agent == "compose"
+        assert d.project_id == 10
 
     def test_minimal(self):
         d = RunCompletedEventData.model_validate({})

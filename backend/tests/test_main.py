@@ -161,6 +161,27 @@ async def test_ws_projects_handles_ping_and_echo(monkeypatch):
         async def send_event(self, project_id, event):
             events.append((project_id, event))
 
+    class FakeSessionCtx:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def execute(self, *args, **kwargs):
+            class _Res:
+                def scalars(self):
+                    return self
+
+                def all(self):
+                    return []
+
+            return _Res()
+
+    class FakeAsyncSessionMaker:
+        def __call__(self):
+            return FakeSessionCtx()
+
     monkeypatch.setattr(main_module, "ws_manager", FakeManager())
     monkeypatch.setattr("app.agents.orchestrator.get_awaiting_payload", lambda run_id: None)
     monkeypatch.setattr(
@@ -174,6 +195,7 @@ async def test_ws_projects_handles_ping_and_echo(monkeypatch):
         ),
     )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
+    monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
 
     fake_ws = _FakeWebSocket(
         [
@@ -327,6 +349,11 @@ async def test_ws_projects_confirm_invalid_run_sends_error(monkeypatch):
         main_module, "AgentRun", SimpleNamespace(project_id=1, status="running"), raising=False
     )
 
+    async def fake_trigger(_run_id):
+        return True
+
+    monkeypatch.setattr("app.agents.orchestrator.trigger_confirm_redis", fake_trigger)
+
     fake_ws = _FakeWebSocket(
         [
             {"type": "confirm", "data": {"run_id": 123, "feedback": "  ok  "}},
@@ -470,6 +497,11 @@ async def test_ws_projects_feedback_save_error_sends_ws_error(monkeypatch):
     )
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr("app.db.session.async_session_maker", FakeAsyncSessionMaker())
+
+    async def fake_trigger(_run_id):
+        return True
+
+    monkeypatch.setattr("app.agents.orchestrator.trigger_confirm_redis", fake_trigger)
 
     fake_ws = _FakeWebSocket(
         [

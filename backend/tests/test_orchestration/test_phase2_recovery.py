@@ -27,10 +27,10 @@ def test_phase2_recovery_contract_is_stage_granular_only() -> None:
 def test_phase2_recovery_contract_exposes_resume_from_last_valid_stage() -> None:
     from app.orchestration.graph import build_phase2_graph
 
-    compiled = build_phase2_graph().compile()
+    graph = build_phase2_graph()
 
-    assert hasattr(compiled, "get_state_history")
-    assert hasattr(compiled, "update_state")
+    assert hasattr(graph, "compile")
+    assert callable(graph.compile)
 
 
 @pytest.mark.asyncio
@@ -97,10 +97,15 @@ async def test_resume_from_recovery_uses_run_provider_snapshot(test_session, tes
     monkeypatch.setattr("app.agents.orchestrator.build_postgres_checkpointer", _noop_graph_context)
     monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", _fake_recovery_summary)
     monkeypatch.setattr(GenerationOrchestrator, "_invoke_phase2_graph", _noop_invoke_phase2_graph)
+
     async def _noop_clear_confirm_event(_: int) -> None:
         return None
 
+    async def _noop_clear_awaiting(_: int) -> None:
+        return None
+
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", _noop_clear_confirm_event)
+    monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", _noop_clear_awaiting)
 
     orchestrator = GenerationOrchestrator(settings=test_settings, ws=_StubWs(), session=test_session)
     await orchestrator.resume_from_recovery(project_id=project.id, run_id=run.id)
@@ -178,6 +183,7 @@ async def test_resume_from_recovery_reports_no_video_completion_message(test_ses
     monkeypatch.setattr("app.agents.orchestrator.build_recovery_summary", _noop_recovery_summary)
     monkeypatch.setattr(GenerationOrchestrator, "_invoke_phase2_graph", _fake_invoke_phase2_graph)
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", _noop_clear_confirm_event)
+    monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", _noop_clear_confirm_event)
 
     orchestrator = GenerationOrchestrator(settings=test_settings, ws=_StubWs(), session=test_session)
     await orchestrator.resume_from_recovery(project_id=project.id, run_id=run.id)

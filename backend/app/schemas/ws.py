@@ -68,6 +68,7 @@ class RunCompletedEventData(BaseModel):
     run_id: int | None = None
     project_id: int | None = None
     current_stage: str | None = None
+    current_agent: str | None = None
     message: str | None = None
     video_generation_pending: bool | None = None
 

@@ -108,6 +108,7 @@ async def run_agent_plan(
                 await session.refresh(ctx.project)
 
             run.status = "succeeded"
+            completed_agent = run.current_agent
             run.current_agent = None
             run.progress = 1.0
             run.updated_at = utcnow()
@@ -120,7 +121,12 @@ async def run_agent_plan(
                 project_id,
                 {
                     "type": "run_completed",
-                    "data": {"run_id": run_id, "current_stage": final_stage},
+                    "data": {
+                        "run_id": run_id,
+                        "project_id": project_id,
+                        "current_stage": final_stage,
+                        "current_agent": completed_agent,
+                    },
                 },
             )
     except asyncio.CancelledError:

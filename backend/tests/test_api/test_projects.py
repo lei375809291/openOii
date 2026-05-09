@@ -378,7 +378,7 @@ async def test_delete_project_does_not_require_admin_token_when_configured(
 
 
 @pytest.mark.asyncio
-async def test_get_final_video_download(async_client, test_session, monkeypatch, tmp_path):
+async def test_get_final_video_download(test_session, monkeypatch, tmp_path):
     project = await create_project(test_session)
     final_file = tmp_path / "merged-final.mp4"
     final_file.write_bytes(b"fake video bytes")
@@ -391,10 +391,10 @@ async def test_get_final_video_download(async_client, test_session, monkeypatch,
     await test_session.commit()
     await test_session.refresh(project)
 
-    res = await async_client.get(f"/api/v1/projects/{project.id}/final-video")
+    response = await projects_routes.download_final_video(project.id, session=test_session)
 
-    assert res.status_code == 200
-    content_disposition = res.headers.get("content-disposition", "")
+    assert response.status_code == 200
+    content_disposition = response.headers.get("content-disposition", "")
     assert "merged-final.mp4" in content_disposition
 
 
@@ -466,20 +466,30 @@ async def test_upload_reference_image_rejects_non_image(async_client, test_sessi
 
 
 @pytest.mark.asyncio
-async def test_upload_reference_image_rejects_oversize(async_client, test_session):
+async def test_upload_reference_image_rejects_oversize(test_session):
     """Reject images over 10MB."""
     project = await create_project(test_session)
 
     # 11MB of zeros pretending to be PNG
     big_content = b"\x89PNG" + b"\x00" * (11 * 1024 * 1024)
 
-    res = await async_client.post(
-        f"/api/v1/projects/{project.id}/upload-reference",
-        files={"file": ("big.png", big_content, "image/png")},
-    )
+    from fastapi import HTTPException
 
-    assert res.status_code == 400
-    assert "10MB" in res.json()["detail"]
+    class FakeUploadFile:
+        content_type = "image/png"
+
+        async def read(self) -> bytes:
+            return big_content
+
+    with pytest.raises(HTTPException) as exc_info:
+        await project_routes.upload_reference_image(
+            project.id,
+            file=FakeUploadFile(),
+            session=test_session,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "10MB" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio

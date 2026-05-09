@@ -315,3 +315,50 @@ describe("admin token localStorage", () => {
 		expect(headers["X-Admin-Token"]).toBeUndefined();
 	});
 });
+
+describe("configApi", () => {
+	const mockFetch = vi.fn();
+	let configApi: typeof import("./api").configApi;
+
+	beforeEach(async () => {
+		vi.resetModules();
+		vi.stubGlobal("fetch", mockFetch);
+		const mod = await import("./api");
+		configApi = mod.configApi;
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("serializes boolean and number config values to strings", async () => {
+		mockFetch.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({
+					updated: 2,
+					skipped: 0,
+					restart_required: false,
+					restart_keys: [],
+					message: "ok",
+				}),
+				{ status: 200 },
+			),
+		);
+
+		await configApi.update({
+			DB_ECHO: true,
+			REQUEST_TIMEOUT_S: 12.5,
+			EMPTY_VALUE: null,
+		});
+
+		const [, options] = mockFetch.mock.calls[0] ?? [];
+		expect(options).toMatchObject({ method: "PUT" });
+		expect(JSON.parse(options.body)).toEqual({
+			configs: {
+				DB_ECHO: "true",
+				REQUEST_TIMEOUT_S: "12.5",
+				EMPTY_VALUE: null,
+			},
+		});
+	});
+});

@@ -706,10 +706,13 @@ async def test_download_and_save_success(monkeypatch, tmp_path):
         def __exit__(self, *args):
             pass
 
-    # download_and_save uses urllib.request.urlopen inside asyncio.to_thread
-    # Patch at the module level where it's imported
     import urllib.request
+
+    async def run_inline(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
     monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout: FakeUrlopenResponse())
+    monkeypatch.setattr("app.services.image.asyncio.to_thread", run_inline)
 
     await service.download_and_save("https://cdn.example.com/a.png", save_path)
     assert save_path.exists()
@@ -728,7 +731,11 @@ async def test_download_and_save_raises_on_http_error(monkeypatch, tmp_path):
     def boom(url, timeout):
         raise HTTPError(url, 403, "Forbidden", {}, None)
 
+    async def run_inline(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
     monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr("app.services.image.asyncio.to_thread", run_inline)
 
     with pytest.raises(RuntimeError, match="HTTP 403"):
         await service.download_and_save("https://cdn.example.com/a.png", save_path)
@@ -1171,7 +1178,11 @@ async def test_download_and_save_unexpected_content_type_warns(monkeypatch, tmp_
         def __exit__(self, *args):
             pass
 
+    async def run_inline(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
     monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout: FakeResponse())
+    monkeypatch.setattr("app.services.image.asyncio.to_thread", run_inline)
 
     await service.download_and_save("https://cdn.example.com/a", save_path)
     assert save_path.exists()
@@ -1191,7 +1202,11 @@ async def test_download_and_save_raises_on_url_error(monkeypatch, tmp_path):
     def boom(url, timeout):
         raise URLError("dns failure")
 
+    async def run_inline(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
     monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr("app.services.image.asyncio.to_thread", run_inline)
 
     with pytest.raises(RuntimeError, match="dns failure"):
         await service.download_and_save("https://cdn.example.com/a.png", save_path)
@@ -1209,7 +1224,11 @@ async def test_download_and_save_raises_on_unexpected_error(monkeypatch, tmp_pat
     def boom(url, timeout):
         raise OSError("disk full")
 
+    async def run_inline(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
     monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr("app.services.image.asyncio.to_thread", run_inline)
 
     with pytest.raises(RuntimeError, match="disk full"):
         await service.download_and_save("https://cdn.example.com/a.png", save_path)

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from pydantic import ValidationError
 from fastapi import WebSocket
-from starlette.websockets import WebSocketState
+from pydantic import ValidationError
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 
+from app import main as main_module
 from app.agents import orchestrator as orchestrator_module
 from app.schemas.project import RecoverySummaryRead
 from app.ws.manager import ws_manager
@@ -22,20 +24,103 @@ class _FakeWebSocket:
         self.sent.append(payload)
 
 
-def test_websocket_ping_echo(ws_client):
-    with ws_client.websocket_connect("/ws/projects/1") as ws:
-        connected = ws.receive_json()
-        assert connected["type"] == "connected"
-        assert connected["data"]["project_id"] == 1
+class _InboundWebSocket:
+    def __init__(self, messages: list[dict[str, Any]]) -> None:
+        self.messages = messages
+        self.accepted = False
+        self.client_state = WebSocketState.CONNECTED
+        self.application_state = WebSocketState.CONNECTED
 
-        ws.send_json({"type": "ping"})
-        pong = ws.receive_json()
-        assert pong["type"] == "pong"
+    async def accept(self) -> None:
+        self.accepted = True
 
-        ws.send_json({"type": "echo", "data": {"hello": "world"}})
-        echo = ws.receive_json()
-        assert echo["type"] == "echo"
-        assert echo["data"]["hello"] == "world"
+    async def receive_json(self) -> dict[str, Any]:
+        if not self.messages:
+            raise WebSocketDisconnect(code=1000)
+        return self.messages.pop(0)
+
+    async def send_json(self, _payload: dict[str, Any]) -> None:
+        return None
+
+
+class _FakeManager:
+    def __init__(self) -> None:
+        self.events: list[tuple[int, dict[str, Any]]] = []
+
+    async def connect(self, project_id: int, websocket: _InboundWebSocket) -> None:
+        await websocket.accept()
+
+    async def disconnect(self, project_id: int, websocket: _InboundWebSocket) -> None:
+        self.events.append((project_id, {"type": "disconnected", "data": {}}))
+
+    async def send_event(self, project_id: int, event: dict[str, Any]) -> None:
+        self.events.append((project_id, event))
+
+
+class _Result:
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+
+    def scalars(self) -> "_Result":
+        return self
+
+    def all(self) -> list[Any]:
+        return self._rows
+
+
+class _SessionContext:
+    def __init__(self, rows: list[Any]) -> None:
+        self._result = _Result(rows)
+
+    async def __aenter__(self) -> Any:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    async def execute(self, _statement: Any) -> _Result:
+        return self._result
+
+
+def _patch_ws_app(monkeypatch: pytest.MonkeyPatch, manager: _FakeManager) -> None:
+    monkeypatch.setattr(main_module, "ws_manager", manager)
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_name="openOii",
+            cors_origins=[],
+            api_v1_prefix="/api/v1",
+            environment="development",
+        ),
+    )
+
+
+def _ws_handler():
+    app = main_module.create_app()
+    return next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/ws/projects/{project_id}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_websocket_ping_echo(monkeypatch):
+    manager = _FakeManager()
+    _patch_ws_app(monkeypatch, manager)
+    monkeypatch.setattr("app.db.session.async_session_maker", lambda: _SessionContext([]))
+
+    fake_ws = _InboundWebSocket(
+        [{"type": "ping"}, {"type": "echo", "data": {"hello": "world"}}]
+    )
+
+    await _ws_handler()(fake_ws, 1)
+
+    assert fake_ws.accepted is True
+    assert (1, {"type": "connected", "data": {"project_id": 1}}) in manager.events
+    assert (1, {"type": "pong", "data": {}}) in manager.events
+    assert (1, {"type": "echo", "data": {"hello": "world"}}) in manager.events
 
 
 @pytest.mark.asyncio
@@ -87,7 +172,8 @@ async def test_websocket_manager_enriches_recovery_payloads():
     assert data["current_stage"] == "script"
 
 
-def test_websocket_connection_replays_awaiting_payload(ws_client, monkeypatch):
+@pytest.mark.asyncio
+async def test_websocket_connection_replays_awaiting_payload(monkeypatch):
     project_id = 1
     run_id = 42
 
@@ -113,44 +199,24 @@ def test_websocket_connection_replays_awaiting_payload(ws_client, monkeypatch):
         return None
 
     monkeypatch.setattr(orchestrator_module, "get_awaiting_payload", fake_get_awaiting_payload)
-
-    class _FakeResult:
-        def scalars(self) -> Any:
-            return self
-
-        def all(self) -> list[Any]:
-            return [type("Run", (), {"id": run_id, "project_id": project_id})()]
-
-    class _FakeSession:
-        async def execute(self, _statement: Any) -> _FakeResult:
-            return _FakeResult()
-
-    class _SessionContext:
-        def __init__(self) -> None:
-            self._session = _FakeSession()
-
-        async def __aenter__(self) -> Any:
-            return self._session
-
-        async def __aexit__(self, exc_type, exc, tb) -> bool:
-            return False
-
+    manager = _FakeManager()
+    _patch_ws_app(monkeypatch, manager)
     monkeypatch.setattr(
         "app.db.session.async_session_maker",
-        lambda: _SessionContext(),
+        lambda: _SessionContext([type("Run", (), {"id": run_id, "project_id": project_id})()]),
     )
 
-    with ws_client.websocket_connect(f"/ws/projects/{project_id}") as ws:
-        connected = ws.receive_json()
-        replayed = ws.receive_json()
+    await _ws_handler()(_InboundWebSocket([]), project_id)
 
-    assert connected["type"] == "connected"
-    assert replayed["type"] == "run_awaiting_confirm"
-    assert replayed["data"]["run_id"] == run_id
-    assert replayed["data"]["gate"] == "director"
+    events = [event for _, event in manager.events]
+    assert events[0]["type"] == "connected"
+    assert events[1]["type"] == "run_awaiting_confirm"
+    assert events[1]["data"]["run_id"] == run_id
+    assert events[1]["data"]["gate"] == "director"
 
 
-def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_client, monkeypatch):
+@pytest.mark.asyncio
+async def test_websocket_connection_replays_run_progress_for_non_awaiting_run(monkeypatch):
     project_id = 2
     run_id = 99
 
@@ -158,49 +224,34 @@ def test_websocket_connection_replays_run_progress_for_non_awaiting_run(ws_clien
         return None
 
     monkeypatch.setattr(orchestrator_module, "get_awaiting_payload", fake_get_awaiting_payload)
-
-    class _FakeResult:
-        def scalars(self) -> Any:
-            return self
-
-        def all(self) -> list[Any]:
-            return [
-                type("Run", (), {
-                    "id": run_id,
-                    "project_id": project_id,
-                    "current_agent": "character",
-                    "progress": 0.65,
-                })()
-            ]
-
-    class _FakeSession:
-        async def execute(self, _statement: Any) -> _FakeResult:
-            return _FakeResult()
-
-    class _SessionContext:
-        def __init__(self) -> None:
-            self._session = _FakeSession()
-
-        async def __aenter__(self) -> Any:
-            return self._session
-
-        async def __aexit__(self, exc_type, exc, tb) -> bool:
-            return False
-
+    manager = _FakeManager()
+    _patch_ws_app(monkeypatch, manager)
     monkeypatch.setattr(
         "app.db.session.async_session_maker",
-        lambda: _SessionContext(),
+        lambda: _SessionContext(
+            [
+                type(
+                    "Run",
+                    (),
+                    {
+                        "id": run_id,
+                        "project_id": project_id,
+                        "current_agent": "character",
+                        "progress": 0.65,
+                    },
+                )()
+            ]
+        ),
     )
 
-    with ws_client.websocket_connect(f"/ws/projects/{project_id}") as ws:
-        connected = ws.receive_json()
-        replayed = ws.receive_json()
+    await _ws_handler()(_InboundWebSocket([]), project_id)
 
-    assert connected["type"] == "connected"
-    assert replayed["type"] == "run_progress"
-    assert replayed["data"]["run_id"] == run_id
-    assert replayed["data"]["current_agent"] == "character"
-    assert replayed["data"]["progress"] == 0.65
+    events = [event for _, event in manager.events]
+    assert events[0]["type"] == "connected"
+    assert events[1]["type"] == "run_progress"
+    assert events[1]["data"]["run_id"] == run_id
+    assert events[1]["data"]["current_agent"] == "character"
+    assert events[1]["data"]["progress"] == 0.65
 
 
 @pytest.mark.asyncio

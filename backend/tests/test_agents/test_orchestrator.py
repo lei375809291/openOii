@@ -677,6 +677,7 @@ async def test_resume_from_recovery_happy_path(monkeypatch):
     assert ws.events[0][1]["type"] == "run_started"
     assert ws.events[0][1]["data"]["current_agent"] == "plan"
     assert ws.events[-1][1]["type"] == "run_completed"
+    assert ws.events[-1][1]["data"]["current_agent"] == "plan"
 
 
 @pytest.mark.asyncio
@@ -713,6 +714,8 @@ async def test_run_from_agent_happy_path(monkeypatch):
         return False, "compose"
 
     async def set_run(run, **fields):
+        for key, value in fields.items():
+            setattr(run, key, value)
         return run
 
     monkeypatch.setattr(orchestrator, "_cleanup_for_rerun", noop_async)
@@ -730,6 +733,7 @@ async def test_run_from_agent_happy_path(monkeypatch):
     assert ws.events[0][1]["type"] == "run_started"
     assert ws.events[0][1]["data"]["current_agent"] == "plan"
     assert ws.events[-1][1]["type"] == "run_completed"
+    assert ws.events[-1][1]["data"]["current_agent"] == "plan"
 
 
 @pytest.mark.asyncio

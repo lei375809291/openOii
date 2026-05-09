@@ -402,15 +402,27 @@ async def test_generate_500_server_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_timeout():
+async def test_generate_timeout(monkeypatch):
     """测试超时"""
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",
-        text_base_url="https://httpbin.org/delay/10",
-        text_endpoint="",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
         request_timeout_s=0.1,
     )
     service = TextService(settings, max_retries=0)
+
+    class TimeoutClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            raise httpx.TimeoutException("timed out")
+
+    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: TimeoutClient())
 
     with pytest.raises(TextServiceError):
         await service.generate(prompt="hi")

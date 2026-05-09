@@ -334,27 +334,37 @@ export const assetsApi = {
 // Config API
 export const configApi = {
 	get: () => fetchApi<import("~/types").ConfigItem[]>("/api/v1/config"),
-	update: (config: Record<string, import("~/types").ConfigValue>) =>
-		fetchApi<{
-			updated: number;
-			skipped: number;
-			restart_required: boolean;
-			restart_keys: string[];
-			message: string;
-		}>("/api/v1/config", {
-			method: "PUT",
-			body: JSON.stringify({ configs: config }),
-		}).then((res) => {
-			if ("ADMIN_TOKEN" in config) {
-				const token = config.ADMIN_TOKEN;
-				if (typeof token === "string" && token.length > 0) {
-					localStorage.setItem("openoii_admin_token", token);
+	update: (config: Record<string, import("~/types").ConfigValue>) => {
+		const normalizedConfig = Object.fromEntries(
+			Object.entries(config).map(([key, value]) => [
+				key,
+				value === null ? null : String(value),
+			]),
+		) as Record<string, string | null>;
+
+		return (
+			fetchApi<{
+				updated: number;
+				skipped: number;
+				restart_required: boolean;
+				restart_keys: string[];
+				message: string;
+			}>("/api/v1/config", {
+				method: "PUT",
+				body: JSON.stringify({ configs: normalizedConfig }),
+			}).then((res) => {
+				if ("ADMIN_TOKEN" in config) {
+					const token = config.ADMIN_TOKEN;
+					if (typeof token === "string" && token.length > 0) {
+						localStorage.setItem("openoii_admin_token", token);
 				} else {
 					localStorage.removeItem("openoii_admin_token");
 				}
-			}
-			return res;
-		}),
+				}
+				return res;
+			})
+		);
+	},
 	testConnection: (
 		service: "llm" | "image" | "video",
 		configOverrides?: Record<string, string | null>,
