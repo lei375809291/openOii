@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { projectsApi } from "~/services/api";
+import { ProviderSelectionFields } from "~/components/project/ProviderSelectionFields";
 import { Button } from "~/components/ui/Button";
 import { Input } from "~/components/ui/Input";
 import { Card } from "~/components/ui/Card";
@@ -24,6 +25,9 @@ export function NewProjectPage() {
     title: "",
     story: "",
     style: "cinematic",
+    text_provider_override: null as string | null,
+    image_provider_override: null as string | null,
+    video_provider_override: null as string | null,
   });
 
   const createMutation = useMutation({
@@ -106,10 +110,11 @@ export function NewProjectPage() {
                 }
               />
               <div className="form-control">
-                <label className="label">
+                <label className="label" htmlFor="project-story">
                   <span className="label-text">故事内容</span>
                 </label>
                 <textarea
+                  id="project-story"
                   className="textarea textarea-bordered bg-base-200 h-48"
                   placeholder="很久很久以前..."
                   value={formData.story}
@@ -145,6 +150,7 @@ export function NewProjectPage() {
                 const StyleIcon = style.icon;
                 return (
                   <button
+                    type="button"
                     key={style.id}
                     className={`card bg-base-300 p-6 text-center transition-all hover:scale-105 ${
                       formData.style === style.id
@@ -158,6 +164,24 @@ export function NewProjectPage() {
                   </button>
                 );
               })}
+            </div>
+            <div className="mb-6 border-t border-base-300 pt-6">
+              <div className="mb-4">
+                <h4 className="text-base font-semibold text-base-content">
+                  Provider 选择
+                </h4>
+                <p className="mt-1 text-sm text-base-content/70">
+                  为当前项目单独设置 text / image / video provider；不设置时继承系统默认。
+                </p>
+              </div>
+              <ProviderSelectionFields
+                value={{
+                  text_provider_override: formData.text_provider_override,
+                  image_provider_override: formData.image_provider_override,
+                  video_provider_override: formData.video_provider_override,
+                }}
+                onChange={(providers) => setFormData({ ...formData, ...providers })}
+              />
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep(1)}>
@@ -194,6 +218,25 @@ export function NewProjectPage() {
                     {formData.story}
                   </p>
                 )}
+              </div>
+              <div className="rounded-lg border border-base-300 bg-base-200/60 p-4">
+                <h4 className="text-sm font-semibold text-base-content">
+                  Provider 选择
+                </h4>
+                <dl className="mt-3 space-y-2 text-sm text-base-content/80">
+                  <div className="flex items-center justify-between gap-4">
+                    <dt>文本</dt>
+                    <dd>{formData.text_provider_override ?? "继承默认"}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt>图像</dt>
+                    <dd>{formData.image_provider_override ?? "继承默认"}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt>视频</dt>
+                    <dd>{formData.video_provider_override ?? "继承默认"}</dd>
+                  </div>
+                </dl>
               </div>
               <div className="flex justify-between">
                 <Button variant="ghost" onClick={() => setStep(2)}>

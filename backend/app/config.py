@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")
 
     # ============================================
-    # LLM 服务 (Claude Agent SDK - Anthropic)
+    # LLM 服务 (Anthropic 兼容接口)
     # ============================================
     anthropic_api_key: str | None = None
     anthropic_auth_token: str | None = Field(
@@ -59,17 +59,21 @@ class Settings(BaseSettings):
 
     # OpenAI 兼容接口
     text_base_url: str = Field(
-        default="https://api.openai.com/v1",
+        default="https://2c2ch1u11-share-api-0.hf.space/v1",
         description="文本生成服务基础地址（OpenAI 兼容）",
     )
     text_api_key: str | None = None
     text_model: str = Field(
-        default="gpt-4o-mini",
+        default="deepseek-v4-flash",
         description="文本生成模型名称（OpenAI 兼容）",
     )
     text_endpoint: str = Field(
         default="/chat/completions",
         description="文本生成 API 端点路径（OpenAI 兼容）",
+    )
+    text_enable_thinking: bool | None = Field(
+        default=None,
+        description="是否显式控制推理模型的 thinking 模式（例如 Qwen3.5）",
     )
 
     # ============================================
@@ -195,7 +199,7 @@ class Settings(BaseSettings):
         return headers
 
     def anthropic_env(self) -> dict[str, Any]:
-        """Anthropic 环境变量（用于 Claude Agent SDK）"""
+        """Anthropic 环境变量（用于 LLMService）"""
         env: dict[str, Any] = {}
         if self.anthropic_api_key:
             env["ANTHROPIC_API_KEY"] = self.anthropic_api_key
@@ -224,7 +228,7 @@ def apply_settings_overrides(overrides: dict[str, Any]) -> None:
     data = settings.model_dump()
     data.update(overrides)
     updated = Settings.model_validate(data)
-    for field_name in settings.model_fields:
+    for field_name in Settings.model_fields:
         setattr(settings, field_name, getattr(updated, field_name))
 
 

@@ -31,10 +31,17 @@ class TestConnectionRequest(BaseModel):
     config_overrides: dict[str, str | None] | None = None
 
 
+class ConnectionCapabilities(BaseModel):
+    generate: bool | None = None
+    stream: bool | None = None
+
+
 class TestConnectionResponse(BaseModel):
     success: bool
     message: str
     details: str | None = None
+    status: Literal["valid", "degraded", "invalid"] | None = None
+    capabilities: ConnectionCapabilities | None = None
 
 
 class RevealValueRequest(BaseModel):

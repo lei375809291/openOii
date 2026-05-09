@@ -60,8 +60,10 @@ def create_video_service(settings: Settings) -> VideoServiceProtocol:
 
     if provider == "doubao":
         from app.services.doubao_video import DoubaoVideoService
+
         return DoubaoVideoService(settings)
-    else:
-        # 默认使用 OpenAI 兼容接口
+    if provider == "openai":
         from app.services.video import VideoService
+
         return VideoService(settings)
+    raise ValueError(f"Unsupported video provider: {settings.video_provider}")

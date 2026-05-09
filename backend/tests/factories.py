@@ -14,12 +14,18 @@ async def create_project(
     story: str = "Test story",
     style: str = "anime",
     status: str = "draft",
+    text_provider_override: str | None = None,
+    image_provider_override: str | None = None,
+    video_provider_override: str | None = None,
 ) -> Project:
     project = Project(
         title=title,
         story=story,
         style=style,
         status=status,
+        text_provider_override=text_provider_override,
+        image_provider_override=image_provider_override,
+        video_provider_override=video_provider_override,
     )
     session.add(project)
     await session.commit()

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { SvgIcon } from "~/components/ui/SvgIcon";
 
 interface FieldConfig {
   name: string;
@@ -55,7 +56,7 @@ export function EditModal({
           className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
           onClick={onClose}
         >
-          ✕
+          <SvgIcon name="x" size={14} />
         </button>
 
         <div className="space-y-4">

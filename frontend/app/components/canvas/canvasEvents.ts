@@ -1,46 +1,48 @@
-/**
- * 类型安全的画布事件系统
- * 替代 window.dispatchEvent/addEventListener 的全局事件
- */
+import type { ShotUpdatePayload } from "~/types";
 
-import type { Character, Shot } from "~/types";
+export type ShapeActionName = "add-to-assets" | "approve" | "edit" | "regenerate";
 
-// 事件类型定义
+export interface ShapeActionPayload {
+  shapeId: string;
+  action: ShapeActionName;
+  entityType: "character" | "shot";
+  entityId: number;
+  feedbackType: "render";
+  shotPatch?: ShotUpdatePayload;
+  feedbackContent?: string;
+}
+
+// 事件类型定义 — 只保留仍在使用的事件
 export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
-  "edit-character": Character;
-  "regenerate-character": number;
-  "delete-character": Character;
-  "edit-shot": Shot;
-  "regenerate-shot": { id: number; type: "image" | "video" };
-  "delete-shot": Shot;
+  "shape-action": ShapeActionPayload;
 }
 
 type EventCallback<T> = (data: T) => void;
+type AnyEventCallback = (data: CanvasEvents[keyof CanvasEvents]) => void;
 
 // 事件总线单例
 class CanvasEventBus {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private listeners: Map<keyof CanvasEvents, Set<EventCallback<any>>> = new Map();
+  private listeners: Partial<Record<keyof CanvasEvents, Set<AnyEventCallback>>> = {};
 
   on<K extends keyof CanvasEvents>(
     event: K,
     callback: EventCallback<CanvasEvents[K]>
   ): () => void {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
+    if (!this.listeners[event]) {
+      this.listeners[event] = new Set();
     }
-    this.listeners.get(event)!.add(callback);
+    this.listeners[event].add(callback as EventCallback<CanvasEvents[keyof CanvasEvents]>);
 
     // 返回取消订阅函数
     return () => {
-      this.listeners.get(event)?.delete(callback);
+      this.listeners[event]?.delete(callback as EventCallback<CanvasEvents[keyof CanvasEvents]>);
     };
   }
 
   emit<K extends keyof CanvasEvents>(event: K, data: CanvasEvents[K]): void {
-    const callbacks = this.listeners.get(event);
+    const callbacks = this.listeners[event];
     if (callbacks) {
       callbacks.forEach((callback) => {
         callback(data);
@@ -53,14 +55,14 @@ class CanvasEventBus {
     callback?: EventCallback<CanvasEvents[K]>
   ): void {
     if (callback) {
-      this.listeners.get(event)?.delete(callback);
+      this.listeners[event]?.delete(callback as EventCallback<CanvasEvents[keyof CanvasEvents]>);
     } else {
-      this.listeners.delete(event);
+      delete this.listeners[event];
     }
   }
 
   clear(): void {
-    this.listeners.clear();
+    this.listeners = {};
   }
 }
 

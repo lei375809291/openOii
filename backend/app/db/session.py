@@ -1,32 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
-import asyncio
 from sqlalchemy import func, update
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlmodel import SQLModel
 
 from app.config import get_settings
-from app.models import agent_run, config_item, message, project  # noqa: F401
+from app.models import agent_run, artifact, config_item, message, project, run, stage  # noqa: F401
+from app.orchestration.persistence import ensure_postgres_checkpointer_setup
 
-
-def _patch_aiosqlite_event_loop() -> None:
-    # Python 3.14 tightened asyncio.get_event_loop() semantics; older aiosqlite versions
-    # may hang because they create futures on a non-running loop. Force it to use the
-    # running loop when available.
-    try:
-        import aiosqlite.core as _core  # type: ignore
-    except Exception:
-        return
-
-    try:
-        _core.asyncio.get_event_loop = asyncio.get_running_loop  # type: ignore[attr-defined]
-    except Exception:
-        return
-
-
-_patch_aiosqlite_event_loop()
+ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
+ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
 
 
 def _build_engine() -> AsyncEngine:
@@ -40,11 +31,40 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
 )
 
 
+def _run_alembic_upgrade() -> None:
+    import subprocess
+    import sys
+    import os
+    settings = get_settings()
+    env = os.environ.copy()
+    env["DATABASE_URL"] = settings.database_url.replace("+asyncpg", "+psycopg2")
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=str(ALEMBIC_INI.parent),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"alembic upgrade failed: {result.stderr}")
+
+
 async def init_db() -> None:
     """Initialize database tables and cleanup stale runs."""
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+    import logging
+    log = logging.getLogger("openOii.init_db")
+    settings = get_settings()
+    agent_run_table = SQLModel.metadata.tables["agentrun"]
+    project_table = SQLModel.metadata.tables["project"]
 
+    try:
+        _run_alembic_upgrade()
+        log.info("init_db: alembic upgrade done")
+    except Exception as e:
+        log.warning("init_db: alembic upgrade failed (%s), skipping", e)
+
+    log.info("init_db: starting DB session cleanup")
     async with async_session_maker() as session:
         from app.services.config_service import ConfigService
         from app.models.agent_run import AgentRun
@@ -54,20 +74,20 @@ async def init_db() -> None:
         await config_service.ensure_initialized()
         await config_service.apply_settings_overrides()
 
-        # 清理服务重启前遗留的 running/queued 状态的 run（它们已经不会继续执行了）
         await session.execute(
             update(AgentRun)
-            .where(AgentRun.status.in_(["queued", "running"]))
+            .where(agent_run_table.c.status.in_(["queued", "running"]))
             .values(status="cancelled", error="Service restarted")
         )
 
-        # 兼容旧数据：style 可能为 NULL/空字符串，统一回填为默认风格
         await session.execute(
             update(Project)
-            .where((Project.style.is_(None)) | (func.trim(Project.style) == ""))
+            .where((project_table.c.style.is_(None)) | (func.trim(project_table.c.style) == ""))
             .values(style="anime")
         )
         await session.commit()
+
+    await ensure_postgres_checkpointer_setup(settings.database_url)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

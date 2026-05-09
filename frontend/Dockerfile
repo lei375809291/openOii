@@ -1,23 +1,17 @@
-FROM node:20-alpine
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 
-# 复制依赖文件
 COPY package.json pnpm-lock.yaml ./
-
-# 安装依赖
 RUN pnpm install --frozen-lockfile
-
-# 复制源代码
 COPY . .
-
-# 构建应用
 RUN pnpm build
 
-EXPOSE 15173
+FROM nginx:1.27-alpine
 
-# 使用 pnpm preview 启动，保持与开发环境一致
-CMD ["pnpm", "preview", "--host", "0.0.0.0", "--port", "15173"]
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 15173

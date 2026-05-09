@@ -10,6 +10,7 @@ from app.config import Settings
 from app.models.agent_run import AgentRun
 from app.models.message import Message
 from app.models.project import Project
+from app.schemas.project import CharacterRead, ShotRead
 from app.services.image import ImageService
 from app.services.llm import LLMResponse, LLMService
 from app.services.video_factory import VideoServiceProtocol
@@ -22,12 +23,23 @@ if TYPE_CHECKING:
 @dataclass
 class TargetIds:
     """精细化控制的目标 ID"""
+
     character_ids: list[int] = field(default_factory=list)
     shot_ids: list[int] = field(default_factory=list)
 
     def has_targets(self) -> bool:
         """是否有指定的目标"""
         return bool(self.character_ids or self.shot_ids)
+
+
+@dataclass
+class CompletionInfo:
+    """Agent 完成时的确认信息，由 agent 在 run() 结束时设置"""
+
+    completed: str = ""
+    details: str = ""
+    next: str = ""
+    question: str = ""
 
 
 @dataclass
@@ -41,19 +53,32 @@ class AgentContext:
     image: ImageService
     video: VideoServiceProtocol
     user_feedback: str | None = None
+    feedback_type: str | None = None  # "plan" | "character" | "shot" | "compose"
+    entity_type: str | None = None  # "character" | "shot"
+    entity_id: int | None = None  # per-entity feedback target
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID
+    completion_info: CompletionInfo | None = None
+    plan_data: dict | None = None  # Cached LLM response from plan_characters for plan_shots
 
 
 class BaseAgent:
     name: str = "base"
 
-    async def send_message(self, ctx: AgentContext, content: str, progress: float | None = None, is_loading: bool = False) -> None:
+    async def send_message(
+        self,
+        ctx: AgentContext,
+        content: str,
+        summary: str | None = None,
+        progress: float | None = None,
+        is_loading: bool = False,
+    ) -> None:
         """发送消息
 
         Args:
             ctx: Agent 上下文
             content: 消息内容
+            summary: 摘要（用于确认环节显示）
             progress: 进度值（0-1 之间）
             is_loading: 是否显示加载动画
         """
@@ -61,7 +86,11 @@ class BaseAgent:
             "agent": self.name,
             "role": "assistant",
             "content": content,
+            "project_id": ctx.project.id,
+            "run_id": ctx.run.id,
         }
+        if summary is not None:
+            data["summary"] = summary
         if progress is not None:
             data["progress"] = progress
         if is_loading:
@@ -74,11 +103,12 @@ class BaseAgent:
             agent=self.name,
             role="assistant",
             content=content,
+            summary=summary,
             progress=progress,
             is_loading=is_loading,
         )
         ctx.session.add(message)
-        await ctx.session.flush()
+        await ctx.session.commit()
 
         # 发送 WebSocket 事件
         await ctx.ws.send_event(
@@ -86,42 +116,29 @@ class BaseAgent:
             {"type": "run_message", "data": data},
         )
 
-    async def send_character_event(self, ctx: AgentContext, character: Any, event_type: str = "character_created") -> None:
+    async def send_character_event(
+        self, ctx: AgentContext, character: Any, event_type: str = "character_created"
+    ) -> None:
         """发送角色创建/更新事件"""
+        payload = CharacterRead.model_validate(character).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
             {
                 "type": event_type,
-                "data": {
-                    "character": {
-                        "id": character.id,
-                        "project_id": character.project_id,
-                        "name": character.name,
-                        "description": character.description,
-                        "image_url": character.image_url,
-                    }
-                },
+                "data": {"character": payload},
             },
         )
 
-    async def send_shot_event(self, ctx: AgentContext, shot: Any, event_type: str = "shot_created") -> None:
+    async def send_shot_event(
+        self, ctx: AgentContext, shot: Any, event_type: str = "shot_created"
+    ) -> None:
         """发送分镜创建/更新事件"""
+        payload = ShotRead.model_validate(shot).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
             {
                 "type": event_type,
-                "data": {
-                    "shot": {
-                        "id": shot.id,
-                        "project_id": shot.project_id,
-                        "order": shot.order,
-                        "description": shot.description,
-                        "prompt": shot.prompt,
-                        "image_url": shot.image_url,
-                        "video_url": shot.video_url,
-                        "duration": shot.duration,
-                    }
-                },
+                "data": {"shot": payload},
             },
         )
 
@@ -218,7 +235,9 @@ class BaseAgent:
         final: LLMResponse | None = None
         buffer = ""
 
-        async for event in ctx.llm.stream(messages=messages, system=system_prompt, tools=tools, max_tokens=max_tokens):
+        async for event in ctx.llm.stream(
+            messages=messages, system=system_prompt, tools=tools, max_tokens=max_tokens
+        ):
             event_type = event.get("type")
             if event_type == "text":
                 delta = event.get("text", "")
@@ -226,7 +245,9 @@ class BaseAgent:
                     continue
                 buffer += delta
                 # 只有明确要求时才流式推送（JSON 输出不适合直接展示给用户）
-                if stream_to_ws and (len(buffer) >= 80 or buffer.endswith(("\n", "。", ".", "!", "?", "！", "？"))):
+                if stream_to_ws and (
+                    len(buffer) >= 80 or buffer.endswith(("\n", "。", ".", "!", "?", "！", "？"))
+                ):
                     await self.send_message(ctx, buffer)
                     buffer = ""
             elif event_type == "final":

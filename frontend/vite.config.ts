@@ -35,8 +35,9 @@ export default defineConfig({
     },
     // 启用 CSS 代码分割
     cssCodeSplit: true,
-    // 设置 chunk 大小警告阈值
-    chunkSizeWarningLimit: 1000,
+    // tldraw is intentionally isolated in its own vendor chunk; keep the warning
+    // threshold above the current isolated payload so builds only warn on growth.
+    chunkSizeWarningLimit: 1700,
     // 启用压缩
     minify: 'esbuild',
     // 启用源码映射（仅用于错误追踪）

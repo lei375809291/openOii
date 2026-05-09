@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.routes.assets import router as assets_router
 from app.api.v1.routes.characters import router as characters_router
 from app.api.v1.routes.config import router as config_router
 from app.api.v1.routes.generation import router as generation_router
@@ -13,4 +14,5 @@ api_router.include_router(generation_router, tags=["generation"])
 api_router.include_router(config_router, prefix="/config", tags=["config"])
 api_router.include_router(characters_router, prefix="/characters", tags=["characters"])
 api_router.include_router(shots_router, prefix="/shots", tags=["shots"])
+api_router.include_router(assets_router, prefix="/assets", tags=["assets"])
 api_router.include_router(text_router)

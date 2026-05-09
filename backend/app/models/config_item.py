@@ -1,11 +1,9 @@
-from datetime import datetime, UTC
+from datetime import datetime
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+from app.db.utils import utcnow
 
 
 class ConfigItem(SQLModel, table=True):

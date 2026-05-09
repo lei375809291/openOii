@@ -1,87 +1,110 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, UTC
+import logging
+from typing import Any, cast
 
 import redis.asyncio as redis
+from langgraph.types import Command
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.utils import utcnow
 from app.agents.base import AgentContext
-from app.agents.character_artist import CharacterArtistAgent
-from app.agents.director import DirectorAgent
-from app.agents.onboarding import OnboardingAgent
-from app.agents.scriptwriter import ScriptwriterAgent
-from app.agents.storyboard_artist import StoryboardArtistAgent
-from app.agents.video_generator import VideoGeneratorAgent
-from app.agents.video_merger import VideoMergerAgent
-from app.agents.review import ReviewAgent
+from app.agents.plan import PlanAgent
+from app.agents.render import RenderAgent
+from app.agents.compose import ComposeAgent
+from app.agents.review_rules import ReviewRuleEngine
 from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
-from app.services.file_cleaner import delete_file, delete_files
+from app.orchestration.graph import build_phase2_graph
+from app.orchestration.persistence import build_postgres_checkpointer
+from app.orchestration.runtime import (
+    build_graph_config,
+    build_phase2_runtime_context,
+    build_stage_recovery_config,
+)
+from app.orchestration.state import Phase2Stage, next_production_stage, workflow_progress_for_stage
+from app.services.creative_control import collect_project_blocking_clips
+from app.services.file_cleaner import delete_files
 from app.services.image import ImageService
+from app.services.provider_resolution import settings_with_provider_snapshot
+from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary
 from app.services.text_factory import create_text_service
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
 
+logger = logging.getLogger(__name__)
 
-# Agent 到工作流阶段的映射
-AGENT_STAGE_MAP = {
-    "onboarding": "ideate",
-    "director": "ideate",
-    "scriptwriter": "ideate",
-    "character_artist": "visualize",
-    "storyboard_artist": "visualize",
-    "video_generator": "animate",
-    "video_merger": "deploy",
-    "review": "ideate",
+
+def _next_phase2_stage(stage: str | None) -> str | None:
+    if not isinstance(stage, str) or stage not in PHASE2_STAGE_ORDER:
+        return None
+    next_index = PHASE2_STAGE_ORDER.index(stage) + 1
+    if next_index >= len(PHASE2_STAGE_ORDER):
+        return None
+    return PHASE2_STAGE_ORDER[next_index]
+
+
+STAGE_AGENT_MAP = {
+    "plan_characters": "plan",
+    "characters_approval": "plan",
+    "plan_shots": "plan",
+    "shots_approval": "plan",
+    "render_characters": "render",
+    "character_images_approval": "render",
+    "render_shots": "render",
+    "shot_images_approval": "render",
+    "compose_videos": "compose",
+    "compose_merge": "compose",
+    "compose_approval": "compose",
+    "review": "review",
 }
+
+GRAPH_STAGE_FOR_AGENT = {
+    "plan": "plan_characters",
+    "render": "render_characters",
+    "compose": "compose_videos",
+    "review": "review",
+}
+AGENT_STAGE_MAP = STAGE_AGENT_MAP
+RESUME_AGENT_FOR_STAGE = STAGE_AGENT_MAP
+
+
+def _resume_agent_for_stage(stage: str | None) -> str:
+    if not isinstance(stage, str):
+        return "plan"
+    return RESUME_AGENT_FOR_STAGE.get(stage, "plan")
+
+
+def _video_generation_skipped_in_result(result: Any) -> bool:
+    if not isinstance(result, dict):
+        return False
+    return bool(result.get("video_generation_skipped"))
+
 
 # Agent 完成后的描述信息
 AGENT_COMPLETION_INFO = {
-    "onboarding": {
-        "completed": "已完成项目初始化",
-        "next": "接下来将由导演规划整体创作方向",
-        "question": "项目设置看起来如何？",
-    },
-    "director": {
-        "completed": "已完成创作方向规划",
-        "next": "接下来编剧将创作剧本、设计角色和规划分镜",
-        "question": "创作方向是否符合您的预期？",
-    },
-    "scriptwriter": {
-        "completed": "已完成剧本创作",
+    "plan": {
+        "completed": "已完成创作方案规划",
         "details": "生成了角色设定和分镜脚本",
-        "next": "接下来将为角色生成参考图片",
-        "question": "剧本内容和角色设定是否满意？如果需要修改，请告诉我具体的调整意见。",
+        "next": "接下来将为角色和分镜生成参考图片",
+        "question": "创作方案是否符合您的预期？如果需要修改，请告诉我具体的调整意见。",
     },
-    "character_artist": {
-        "completed": "已完成角色图片生成",
-        "next": "接下来将为每个分镜生成首帧图片",
-        "question": "角色形象是否符合您的想象？如果需要重新生成某个角色，请告诉我。",
+    "render": {
+        "completed": "已完成角色形象和分镜画面渲染",
+        "details": "角色形象和分镜画面均已渲染完成",
+        "next": "接下来将根据分镜生成视频片段并合成",
+        "question": "角色形象和分镜画面是否满意？如果需要重新生成，请告诉我。",
     },
-    "storyboard_artist": {
-        "completed": "已完成分镜首帧图片生成",
-        "next": "接下来将根据分镜生成视频片段",
-        "question": "分镜画面是否满意？如果某些镜头需要调整，请告诉我。",
-    },
-    "video_generator": {
-        "completed": "已完成视频片段生成",
-        "next": "接下来将把所有片段拼接成完整视频",
-        "question": "视频片段效果如何？是否需要重新生成某些镜头？",
-    },
-    "video_merger": {
-        "completed": "已完成视频拼接",
+    "compose": {
+        "completed": "已完成视频合成",
         "next": "您的漫剧已经准备就绪！可以下载或分享了。",
         "question": "最终视频效果满意吗？",
     },
 }
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 _redis_client: redis.Redis | None = None
@@ -103,6 +126,47 @@ def get_confirm_event_key(run_id: int) -> str:
 
 def get_confirm_channel(run_id: int) -> str:
     return f"openoii:confirm_channel:{run_id}"
+
+
+def get_awaiting_payload_key(run_id: int) -> str:
+    """Redis 缓存 run 当前 gate 的 awaiting payload，用于 WS 重连补发"""
+    return f"openoii:awaiting:{run_id}"
+
+
+async def store_awaiting_payload(run_id: int, payload: dict) -> None:
+    """记录当前 run 在 gate 等待，附带 run_awaiting_confirm 事件 payload"""
+    import json as _json
+
+    try:
+        r = await get_redis()
+        await r.set(get_awaiting_payload_key(run_id), _json.dumps(payload), ex=7200)
+    except Exception:  # noqa: BLE001 - redis unreachable is non-fatal for orchestration flow
+        logger.exception("store_awaiting_payload failed run_id=%s", run_id)
+
+
+async def clear_awaiting_payload(run_id: int) -> None:
+    try:
+        r = await get_redis()
+        await r.delete(get_awaiting_payload_key(run_id))
+    except Exception:  # noqa: BLE001
+        logger.exception("clear_awaiting_payload failed run_id=%s", run_id)
+
+
+async def get_awaiting_payload(run_id: int) -> dict | None:
+    import json as _json
+
+    try:
+        r = await get_redis()
+        raw = await r.get(get_awaiting_payload_key(run_id))
+    except Exception:  # noqa: BLE001
+        logger.exception("get_awaiting_payload failed run_id=%s", run_id)
+        return None
+    if not raw:
+        return None
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return None
 
 
 async def clear_confirm_event_redis(run_id: int) -> None:
@@ -165,14 +229,10 @@ class GenerationOrchestrator:
         self.session = session
         self._last_user_feedback_id: int | None = None
         self.agents = [
-            OnboardingAgent(),
-            DirectorAgent(),
-            ScriptwriterAgent(),  # 生成角色+分镜描述
-            CharacterArtistAgent(),  # 生成角色图片
-            StoryboardArtistAgent(),  # 生成分镜首帧图片
-            VideoGeneratorAgent(),  # 生成分镜视频
-            VideoMergerAgent(),  # 拼接完整视频
-            ReviewAgent(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
+            PlanAgent(),
+            RenderAgent(),
+            ComposeAgent(),
+            ReviewRuleEngine(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
         ]
 
     def _agent_index(self, agent_name: str) -> int:
@@ -222,18 +282,9 @@ class GenerationOrchestrator:
             shot.video_url = None
             self.session.add(shot)
 
-    async def _clear_project_video(self, project_id: int) -> None:
-        """清空项目最终视频（先删除文件再清空 URL）"""
-        project = await self.session.execute(select(Project).where(Project.id == project_id))
-        proj = project.scalars().first()
-        if proj:
-            # 先删除文件
-            delete_file(proj.video_url)
-            # 再清空 URL
-            proj.video_url = None
-            self.session.add(proj)
-
-    async def _cleanup_for_rerun(self, project_id: int, start_agent: str, mode: str = "full") -> None:
+    async def _cleanup_for_rerun(
+        self, project_id: int, start_agent: str, mode: str = "full"
+    ) -> None:
         """清理逻辑：根据重新运行的 agent 和模式清理数据
 
         Args:
@@ -244,56 +295,29 @@ class GenerationOrchestrator:
         cleared_types: list[str] = []
 
         if mode == "incremental":
-            # 增量模式：只清理下游产物（图片/视频），保留数据结构
-            if start_agent in {"onboarding", "director", "scriptwriter"}:
-                # 增量模式下 scriptwriter 不删除数据，只清理下游产物
+            if start_agent in {"plan"}:
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-                # 不发送 data_cleared 事件，因为数据结构保留
-            elif start_agent == "character_artist":
+            elif start_agent == "render":
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-            elif start_agent == "storyboard_artist":
-                await self._clear_shot_images(project_id)
+            elif start_agent == "compose":
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-            elif start_agent == "video_generator":
-                await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-            elif start_agent == "video_merger":
-                await self._clear_project_video(project_id)
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
         else:
-            # 全量模式：原有逻辑
-            if start_agent in {"onboarding", "director", "scriptwriter"}:
-                # 从头开始：删除角色、镜头
+            if start_agent in {"plan"}:
                 await self._delete_project_shots(project_id)
                 await self._delete_project_characters(project_id)
-                await self._clear_project_video(project_id)
                 cleared_types = ["characters", "shots"]
-            elif start_agent == "character_artist":
-                # 重新生成角色图片，并清空下游产物
+            elif start_agent == "render":
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-            elif start_agent == "storyboard_artist":
-                # 重新生成分镜首帧，并清空下游产物
-                await self._clear_shot_images(project_id)
+            elif start_agent == "compose":
                 await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-            elif start_agent == "video_generator":
-                # 重新生成分镜视频，并清空下游产物
-                await self._clear_shot_videos(project_id)
-                await self._clear_project_video(project_id)
-            elif start_agent == "video_merger":
-                # 重新拼接视频：清空 Project.video_url
-                await self._clear_project_video(project_id)
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
 
@@ -305,7 +329,11 @@ class GenerationOrchestrator:
                 project_id,
                 {
                     "type": "data_cleared",
-                    "data": {"cleared_types": cleared_types, "start_agent": start_agent, "mode": mode},
+                    "data": {
+                        "cleared_types": cleared_types,
+                        "start_agent": start_agent,
+                        "mode": mode,
+                    },
                 },
             )
 
@@ -313,9 +341,10 @@ class GenerationOrchestrator:
         for k, v in fields.items():
             setattr(run, k, v)
         run.updated_at = utcnow()
-        self.session.add(run)
-        await self.session.commit()
-        await self.session.refresh(run)
+        if self.session:
+            self.session.add(run)
+            await self.session.commit()
+            await self.session.refresh(run)
         return run
 
     async def _log(self, run_id: int, *, agent: str, role: str, content: str) -> None:
@@ -323,53 +352,168 @@ class GenerationOrchestrator:
         self.session.add(msg)
         await self.session.commit()
 
-    async def _wait_for_confirm(self, project_id: int, run_id: int, agent_name: str) -> str | None:
-        # 获取 agent 完成信息
-        info = AGENT_COMPLETION_INFO.get(agent_name, {})
-        completed = info.get("completed", f"「{agent_name}」已完成")
-        details = info.get("details", "")
-        next_step = info.get("next", "继续下一步")
-        question = info.get("question", "是否继续？")
+    async def _handle_run_failure(
+        self, project_id: int, run: AgentRun, run_id: int, error: Exception, context: str = "Run"
+    ) -> None:
+        await self.session.rollback()
+        try:
+            await self._log(
+                run_id, agent="orchestrator", role="system", content=f"{context} failed: {error!r}"
+            )
+            await self._set_run(run, status="failed", error=str(error))
+
+            project = await self.session.get(Project, project_id)
+            if project is not None:
+                project.status = "failed"
+                self.session.add(project)
+                await self.session.commit()
+                blocking_clips = await collect_project_blocking_clips(self.session, project)
+                await self.ws.send_event(
+                    project_id,
+                    {
+                        "type": "project_updated",
+                        "data": {
+                            "project": {
+                                "id": project_id,
+                                "status": project.status,
+                                "video_url": project.video_url,
+                                "blocking_clips": blocking_clips,
+                            }
+                        },
+                    },
+                )
+        except Exception:
+            pass
+        await self.ws.send_event(
+            project_id,
+            {
+                "type": "run_failed",
+                "data": {"run_id": run_id, "project_id": project_id, "error": str(error)},
+            },
+        )
+
+    async def _complete_run(
+        self,
+        project_id: int,
+        run: AgentRun,
+        run_id: int,
+        final_stage: str,
+        video_generation_skipped: bool,
+    ) -> None:
+        completed_agent = getattr(run, "current_agent", None)
+        await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
+        completed_data: dict = {
+            "run_id": run_id,
+            "project_id": project_id,
+            "current_stage": final_stage,
+            "current_agent": completed_agent,
+        }
+        if video_generation_skipped:
+            completed_data["message"] = "视频未配置，已完成文本和图片生成"
+            completed_data["video_generation_pending"] = True
+        await self.ws.send_event(project_id, {"type": "run_completed", "data": completed_data})
+
+    async def _cleanup_run(self, run_id: int) -> None:
+        await clear_confirm_event_redis(run_id)
+        await clear_awaiting_payload(run_id)
+
+    async def _wait_for_confirm(
+        self, project_id: int, run: AgentRun, agent_name: str, agent_ctx: AgentContext | None = None
+    ) -> str | None:
+        current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "plan")
+        next_stage = _next_phase2_stage(current_stage)
+        recovery_summary = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+        run_pk = run.id or 0
+
+        if agent_ctx and agent_ctx.completion_info:
+            completed = agent_ctx.completion_info.completed or f"「{agent_name}」已完成"
+            details = agent_ctx.completion_info.details
+            next_step = agent_ctx.completion_info.next or "继续下一步"
+            question = agent_ctx.completion_info.question or "是否继续？"
+        else:
+            info = AGENT_COMPLETION_INFO.get(agent_name, {})
+            completed = info.get("completed", f"「{agent_name}」已完成")
+            details = info.get("details", "")
+            next_step = info.get("next", "继续下一步")
+            question = info.get("question", "是否继续？")
 
         # 构建详细消息
-        message_parts = [f"✅ {completed}"]
+        message_parts = [completed]
         if details:
-            message_parts.append(f"📋 {details}")
-        message_parts.append(f"➡️ {next_step}")
-        message_parts.append(f"❓ {question}")
+            message_parts.append(f"{details}")
+        message_parts.append(next_step)
+        message_parts.append(question)
 
         full_message = "\n".join(message_parts)
 
         # 清理上一轮遗留的 confirm（避免误触导致直接跳过等待）
-        await clear_confirm_event_redis(run_id)
+        await clear_confirm_event_redis(run_pk)
+
+        awaiting_payload = {
+            "run_id": run_pk,
+            "project_id": project_id,
+            "agent": agent_name,
+            "gate": agent_name,
+            "current_stage": current_stage,
+            "stage": current_stage,
+            "next_stage": next_stage,
+            "recovery_summary": recovery_summary.model_dump(mode="json"),
+            "preserved_stages": recovery_summary.preserved_stages,
+            "message": full_message,
+            "completed": completed,
+            "next_step": next_step,
+            "question": question,
+        }
+
+        # 缓存 payload 以便 WS 重连补发（事件本身可能在客户端未连接时丢失）
+        await store_awaiting_payload(run_pk, awaiting_payload)
 
         await self.ws.send_event(
             project_id,
             {
                 "type": "run_awaiting_confirm",
-                "data": {
-                    "run_id": run_id,
-                    "agent": agent_name,
-                    "message": full_message,
-                    "completed": completed,
-                    "next_step": next_step,
-                    "question": question,
-                },
+                "data": awaiting_payload,
             },
         )
 
         try:
-            ok = await wait_for_confirm_redis(run_id, timeout=1800)
+            ok = await wait_for_confirm_redis(run_pk, timeout=1800)
             if not ok:
                 raise asyncio.TimeoutError()
         except asyncio.TimeoutError:
+            await clear_awaiting_payload(run_pk)
             raise RuntimeError(f"等待确认超时（agent: {agent_name}）")
+
+        await clear_awaiting_payload(run_pk)
+
+        confirmed_recovery = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+
+        post_approval_stage = _next_phase2_stage(next_stage)
 
         await self.ws.send_event(
             project_id,
             {
                 "type": "run_confirmed",
-                "data": {"run_id": run_id, "agent": agent_name},
+                "data": {
+                    "run_id": run_pk,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": post_approval_stage,
+                    "stage": post_approval_stage,
+                    "next_stage": _next_phase2_stage(post_approval_stage)
+                    if post_approval_stage
+                    else None,
+                    "recovery_summary": confirmed_recovery.model_dump(mode="json"),
+                },
             },
         )
 
@@ -379,7 +523,7 @@ class GenerationOrchestrator:
         # 读取本次确认携带的最新用户反馈（若有）
         res = await self.session.execute(
             select(AgentMessage)
-            .where(AgentMessage.run_id == run_id)
+            .where(AgentMessage.run_id == run_pk)
             .where(AgentMessage.role == "user")
             .order_by(AgentMessage.created_at.desc())
             .limit(1)
@@ -391,6 +535,378 @@ class GenerationOrchestrator:
 
         return None
 
+    async def _send_auto_approval_events(
+        self, project_id: int, run: AgentRun, agent_name: str, agent_ctx: AgentContext | None = None
+    ) -> None:
+        current_stage = GRAPH_STAGE_FOR_AGENT.get(agent_name, "plan")
+        approval_stage = _next_phase2_stage(current_stage)
+        post_approval_stage = _next_phase2_stage(approval_stage) if approval_stage else None
+        recovery_summary = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+        run_pk = run.id or 0
+
+        if agent_ctx and agent_ctx.completion_info:
+            completed = agent_ctx.completion_info.completed or f"「{agent_name}」已完成"
+            next_step = agent_ctx.completion_info.next or "继续下一步"
+            question = agent_ctx.completion_info.question or "是否继续？"
+        else:
+            info = AGENT_COMPLETION_INFO.get(agent_name, {})
+            completed = info.get("completed", f"「{agent_name}」已完成")
+            next_step = info.get("next", "继续下一步")
+            question = info.get("question", "是否继续？")
+
+        message_parts = [completed, next_step, question, "[auto]"]
+        full_message = "\n".join(message_parts)
+
+        await self.ws.send_event(
+            project_id,
+            {
+                "type": "run_awaiting_confirm",
+                "data": {
+                    "run_id": run_pk,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": current_stage,
+                    "stage": current_stage,
+                    "next_stage": approval_stage,
+                    "recovery_summary": recovery_summary.model_dump(mode="json"),
+                    "preserved_stages": recovery_summary.preserved_stages,
+                    "message": full_message,
+                    "completed": completed,
+                    "next_step": next_step,
+                    "question": question,
+                    "auto_mode": True,
+                },
+            },
+        )
+
+        confirmed_recovery = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+
+        await self.ws.send_event(
+            project_id,
+            {
+                "type": "run_confirmed",
+                "data": {
+                    "run_id": run_pk,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "gate": agent_name,
+                    "current_stage": post_approval_stage,
+                    "stage": post_approval_stage,
+                    "next_stage": _next_phase2_stage(post_approval_stage)
+                    if post_approval_stage
+                    else None,
+                    "recovery_summary": confirmed_recovery.model_dump(mode="json"),
+                    "auto_mode": True,
+                },
+            },
+        )
+
+    def _build_agent_context(
+        self,
+        *,
+        project: Project,
+        run: AgentRun,
+        request: GenerateRequest,
+    ) -> AgentContext:
+        context_settings = settings_with_provider_snapshot(
+            self.settings,
+            run.provider_snapshot,
+        )
+        return AgentContext(
+            settings=context_settings,
+            session=self.session,
+            ws=self.ws,
+            project=project,
+            run=run,
+            llm=cast(Any, create_text_service(context_settings)),
+            image=ImageService(self.settings),
+            video=cast(Any, create_video_service(context_settings)),
+        )
+
+    def _build_phase2_state(
+        self,
+        *,
+        project_id: int,
+        run_id: int,
+        thread_id: str,
+        start_stage: str,
+    ) -> dict[str, Any]:
+        return {
+            "project_id": project_id,
+            "run_id": run_id,
+            "thread_id": thread_id,
+            "current_stage": start_stage,
+            "stage_history": [],
+            "approval_history": [],
+            "artifact_lineage": [],
+            "review_requested": False,
+            "approval_feedback": "",
+            "route_stage": start_stage,
+            "route_mode": "full",
+        }
+
+    async def _invoke_phase2_graph(
+        self,
+        *,
+        project: Project,
+        run: AgentRun,
+        ctx: AgentContext,
+        compiled_graph: Any,
+        graph_config: dict[str, dict[str, str]],
+        runtime_context: Any,
+        initial_payload: Any,
+        auto_mode: bool,
+    ) -> tuple[bool, str]:
+        if project.id is None or run.id is None:
+            raise RuntimeError("Project and run must be persisted before graph execution")
+        project_pk = int(project.id)
+        run_pk = int(run.id)
+
+        payload: Any = initial_payload
+        video_generation_skipped = False
+        final_stage = "compose"
+        saw_compose_stage = False
+        while True:
+            logger.debug(
+                "[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__
+            )
+            result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
+            logger.debug(
+                "[graph] run=%s ainvoke returned result_type=%s", run_pk, type(result).__name__
+            )
+            if not isinstance(result, dict):
+                logger.warning("[graph] run=%s result not dict, breaking", run_pk)
+                break
+
+            result_stage = result.get("current_stage")
+            if isinstance(result_stage, str) and result_stage:
+                final_stage = result_stage
+                if result_stage.startswith("compose"):
+                    saw_compose_stage = True
+
+            if _video_generation_skipped_in_result(result):
+                video_generation_skipped = True
+
+            interrupts = result.get("__interrupt__") or []
+            logger.debug(
+                "[graph] run=%s interrupts_count=%s keys=%s",
+                run_pk,
+                len(interrupts),
+                list(result.keys()),
+            )
+            if not interrupts:
+                logger.debug("[graph] run=%s no interrupts, breaking", run_pk)
+                break
+
+            interrupt_value = getattr(interrupts[0], "value", None)
+            gate_agent = None
+            if isinstance(interrupt_value, dict):
+                gate_agent = interrupt_value.get("gate")
+
+            if not isinstance(gate_agent, str) or not gate_agent.strip():
+                raise RuntimeError("LangGraph approval gate did not include a valid gate name")
+
+            logger.debug(
+                "[graph] run=%s interrupt gate=%s auto_mode=%s", run_pk, gate_agent, auto_mode
+            )
+            feedback = ""
+            action = "approve"
+            if not auto_mode:
+                feedback = (
+                    await self._wait_for_confirm(project_pk, run, gate_agent.strip(), agent_ctx=ctx)
+                    or ""
+                )
+            else:
+                await self._send_auto_approval_events(
+                    project_pk, run, gate_agent.strip(), agent_ctx=ctx
+                )
+            logger.debug(
+                "[graph] run=%s resume with feedback=%r action=%s", run_pk, feedback, action
+            )
+            if feedback:
+                action = "feedback"
+            payload = Command(resume={"action": action, "feedback": feedback})
+
+        await self.session.refresh(ctx.project)
+
+        if saw_compose_stage and not video_generation_skipped and final_stage.startswith("compose"):
+            blocking_clips = await collect_project_blocking_clips(self.session, ctx.project)
+            project_video_url = getattr(ctx.project, "video_url", None)
+            if not project_video_url or blocking_clips:
+                reasons: list[str] = []
+                if not project_video_url:
+                    reasons.append("final project video_url is empty")
+                if blocking_clips:
+                    reasons.append(f"{len(blocking_clips)} blocking clips remain")
+                raise RuntimeError(
+                    "Compose finished without a usable final video: " + "; ".join(reasons)
+                )
+
+        ctx.project.status = "ready"
+        self.session.add(ctx.project)
+        await self.session.commit()
+
+        return video_generation_skipped, final_stage
+
+    async def _run_phase2_graph(
+        self,
+        *,
+        project: Project,
+        run: AgentRun,
+        request: GenerateRequest,
+        ctx: AgentContext,
+        agent_name: str,
+        auto_mode: bool,
+    ) -> tuple[bool, str]:
+        if agent_name not in GRAPH_STAGE_FOR_AGENT:
+            raise ValueError(f"Unsupported agent for graph execution: {agent_name}")
+
+        if agent_name == "review":
+            latest_feedback = (ctx.user_feedback or request.notes or "").strip()
+            if latest_feedback:
+                ctx.user_feedback = latest_feedback
+
+        start_stage = cast(Phase2Stage, GRAPH_STAGE_FOR_AGENT[agent_name])
+        if project.id is None or run.id is None:
+            raise RuntimeError("Project and run must be persisted before graph execution")
+        graph_config = cast(Any, build_graph_config(run))
+        thread_id = graph_config["configurable"]["thread_id"]
+        if not run.thread_id:
+            await self._set_run(run, thread_id=thread_id)
+        runtime_context = build_phase2_runtime_context(
+            orchestrator=self,
+            agent_context=ctx,
+            start_stage=start_stage,
+            auto_mode=auto_mode,
+        )
+        initial_state = self._build_phase2_state(
+            project_id=int(project.id),
+            run_id=int(run.id),
+            thread_id=graph_config["configurable"]["thread_id"],
+            start_stage=start_stage,
+        )
+
+        async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
+            compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
+            return await self._invoke_phase2_graph(
+                project=project,
+                run=run,
+                ctx=ctx,
+                compiled_graph=compiled_graph,
+                graph_config=graph_config,
+                runtime_context=runtime_context,
+                initial_payload=initial_state,
+                auto_mode=auto_mode,
+            )
+
+    async def resume_from_recovery(
+        self,
+        *,
+        project_id: int,
+        run_id: int,
+        auto_mode: bool = False,
+    ) -> None:
+        project = await self.session.get(Project, project_id)
+        run = await self.session.get(AgentRun, run_id)
+        if not project or not run:
+            return
+
+        recovery = await build_recovery_summary(
+            session=self.session,
+            database_url=self.settings.database_url,
+            run=run,
+        )
+        resume_stage = cast(Phase2Stage, recovery.next_stage or recovery.current_stage)
+        resume_agent = _resume_agent_for_stage(resume_stage)
+
+        graph_config = cast(Any, build_graph_config(run))
+        thread_id = graph_config["configurable"]["thread_id"]
+        if not run.thread_id:
+            await self._set_run(run, thread_id=thread_id)
+
+        try:
+            self._agent_index(resume_agent)
+            await self._set_run(
+                run,
+                status="running",
+                current_agent=_resume_agent_for_stage(resume_stage),
+                progress=workflow_progress_for_stage(resume_stage),
+                error=None,
+            )
+
+            ctx = self._build_agent_context(
+                project=project,
+                run=run,
+                request=GenerateRequest(),
+            )
+            ctx.user_feedback = None
+
+            await self.ws.send_event(
+                project_id,
+                {
+                    "type": "run_started",
+                    "data": {
+                        "run_id": run_id,
+                        "project_id": project_id,
+                        "provider_snapshot": run.provider_snapshot,
+                        "current_stage": resume_stage,
+                        "stage": resume_stage,
+                        "next_stage": recovery.next_stage,
+                        "progress": workflow_progress_for_stage(resume_stage),
+                        "current_agent": _resume_agent_for_stage(resume_stage),
+                        "recovery_summary": recovery.model_dump(mode="json"),
+                    },
+                },
+            )
+            await self._log(
+                run_id,
+                agent="orchestrator",
+                role="system",
+                content=f"Resuming from checkpoint at {resume_stage}: {recovery!r}",
+            )
+
+            async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
+                compiled_graph = build_phase2_graph().compile(checkpointer=cast(Any, checkpointer))
+                resume_config = cast(
+                    Any,
+                    await build_stage_recovery_config(
+                        compiled_graph,
+                        run,
+                        before_stage=recovery.next_stage or recovery.current_stage,
+                    ),
+                )
+                runtime_context = build_phase2_runtime_context(
+                    orchestrator=self,
+                    agent_context=ctx,
+                    start_stage=resume_stage,
+                    auto_mode=auto_mode,
+                )
+                video_generation_skipped, final_stage = await self._invoke_phase2_graph(
+                    project=project,
+                    run=run,
+                    ctx=ctx,
+                    compiled_graph=compiled_graph,
+                    graph_config=resume_config,
+                    runtime_context=runtime_context,
+                    initial_payload=None,
+                    auto_mode=auto_mode,
+                )
+
+            await self._complete_run(project_id, run, run_id, final_stage, video_generation_skipped)
+        except Exception as e:
+            await self._handle_run_failure(project_id, run, run_id, e, context="Resume")
+        finally:
+            await self._cleanup_run(run_id)
+
     async def run_from_agent(
         self,
         *,
@@ -399,6 +915,9 @@ class GenerationOrchestrator:
         request: GenerateRequest,
         agent_name: str,
         auto_mode: bool = False,
+        feedback_type: str | None = None,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
     ) -> None:
         project = await self.session.get(Project, project_id)
         run = await self.session.get(AgentRun, run_id)
@@ -409,11 +928,28 @@ class GenerationOrchestrator:
             self._agent_index(agent_name)
 
             await self._set_run(
-                run, status="running", current_agent="orchestrator", progress=0.01, error=None
+                run,
+                status="running",
+                current_agent=agent_name,
+                progress=workflow_progress_for_stage(GRAPH_STAGE_FOR_AGENT[agent_name]),
+                error=None,
             )
+            initial_stage = GRAPH_STAGE_FOR_AGENT[agent_name]
             await self.ws.send_event(
                 project_id,
-                {"type": "run_started", "data": {"run_id": run_id, "project_id": project_id}},
+                {
+                    "type": "run_started",
+                    "data": {
+                        "run_id": run_id,
+                        "project_id": project_id,
+                        "provider_snapshot": run.provider_snapshot,
+                        "current_stage": initial_stage,
+                        "stage": initial_stage,
+                        "next_stage": next_production_stage(initial_stage),
+                        "progress": workflow_progress_for_stage(initial_stage),
+                        "current_agent": agent_name,
+                    },
+                },
             )
             await self._log(
                 run_id,
@@ -422,33 +958,23 @@ class GenerationOrchestrator:
                 content=f"Generate started from {agent_name}: {request!r}",
             )
 
-            ctx = AgentContext(
-                settings=self.settings,
-                session=self.session,
-                ws=self.ws,
-                project=project,
-                run=run,
-                llm=create_text_service(self.settings),
-                image=ImageService(self.settings),
-                video=create_video_service(self.settings),
-            )
+            ctx = self._build_agent_context(project=project, run=run, request=request)
 
             # 初始化当前 run 已存在的用户反馈消息（避免后续确认不带反馈时误读历史反馈）
             res = await ctx.session.execute(
                 select(AgentMessage.id)
-                .where(AgentMessage.run_id == ctx.run.id)
+                .where(AgentMessage.run_id == run.id)
                 .where(AgentMessage.role == "user")
                 .order_by(AgentMessage.created_at.desc())
                 .limit(1)
             )
             self._last_user_feedback_id = res.scalar_one_or_none()
 
-            prev_handoff_agent: str | None = None
             if agent_name == "review":
                 # 让后续 agent 能直接读取用户反馈（例如编剧需要遵循数量限制等）
                 res = await ctx.session.execute(
                     select(AgentMessage)
-                    .where(AgentMessage.run_id == ctx.run.id)
+                    .where(AgentMessage.run_id == run.id)
                     .where(AgentMessage.role == "user")
                     .order_by(AgentMessage.created_at.desc())
                     .limit(1)
@@ -459,7 +985,10 @@ class GenerationOrchestrator:
                 elif request.notes and request.notes.strip():
                     ctx.user_feedback = request.notes.strip()
 
-                prev_handoff_agent = "review"
+                ctx.feedback_type = feedback_type
+                ctx.entity_type = entity_type
+                ctx.entity_id = entity_id
+
                 review_agent = self.agents[self._agent_index("review")]
 
                 await self._set_run(run, current_agent=review_agent.name, progress=0.0)
@@ -470,7 +999,11 @@ class GenerationOrchestrator:
                         "data": {
                             "run_id": run_id,
                             "current_agent": review_agent.name,
-                            "stage": AGENT_STAGE_MAP.get(review_agent.name, "ideate"),
+                            "current_stage": GRAPH_STAGE_FOR_AGENT.get(review_agent.name, "review"),
+                            "stage": GRAPH_STAGE_FOR_AGENT.get(review_agent.name, "review"),
+                            "next_stage": _next_phase2_stage(
+                                GRAPH_STAGE_FOR_AGENT.get(review_agent.name, "review")
+                            ),
                             "progress": 0.0,
                         },
                     },
@@ -485,10 +1018,9 @@ class GenerationOrchestrator:
                     if isinstance(m, str) and m.strip() in ("incremental", "full"):
                         mode = m.strip()
                 if not (isinstance(start_agent, str) and start_agent.strip()):
-                    start_agent = "scriptwriter"
+                    start_agent = "plan"
                 agent_name = start_agent.strip()
                 self._agent_index(agent_name)  # validate
-                # 保存 mode 到 ctx 供 scriptwriter 使用
                 ctx.rerun_mode = mode
                 await self._log(
                     run_id,
@@ -497,131 +1029,27 @@ class GenerationOrchestrator:
                     content=f"Review routed to {agent_name} (mode={mode}): {routing!r}",
                 )
 
-            await self._cleanup_for_rerun(project_id, agent_name, mode=getattr(ctx, 'rerun_mode', 'full'))
+            await self._cleanup_for_rerun(
+                project_id, agent_name, mode=getattr(ctx, "rerun_mode", "full")
+            )
 
             # 刷新 project 对象，因为 cleanup 可能修改了它
             await self.session.refresh(ctx.project)
 
-            start_idx = self._agent_index(agent_name)
-            plan = [a.name for a in self.agents[start_idx:] if a.name != "review"]
-
-            i = 0
-            while i < len(plan):
-                cur_name = plan[i]
-                cur_idx = self._agent_index(cur_name)
-                agent = self.agents[cur_idx]
-
-                # 发送 Agent 邀请消息
-                prev_agent_name: str | None = None
-                if i > 0:
-                    prev_agent_name = plan[i - 1]
-                elif prev_handoff_agent:
-                    prev_agent_name = prev_handoff_agent
-
-                if prev_agent_name:
-                    await self.ws.send_event(
-                        project_id,
-                        {
-                            "type": "agent_handoff",
-                            "data": {
-                                "from_agent": prev_agent_name,
-                                "to_agent": agent.name,
-                                "message": f"@{prev_agent_name} 邀请 @{agent.name} 加入了群聊",
-                            },
-                        },
-                    )
-
-                progress = i / max(len(plan), 1)
-                await self._set_run(run, current_agent=agent.name, progress=progress)
-                await self.ws.send_event(
-                    project_id,
-                    {
-                        "type": "run_progress",
-                        "data": {
-                            "run_id": run_id,
-                            "current_agent": agent.name,
-                            "stage": AGENT_STAGE_MAP.get(agent.name, "ideate"),
-                            "progress": progress,
-                        },
-                    },
-                )
-
-                await agent.run(ctx)
-
-                # 最后一个 agent 完成后，设置项目状态为 ready
-                if i == len(plan) - 1:
-                    ctx.project.status = "ready"
-                    ctx.session.add(ctx.project)
-                    await ctx.session.commit()
-
-                if not auto_mode and i < (len(plan) - 1):
-                    feedback = await self._wait_for_confirm(project_id, run_id, agent.name)
-                    if feedback:
-                        # 用户提供了反馈，跳转到 review agent 处理
-                        ctx.user_feedback = feedback
-                        await self._log(
-                            run_id,
-                            agent="orchestrator",
-                            role="system",
-                            content=f"User feedback received, routing to review: {feedback[:100]}...",
-                        )
-
-                        # 调用 review agent 分析反馈并决定从哪个 agent 重新开始
-                        review_agent = self.agents[self._agent_index("review")]
-                        routing = await review_agent.run(ctx)
-                        start_agent = (
-                            routing.get("start_agent") if isinstance(routing, dict) else None
-                        )
-                        # 直接从 routing 读取 mode（review.py 已经解析好了）
-                        mode = "full"
-                        if isinstance(routing, dict):
-                            m = routing.get("mode")
-                            if isinstance(m, str) and m.strip() in ("incremental", "full"):
-                                mode = m.strip()
-                        if not (isinstance(start_agent, str) and start_agent.strip()):
-                            start_agent = "scriptwriter"
-                        agent_name = start_agent.strip()
-                        self._agent_index(agent_name)  # validate
-                        # 保存 mode 到 ctx 供 scriptwriter 使用
-                        ctx.rerun_mode = mode
-                        await self._log(
-                            run_id,
-                            agent="orchestrator",
-                            role="system",
-                            content=f"Review routed to {agent_name} (mode={mode}): {routing!r}",
-                        )
-
-                        # 清理并重新规划
-                        await self._cleanup_for_rerun(project_id, agent_name, mode=mode)
-                        # 刷新 project 对象，因为 cleanup 可能修改了它
-                        await self.session.refresh(ctx.project)
-                        start_idx = self._agent_index(agent_name)
-                        plan = [a.name for a in self.agents[start_idx:] if a.name != "review"]
-                        i = 0
-                        prev_handoff_agent = "review"
-                        continue
-
-                i += 1
-
-            await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
-            await self.ws.send_event(
-                project_id, {"type": "run_completed", "data": {"run_id": run_id}}
+            video_generation_skipped, final_stage = await self._run_phase2_graph(
+                project=project,
+                run=run,
+                request=request,
+                ctx=ctx,
+                agent_name=agent_name,
+                auto_mode=auto_mode,
             )
+
+            await self._complete_run(project_id, run, run_id, final_stage, video_generation_skipped)
         except Exception as e:
-            # 先 rollback 以清理可能的脏状态
-            await self.session.rollback()
-            try:
-                await self._log(
-                    run_id, agent="orchestrator", role="system", content=f"Run failed: {e!r}"
-                )
-                await self._set_run(run, status="failed", error=str(e))
-            except Exception:
-                pass  # 如果日志记录也失败，忽略
-            await self.ws.send_event(
-                project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(e)}}
-            )
+            await self._handle_run_failure(project_id, run, run_id, e, context="Run")
         finally:
-            await clear_confirm_event_redis(run_id)
+            await self._cleanup_run(run_id)
 
     async def run(
         self, *, project_id: int, run_id: int, request: GenerateRequest, auto_mode: bool = False

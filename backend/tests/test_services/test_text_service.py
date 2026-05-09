@@ -5,6 +5,7 @@ import pytest
 
 import app.services.text as text_module
 from app.config import Settings
+from app.services.llm import LLMResponse
 from app.services.text import (
     TextService,
     TextServiceAuthError,
@@ -12,6 +13,7 @@ from app.services.text import (
     TextServiceRateLimitError,
     TextServiceServerError,
 )
+from app.services.text_capabilities import TextProviderCapability
 
 
 class StubResponse:
@@ -58,6 +60,18 @@ class StubAsyncClient:
         self.last_headers = headers
         self.last_json = json
         return StubStream(self._response)
+
+
+def make_settings(**overrides):
+    base = dict(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    base.update(overrides)
+    return Settings(**base)
 
 
 def test_build_url():
@@ -144,7 +158,9 @@ async def test_stream_chat_completions_sse(monkeypatch):
 
     parts: list[str] = []
     async for part in service.stream(prompt="hi"):
-        parts.append(part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else "")
+        parts.append(
+            part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else ""
+        )
 
     assert "".join(parts) == "hello"
     assert client.last_json is not None
@@ -175,12 +191,148 @@ async def test_stream_completions_sse(monkeypatch):
 
     parts: list[str] = []
     async for part in service.stream(prompt="hi"):
-        parts.append(part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else "")
+        parts.append(
+            part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else ""
+        )
 
     assert "".join(parts) == "hello"
     assert client.last_json is not None
     assert client.last_json["prompt"] == "hi"
     assert client.last_json["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_stream_falls_back_to_generate_when_native_stream_fails(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings)
+
+    async def fake_stream_native_events(payload):
+        raise TextServiceError("Text generation stream failed after 3 retries")
+        yield payload  # pragma: no cover
+
+    async def fake_generate_from_payload(payload):
+        assert payload["stream"] is False
+        return LLMResponse(text="fallback text", tool_calls=[], raw={"mode": "generate"})
+
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+    monkeypatch.setattr(service, "_generate_from_payload", fake_generate_from_payload)
+
+    events = []
+    async for event in service.stream(prompt="hi"):
+        events.append(event)
+
+    assert events == [
+        {"type": "text", "text": "fallback text"},
+        {
+            "type": "final",
+            "response": LLMResponse(text="fallback text", tool_calls=[], raw={"mode": "generate"}),
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_probe_marks_provider_degraded_when_stream_is_unavailable(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings)
+
+    async def fake_post(_url, _payload):
+        return {"choices": [{"message": {"content": ""}}]}
+
+    async def fake_stream_native_events(payload):
+        raise TextServiceError("stream unavailable")
+        yield payload  # pragma: no cover
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+
+    result = await service.probe()
+
+    assert result.status == "degraded"
+    assert result.generate is True
+    assert result.stream is False
+    assert result.reason_code == "provider_stream_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_probe_retries_transient_generate_failure_before_marking_invalid(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings, max_retries=0)
+    calls = {"post": 0}
+
+    async def fake_post(_url, _payload):
+        calls["post"] += 1
+        if calls["post"] == 1:
+            raise TextServiceError("Text generation request failed after 0 retries")
+        return {"choices": [{"message": {"content": ""}}]}
+
+    async def fake_stream_native_events(payload):
+        raise TextServiceError("Text generation stream failed after 0 retries")
+        yield payload  # pragma: no cover
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+
+    result = await service.probe()
+
+    assert calls["post"] == 2
+    assert result.status == "degraded"
+    assert result.generate is True
+    assert result.stream is False
+
+
+@pytest.mark.asyncio
+async def test_probe_accepts_openai_compatible_reasoning_response_without_content(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
+        text_api_key="test",
+        text_model="gpt-test",
+    )
+    service = TextService(settings)
+
+    async def fake_post(_url, _payload):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "reasoning_content": "thinking...",
+                    }
+                }
+            ]
+        }
+
+    async def fake_stream_native_events(_payload):
+        yield {"type": "text", "text": "OK"}
+        yield {"type": "final", "response": LLMResponse(text="OK", tool_calls=[], raw=None)}
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+    monkeypatch.setattr(service, "_stream_native_events", fake_stream_native_events)
+
+    result = await service.probe()
+
+    assert result.status == "valid"
+    assert result.generate is True
+    assert result.stream is True
 
 
 # ============================================
@@ -250,15 +402,27 @@ async def test_generate_500_server_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_timeout():
+async def test_generate_timeout(monkeypatch):
     """测试超时"""
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",
-        text_base_url="https://httpbin.org/delay/10",
-        text_endpoint="",
+        text_base_url="https://text.example.com",
+        text_endpoint="/chat/completions",
         request_timeout_s=0.1,
     )
     service = TextService(settings, max_retries=0)
+
+    class TimeoutClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            raise httpx.TimeoutException("timed out")
+
+    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: TimeoutClient())
 
     with pytest.raises(TextServiceError):
         await service.generate(prompt="hi")
@@ -393,7 +557,9 @@ async def test_sse_done_with_whitespace(monkeypatch):
 
     parts: list[str] = []
     async for part in service.stream(prompt="hi"):
-        parts.append(part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else "")
+        parts.append(
+            part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else ""
+        )
 
     assert "".join(parts) == "hello"
 
@@ -747,7 +913,9 @@ async def test_network_error_exhausted(monkeypatch):
 
 
 class MockStreamResponse:
-    def __init__(self, status_code: int, lines: list[str] | None = None, headers: dict | None = None):
+    def __init__(
+        self, status_code: int, lines: list[str] | None = None, headers: dict | None = None
+    ):
         self.status_code = status_code
         self._lines = lines or []
         self.headers = headers or {}
@@ -814,7 +982,9 @@ async def test_stream_retry_on_429(monkeypatch):
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     chunks = []
-    async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+    async for chunk in service._post_stream_with_retry(
+        "https://text.example.com/chat/completions", {}
+    ):
         chunks.append(chunk)
 
     assert len(chunks) == 1
@@ -847,7 +1017,9 @@ async def test_stream_retry_with_retry_after_header(monkeypatch):
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     chunks = []
-    async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+    async for chunk in service._post_stream_with_retry(
+        "https://text.example.com/chat/completions", {}
+    ):
         chunks.append(chunk)
 
     assert len(chunks) == 1
@@ -881,7 +1053,9 @@ async def test_stream_retry_invalid_retry_after(monkeypatch):
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     chunks = []
-    async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+    async for chunk in service._post_stream_with_retry(
+        "https://text.example.com/chat/completions", {}
+    ):
         chunks.append(chunk)
 
     assert len(chunks) == 1
@@ -912,7 +1086,9 @@ async def test_stream_no_retry_after_partial_emission(monkeypatch):
             if call_count == 1:
                 # 第一次：发送一些数据后失败
                 return PartialEmitContext()
-            return MockStreamContext(MockStreamResponse(200, lines=['data: {"choices":[{"delta":{"content":"world"}}]}']))
+            return MockStreamContext(
+                MockStreamResponse(200, lines=['data: {"choices":[{"delta":{"content":"world"}}]}'])
+            )
 
     class PartialEmitContext:
         async def __aenter__(self):
@@ -932,11 +1108,15 @@ async def test_stream_no_retry_after_partial_emission(monkeypatch):
             yield 'data: {"choices":[{"delta":{"content":"hello"}}]}'
             raise httpx.NetworkError("Connection lost")
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: PartialEmitClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: PartialEmitClient()
+    )
 
     chunks = []
     with pytest.raises(TextServiceError):
-        async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for chunk in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             chunks.append(chunk)
 
     # 应该只调用一次，因为已经发送了数据
@@ -969,7 +1149,9 @@ async def test_stream_retry_exhausted_500(monkeypatch):
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     with pytest.raises(TextServiceServerError) as exc_info:
-        async for _ in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for _ in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             pass
 
     assert exc_info.value.status_code == 500
@@ -995,7 +1177,9 @@ async def test_stream_no_retry_on_403(monkeypatch):
     monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: client)
 
     with pytest.raises(TextServiceAuthError) as exc_info:
-        async for _ in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for _ in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             pass
 
     assert exc_info.value.status_code == 403
@@ -1025,7 +1209,9 @@ async def test_stream_network_error_retry(monkeypatch):
             call_count += 1
             if call_count < 2:
                 return NetworkErrorContext()
-            return MockStreamContext(MockStreamResponse(200, lines=['data: {"choices":[{"delta":{"content":"hello"}}]}']))
+            return MockStreamContext(
+                MockStreamResponse(200, lines=['data: {"choices":[{"delta":{"content":"hello"}}]}'])
+            )
 
     class NetworkErrorContext:
         async def __aenter__(self):
@@ -1034,7 +1220,9 @@ async def test_stream_network_error_retry(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: NetworkErrorClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: NetworkErrorClient()
+    )
 
     async def mock_sleep(duration):
         pass
@@ -1043,7 +1231,9 @@ async def test_stream_network_error_retry(monkeypatch):
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     chunks = []
-    async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+    async for chunk in service._post_stream_with_retry(
+        "https://text.example.com/chat/completions", {}
+    ):
         chunks.append(chunk)
 
     assert len(chunks) == 1
@@ -1132,10 +1322,14 @@ async def test_stream_response_text_exception(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: BrokenStreamClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: BrokenStreamClient()
+    )
 
     with pytest.raises(TextServiceServerError) as exc_info:
-        async for _ in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for _ in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             pass
 
     assert exc_info.value.status_code == 500
@@ -1188,11 +1382,15 @@ async def test_stream_emitted_then_http_error(monkeypatch):
         status_code = 500
         text = "Server error"
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: PartialThenErrorClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: PartialThenErrorClient()
+    )
 
     chunks = []
     with pytest.raises(TextServiceError):
-        async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for chunk in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             chunks.append(chunk)
 
     # 应该只调用一次，因为已经发送了数据
@@ -1314,7 +1512,9 @@ async def test_stream_with_temperature(monkeypatch):
 
     parts = []
     async for part in service.stream(prompt="hi", temperature=0.8):
-        parts.append(part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else "")
+        parts.append(
+            part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else ""
+        )
 
     assert "".join(parts) == "hello"
 
@@ -1339,7 +1539,9 @@ async def test_stream_chunk_empty_choices(monkeypatch):
 
     parts = []
     async for part in service.stream(prompt="hi"):
-        parts.append(part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else "")
+        parts.append(
+            part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else ""
+        )
 
     assert "".join(parts) == "hello"
 
@@ -1364,7 +1566,9 @@ async def test_stream_chunk_not_list_choices(monkeypatch):
 
     parts = []
     async for part in service.stream(prompt="hi"):
-        parts.append(part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else "")
+        parts.append(
+            part.get("text", "") if isinstance(part, dict) and part.get("type") == "text" else ""
+        )
 
     assert "".join(parts) == "hello"
 
@@ -1409,7 +1613,9 @@ async def test_stream_http_error_after_emit_with_retry(monkeypatch):
         async def aiter_lines(self):
             yield 'data: {"choices":[{"delta":{"content":"hello"}}]}'
             # 模拟在发送数据后遇到可重试的 HTTP 错误（但不应该重试）
-            raise httpx.HTTPStatusError("HTTP Error", request=None, response=RetryableErrorResponse())
+            raise httpx.HTTPStatusError(
+                "HTTP Error", request=None, response=RetryableErrorResponse()
+            )
 
     class RetryableErrorResponse:
         status_code = 429  # 可重试状态码
@@ -1418,13 +1624,17 @@ async def test_stream_http_error_after_emit_with_retry(monkeypatch):
     async def mock_sleep(duration):
         pass
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: EmitThenRetryableErrorClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: EmitThenRetryableErrorClient()
+    )
     monkeypatch.setattr(text_module.asyncio, "sleep", mock_sleep)
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     chunks = []
     with pytest.raises(TextServiceError):
-        async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for chunk in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             chunks.append(chunk)
 
     # 应该只调用一次，因为已经发送了数据（emitted_any=True）
@@ -1473,16 +1683,21 @@ async def test_stream_network_error_after_emit(monkeypatch):
             yield 'data: {"choices":[{"delta":{"content":"hello"}}]}'
             raise httpx.NetworkError("Connection lost")
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: EmitThenNetworkErrorClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: EmitThenNetworkErrorClient()
+    )
 
     chunks = []
     with pytest.raises(TextServiceError):
-        async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for chunk in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             chunks.append(chunk)
 
     # 应该只调用一次，因为已经发送了数据
     assert call_count == 1
     assert len(chunks) == 1
+
 
 @pytest.mark.asyncio
 async def test_stream_http_error_retry_with_sleep(monkeypatch):
@@ -1508,7 +1723,9 @@ async def test_stream_http_error_retry_with_sleep(monkeypatch):
             call_count += 1
             if call_count < 2:
                 return RetryableHTTPErrorContext()
-            return MockStreamContext(MockStreamResponse(200, lines=['data: {"choices":[{"delta":{"content":"hello"}}]}']))
+            return MockStreamContext(
+                MockStreamResponse(200, lines=['data: {"choices":[{"delta":{"content":"hello"}}]}'])
+            )
 
     class RetryableHTTPErrorContext:
         async def __aenter__(self):
@@ -1529,6 +1746,7 @@ async def test_stream_http_error_retry_with_sleep(monkeypatch):
             async def _gen():
                 raise httpx.HTTPStatusError("HTTP Error", request=None, response=ErrorResponse())
                 yield  # pragma: no cover
+
             return _gen()
 
     class ErrorResponse:
@@ -1538,17 +1756,22 @@ async def test_stream_http_error_retry_with_sleep(monkeypatch):
     async def mock_sleep(duration):
         sleep_called.append(duration)
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: RetryableHTTPErrorClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: RetryableHTTPErrorClient()
+    )
     monkeypatch.setattr(text_module.asyncio, "sleep", mock_sleep)
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     chunks = []
-    async for chunk in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+    async for chunk in service._post_stream_with_retry(
+        "https://text.example.com/chat/completions", {}
+    ):
         chunks.append(chunk)
 
     assert call_count == 2
     assert len(chunks) == 1
     assert len(sleep_called) == 1
+
 
 @pytest.mark.asyncio
 async def test_stream_network_error_exhausted(monkeypatch):
@@ -1592,18 +1815,256 @@ async def test_stream_network_error_exhausted(monkeypatch):
             async def _gen():
                 raise httpx.NetworkError("Connection failed")
                 yield  # pragma: no cover
+
             return _gen()
 
     async def mock_sleep(duration):
         pass
 
-    monkeypatch.setattr(text_module.httpx, "AsyncClient", lambda *args, **kwargs: NetworkErrorClient())
+    monkeypatch.setattr(
+        text_module.httpx, "AsyncClient", lambda *args, **kwargs: NetworkErrorClient()
+    )
     monkeypatch.setattr(text_module.asyncio, "sleep", mock_sleep)
     monkeypatch.setattr(text_module.random, "random", lambda: 0.5)
 
     with pytest.raises(TextServiceError):
-        async for _ in service._post_stream_with_retry("https://text.example.com/chat/completions", {}):
+        async for _ in service._post_stream_with_retry(
+            "https://text.example.com/chat/completions", {}
+        ):
             pass
 
-    assert call_count == 3  # max_retries=2 means 3 attempts total
 
+# --- _build_payload branches ---
+
+
+def test_build_payload_enable_thinking():
+    settings = make_settings(text_enable_thinking=True)
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", max_tokens=10, stream=False)
+    assert payload["enable_thinking"] is True
+
+
+def test_build_payload_temperature():
+    settings = make_settings()
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", max_tokens=10, stream=False, temperature=0.5)
+    assert payload["temperature"] == 0.5
+
+
+def test_build_payload_chat_system_with_messages():
+    settings = make_settings()
+    svc = TextService(settings)
+    payload = svc._build_payload(
+        messages=[{"role": "user", "content": "hi"}],
+        system="be polite",
+        max_tokens=10,
+        stream=False,
+    )
+    assert payload["messages"][0] == {"role": "system", "content": "be polite"}
+
+
+def test_build_payload_chat_system_with_prompt():
+    settings = make_settings()
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", system="be polite", max_tokens=10, stream=False)
+    assert payload["messages"][0] == {"role": "system", "content": "be polite"}
+
+
+def test_build_payload_chat_neither_messages_nor_prompt():
+    settings = make_settings()
+    svc = TextService(settings)
+    with pytest.raises(ValueError, match="Either messages or prompt"):
+        svc._build_payload(max_tokens=10, stream=False)
+
+
+def test_build_payload_non_chat_messages_with_system():
+    settings = make_settings(text_endpoint="/v1/completions")
+    svc = TextService(settings)
+    payload = svc._build_payload(
+        messages=[{"role": "user", "content": "hi"}],
+        system="be polite",
+        max_tokens=10,
+        stream=False,
+    )
+    assert "System: be polite" in payload["prompt"]
+
+
+def test_build_payload_non_chat_prompt_with_system():
+    settings = make_settings(text_endpoint="/v1/completions")
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", system="be polite", max_tokens=10, stream=False)
+    assert "System: be polite" in payload["prompt"]
+
+
+def test_build_payload_non_chat_neither():
+    settings = make_settings(text_endpoint="/v1/completions")
+    svc = TextService(settings)
+    with pytest.raises(ValueError, match="Either messages or prompt"):
+        svc._build_payload(max_tokens=10, stream=False)
+
+
+# --- _stream_fallback_message ---
+
+
+def test_stream_fallback_message_with_detail():
+    svc = TextService(make_settings())
+    msg = svc._stream_fallback_message(Exception("timeout"))
+    assert "timeout" in msg
+
+
+def test_stream_fallback_message_empty_detail():
+    svc = TextService(make_settings())
+    msg = svc._stream_fallback_message(Exception(""))
+    assert "已自动回退" in msg
+
+
+# --- _should_fallback_from_stream ---
+
+
+def test_should_fallback_auth_error():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceAuthError("auth")) is False
+
+
+def test_should_fallback_rate_limit():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceRateLimitError("rate")) is False
+
+
+def test_should_fallback_server_error():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceServerError("server")) is False
+
+
+def test_should_fallback_stream_failed():
+    svc = TextService(make_settings())
+    assert (
+        svc._should_fallback_from_stream(
+            TextServiceError("Text generation stream failed after retries")
+        )
+        is True
+    )
+
+
+def test_should_fallback_other_error():
+    svc = TextService(make_settings())
+    assert svc._should_fallback_from_stream(TextServiceError("something else")) is False
+
+
+# --- _is_retryable_probe_generate_error ---
+
+
+def test_is_retryable_probe_non_text_service_error():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(ValueError("x")) is False
+
+
+def test_is_retryable_probe_no_status_code():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(TextServiceError("x")) is True
+
+
+def test_is_retryable_probe_retryable_status():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(TextServiceError("x", status_code=503)) is True
+
+
+def test_is_retryable_probe_non_retryable_status():
+    svc = TextService(make_settings())
+    assert svc._is_retryable_probe_generate_error(TextServiceError("x", status_code=400)) is False
+
+
+# --- _probe_generate_capability ---
+
+
+@pytest.mark.asyncio
+async def test_probe_generate_capability_retries_on_retryable_error(monkeypatch):
+    """First attempt fails with retryable error, second succeeds."""
+    svc = TextService(make_settings())
+    call_count = 0
+
+    async def fake_post_json(self_inner, url, payload):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise TextServiceError("transient", status_code=503)
+        return {"choices": [{"text": "OK"}]}
+
+    monkeypatch.setattr(TextService, "_post_json_with_retry", fake_post_json)
+
+    async def mock_sleep(duration):
+        pass
+
+    monkeypatch.setattr(text_module.asyncio, "sleep", mock_sleep)
+
+    await svc._probe_generate_capability(messages=[{"role": "user", "content": "hi"}])
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_probe_generate_capability_raises_on_non_retryable_error(monkeypatch):
+    """Non-retryable error raises immediately without retry."""
+    svc = TextService(make_settings())
+
+    async def fake_post_json(self_inner, url, payload):
+        raise TextServiceAuthError("auth fail", status_code=401)
+
+    monkeypatch.setattr(TextService, "_post_json_with_retry", fake_post_json)
+
+    with pytest.raises(TextServiceAuthError):
+        await svc._probe_generate_capability(messages=[{"role": "user", "content": "hi"}])
+
+
+# --- probe() ---
+
+
+@pytest.mark.asyncio
+async def test_probe_returns_invalid_when_generate_fails(monkeypatch):
+    """probe() returns invalid capability when generate probe fails."""
+    svc = TextService(make_settings())
+
+    async def fake_probe(self_inner, messages):
+        raise TextServiceError("provider down")
+
+    monkeypatch.setattr(TextService, "_probe_generate_capability", fake_probe)
+
+    result = await svc.probe()
+    assert result.status == "invalid"
+    assert result.generate is False
+    assert result.stream is False
+    assert result.reason_code == "provider_generate_unavailable"
+
+
+# --- stream() cached capability fallback ---
+
+
+@pytest.mark.asyncio
+async def test_stream_falls_back_when_cached_stream_disabled(monkeypatch):
+    """stream() falls back to non-stream when cached capability says stream=False."""
+    svc = TextService(make_settings())
+
+    cap = TextProviderCapability(
+        status="degraded",
+        generate=True,
+        stream=False,
+        reason_code="test",
+        reason_message="test",
+    )
+    monkeypatch.setattr(text_module, "get_cached_provider_capability", lambda key: cap)
+
+    fake_result = {"choices": [{"message": {"content": "Hello"}}]}
+
+    async def fake_post_json(self_inner, url, payload):
+        assert payload["stream"] is False  # must have been switched off
+        return fake_result
+
+    monkeypatch.setattr(TextService, "_post_json_with_retry", fake_post_json)
+
+    events = []
+    async for event in svc.stream(messages=[{"role": "user", "content": "hi"}]):
+        events.append(event)
+
+    assert events[0]["type"] == "text"
+    assert events[0]["text"] == "Hello"
+    assert events[1]["type"] == "final"
+    assert events[1]["response"].text == "Hello"

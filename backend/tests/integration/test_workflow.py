@@ -5,11 +5,11 @@ import json
 import pytest
 from sqlmodel import select
 
-import app.agents.orchestrator as orchestrator_mod
-from app.agents.orchestrator import GenerationOrchestrator
-from app.models.agent_run import AgentRun
-from app.models.project import Character, Project, Shot
-from app.schemas.project import GenerateRequest
+from app.agents.base import AgentContext
+from app.agents.compose import ComposeAgent
+from app.agents.plan import PlanAgent
+from app.agents.render import RenderAgent
+from app.models.project import Character, Shot
 from app.services.llm import LLMResponse
 from tests.agent_fixtures import DummyWsManager
 from tests.factories import create_project, create_run
@@ -63,43 +63,43 @@ async def test_full_workflow(monkeypatch, test_session, test_settings):
     StubLLM.responses = [
         json.dumps(
             {
-                "story_breakdown": {"logline": "Test"},
-                "key_elements": {"characters": ["Hero"]},
-                "style_recommendation": {"primary": "anime"},
-                "project_update": {"title": "Workflow", "style": "anime"},
-            }
-        ),
-        json.dumps(
-            {
-                "project_update": {"style": "anime", "status": "planning"},
-                "director_notes": {"vision": "Focus"},
-                "scene_outline": [{"title": "Scene 1"}],
-            }
-        ),
-        json.dumps(
-            {
-                "project_update": {"status": "scripted"},
+                "project_update": {"title": "Workflow", "style": "anime", "status": "planning"},
                 "characters": [{"name": "Hero", "description": "Brave"}],
-                "shots": [{"order": 1, "description": "Shot 1", "video_prompt": "Action"}],
+                "shots": [{"order": 1, "description": "Shot 1", "scene": "Opening", "action": "Hero enters", "expression": "determined", "lighting": "dramatic", "dialogue": "Here I come!", "sfx": "wind"}],
+                "user_message": "Plan done",
             }
         ),
+        json.dumps({"user_message": "Character images done"}),
+        json.dumps({"user_message": "Shot images done"}),
     ]
 
-    async def _noop_clear(_: int) -> None:
-        return None
+    monkeypatch.setattr("app.services.face_cropper._get_face_analysis", lambda: None)
 
-    monkeypatch.setattr(orchestrator_mod, "create_text_service", lambda settings: StubLLM(settings))
-    monkeypatch.setattr(orchestrator_mod, "ImageService", StubImage)
-    monkeypatch.setattr(orchestrator_mod, "create_video_service", lambda settings: StubVideo(settings))
-    monkeypatch.setattr(orchestrator_mod, "clear_confirm_event_redis", _noop_clear)
-
-    orchestrator = GenerationOrchestrator(settings=test_settings, ws=ws, session=test_session)
-    await orchestrator.run(
-        project_id=project.id,
-        run_id=run.id,
-        request=GenerateRequest(),
-        auto_mode=True,
+    ctx = AgentContext(
+        settings=test_settings,
+        session=test_session,
+        ws=ws,
+        project=project,
+        run=run,
+        llm=StubLLM(test_settings),
+        image=StubImage(test_settings),
+        video=StubVideo(test_settings),
     )
+
+    plan_agent = PlanAgent()
+    render_agent = RenderAgent()
+    compose_agent = ComposeAgent()
+
+    await plan_agent.run_characters(ctx)
+    await plan_agent.run_shots(ctx)
+    await render_agent.run_characters(ctx)
+    await render_agent.run_shots(ctx)
+    await compose_agent.run_videos(ctx)
+    await compose_agent.run_merge(ctx)
+
+    run.status = "succeeded"
+    test_session.add(run)
+    await test_session.commit()
 
     await test_session.refresh(project)
     await test_session.refresh(run)

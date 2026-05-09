@@ -18,7 +18,12 @@ static
 *.timestamp_*
 playwright-report/
 test-results/
-CLAUDE.md
-.openspec
-openspec
-*.sh
+coverage/
+.coverage
+backend/.coverage
+backend/coverage.json
+.opencode
+.planning/
+backend/.coverage
+dump.rdb
+*.log

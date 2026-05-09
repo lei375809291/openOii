@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,6 +8,7 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from app.api.v1.router import api_router
 from app.config import get_settings
@@ -24,11 +24,15 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # 确保静态文件目录存在
+    import logging
+
+    log = logging.getLogger("openOii.lifespan")
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "videos").mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "images").mkdir(parents=True, exist_ok=True)
+    log.info("lifespan: calling init_db")
     await init_db()
+    log.info("lifespan: init_db done")
     yield
 
 
@@ -103,8 +107,10 @@ def create_app() -> FastAPI:
 
     @app.websocket("/ws/projects/{project_id}")
     async def ws_projects(websocket: WebSocket, project_id: int):
-        from app.agents.orchestrator import trigger_confirm_redis
-        from starlette.websockets import WebSocketDisconnect
+        from app.agents.orchestrator import (
+            get_awaiting_payload,
+            trigger_confirm_redis,
+        )
 
         try:
             await ws_manager.connect(project_id, websocket)
@@ -112,7 +118,58 @@ def create_app() -> FastAPI:
                 project_id, {"type": "connected", "data": {"project_id": project_id}}
             )
 
+            # 补发当前项目下任意 running run 的状态，防止客户端错过事件
+            try:
+                from app.db.session import async_session_maker
+                from app.models.agent_run import AgentRun
+                from sqlalchemy import select
+
+                async with async_session_maker() as session:
+                    res = await session.execute(
+                        select(AgentRun)
+                        .where(AgentRun.project_id == project_id)
+                        .where(AgentRun.status == "running")
+                        .order_by(AgentRun.created_at.desc())
+                    )
+                    for run in res.scalars().all():
+                        payload = await get_awaiting_payload(run.id)
+                        if payload:
+                            await ws_manager.send_event(
+                                project_id,
+                                {"type": "run_awaiting_confirm", "data": payload},
+                            )
+                        else:
+                            from app.agents.orchestrator import STAGE_AGENT_MAP
+
+                            mapped_stage = STAGE_AGENT_MAP.get(
+                                run.current_agent or "", run.current_agent or "plan"
+                            )
+                            await ws_manager.send_event(
+                                project_id,
+                                {
+                                    "type": "run_progress",
+                                    "data": {
+                                        "run_id": run.id,
+                                        "project_id": project_id,
+                                        "current_agent": run.current_agent,
+                                        "current_stage": mapped_stage,
+                                        "stage": mapped_stage,
+                                        "progress": run.progress,
+                                    },
+                                },
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to replay state for project {project_id}: {e}")
+
             while True:
+                # Pre-check: if the socket is no longer connected, exit cleanly.
+                if websocket.client_state != WebSocketState.CONNECTED:
+                    logger.info(
+                        f"WebSocket client_state is {websocket.client_state.name}, "
+                        f"exiting loop for project {project_id}"
+                    )
+                    break
+
                 try:
                     msg = await websocket.receive_json()
                     msg_type = msg.get("type")
@@ -123,83 +180,75 @@ def create_app() -> FastAPI:
                             project_id, {"type": "echo", "data": msg.get("data")}
                         )
                     elif msg_type == "confirm":
-                        # 用户确认继续执行
                         run_id = msg.get("data", {}).get("run_id")
                         feedback = msg.get("data", {}).get("feedback")
                         if run_id:
-                            # 验证 run_id 是否属于当前 project_id（防止跨项目操控）
-                            from app.db.session import async_session_maker
-                            from app.models.agent_run import AgentMessage, AgentRun
-                            from app.models.message import Message
+                            if isinstance(feedback, str) and feedback.strip():
+                                try:
+                                    from app.db.session import async_session_maker
+                                    from app.models.agent_run import AgentMessage
+                                    from app.models.message import Message
 
-                            try:
-                                async with async_session_maker() as session:
-                                    run = await session.get(AgentRun, run_id)
-                                    if not run or run.project_id != project_id:
-                                        await ws_manager.send_event(
-                                            project_id,
-                                            {
-                                                "type": "error",
-                                                "data": {
-                                                    "code": "WS_INVALID_RUN",
-                                                    "message": "无效的 run_id 或不属于当前项目",
-                                                },
-                                            },
-                                        )
-                                        continue
-
-                                    if isinstance(feedback, str) and feedback.strip():
-                                        content = feedback.strip()
-                                        session.add(
-                                            AgentMessage(
-                                                run_id=run_id,
-                                                agent="user",
-                                                role="user",
-                                                content=content,
+                                    content = feedback.strip()
+                                    async with async_session_maker() as session:
+                                        run = await session.get(AgentRun, run_id)
+                                        if run and run.project_id == project_id:
+                                            session.add(
+                                                AgentMessage(
+                                                    run_id=run_id,
+                                                    agent="user",
+                                                    role="user",
+                                                    content=content,
+                                                )
                                             )
-                                        )
-                                        session.add(
-                                            Message(
-                                                project_id=project_id,
-                                                run_id=run_id,
-                                                agent="user",
-                                                role="user",
-                                                content=content,
+                                            session.add(
+                                                Message(
+                                                    project_id=project_id,
+                                                    run_id=run_id,
+                                                    agent="user",
+                                                    role="user",
+                                                    content=content,
+                                                )
                                             )
-                                        )
-                                        await session.commit()
-                                    # 确保 feedback 保存完成后再触发 confirm
-                                    # 添加短暂延迟让 orchestrator 的 session 能读取到新数据
-                                    await asyncio.sleep(0.1)
-                            except Exception as e:
-                                logger.error(f"Failed to save feedback for run {run_id}: {e}")
-                                await ws_manager.send_event(
-                                    project_id,
-                                    {
-                                        "type": "error",
-                                        "data": {
-                                            "code": "WS_SAVE_ERROR",
-                                            "message": "保存反馈失败",
-                                        },
-                                    },
-                                )
-                                continue
+                                            await session.commit()
+                                except Exception as e:
+                                    logger.error(f"Failed to save feedback for run {run_id}: {e}")
                             await trigger_confirm_redis(run_id)
                 except WebSocketDisconnect:
                     logger.info(f"WebSocket disconnected for project {project_id}")
                     break
+                except RuntimeError as e:
+                    # Starlette raises RuntimeError when receive_json/send_json
+                    # is called on a socket whose underlying connection is gone
+                    # (e.g. client closed browser).  Treat as a disconnect.
+                    if "not connected" in str(e).lower():
+                        logger.info(f"WebSocket not connected for project {project_id}: {e}")
+                        break
+                    # Unexpected RuntimeError — log and re-raise.
+                    logger.error(
+                        f"WebSocket runtime error for project {project_id}: {e}", exc_info=True
+                    )
+                    break
                 except Exception as e:
                     logger.error(f"WebSocket message error: {e}", exc_info=True)
-                    await ws_manager.send_event(
-                        project_id,
-                        {
-                            "type": "error",
-                            "data": {
-                                "code": "WS_MESSAGE_ERROR",
-                                "message": "消息处理失败",
+                    # Try to notify the client, but break if it fails — don't
+                    # spin in an infinite loop on a dead connection.
+                    try:
+                        await ws_manager.send_event(
+                            project_id,
+                            {
+                                "type": "error",
+                                "data": {
+                                    "code": "WS_MESSAGE_ERROR",
+                                    "message": "消息处理失败",
+                                },
                             },
-                        },
-                    )
+                        )
+                    except Exception:
+                        logger.info(
+                            f"Failed to send error event, breaking WS loop for project {project_id}"
+                        )
+                        break
         except Exception as e:
             logger.error(f"WebSocket connection error: {e}", exc_info=True)
             try:
@@ -222,22 +271,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-async def _run_demo_mcp_server() -> None:
-    try:
-        from app.tools.media_tools import create_tools_mcp_server
-    except ModuleNotFoundError as exc:
-        if exc.name == "claude_agent_sdk":
-            raise RuntimeError(
-                "Missing dependency `claude-agent-sdk`. Install: `cd backend && uv sync --extra agents` "
-                "or `pip install 'openOii-backend[agents]'`."
-            ) from exc
-        raise
-
-    server = create_tools_mcp_server()
-    await server.serve_stdio()
-
-
-if __name__ == "__main__":
-    asyncio.run(_run_demo_mcp_server())

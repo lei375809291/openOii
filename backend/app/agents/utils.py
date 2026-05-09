@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Sequence
-from datetime import datetime, UTC
 from typing import Protocol
 
 class CharacterLike(Protocol):
@@ -33,11 +32,6 @@ def build_character_context(characters: Sequence[CharacterLike]) -> str:
         return ""
 
     return "Characters: " + "; ".join(char_descriptions)
-
-
-def utcnow() -> datetime:
-    """返回当前 UTC 时间（无时区信息，兼容 PostgreSQL TIMESTAMP WITHOUT TIME ZONE）。"""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def extract_json(text: str) -> dict:

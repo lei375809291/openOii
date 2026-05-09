@@ -1,18 +1,20 @@
 import { useState, useRef, useEffect } from "react";
-import { useEditorStore } from "~/stores/editorStore";
+import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
 import { Button } from "~/components/ui/Button";
 import type { WorkflowStage } from "~/types";
+import { AGENT_NAME_MAP } from "~/types";
 import {
   CheckIcon,
-  FilmIcon,
   LightBulbIcon,
   PaintBrushIcon,
-  PauseIcon,
   RocketLaunchIcon,
   StopIcon,
+  BoltIcon,
+  AdjustmentsHorizontalIcon,
 } from "@heroicons/react/24/outline";
+import { getWorkflowStageInfo } from "~/utils/workflowStage";
 
 interface ChatPanelProps {
   onSendFeedback: (content: string) => void;
@@ -20,50 +22,21 @@ interface ChatPanelProps {
   onGenerate: () => void;
   onCancel: () => void;
   isGenerating: boolean;
+  generateDisabled?: boolean;
+  generateDisabledReason?: string;
+  isPaused?: boolean;
+  onPause?: () => void;
+  onResume?: () => void;
 }
-// ... (imports and interface definition remain the same) ...
 
-const stageInfo: Record<
-  WorkflowStage,
-  {
-    title: string;
-    description: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  }
-> = {
-  ideate: {
-    title: "构思阶段",
-    description: "告诉我你的故事创意，我来帮你写剧本",
-    icon: LightBulbIcon,
-  },
-  visualize: {
-    title: "可视化阶段",
-    description: "正在设计角色形象和绘制分镜画面",
-    icon: PaintBrushIcon,
-  },
-  animate: {
-    title: "动画阶段",
-    description: "正在生成动画视频片段",
-    icon: FilmIcon,
-  },
-  deploy: {
-    title: "完成",
-    description: "你的漫剧已经生成完毕！",
-    icon: RocketLaunchIcon,
-  },
-};
+function getStageIcon(stage: WorkflowStage) {
+  if (stage === "compose") return RocketLaunchIcon;
+  if (stage === "render" || stage === "render_approval") return PaintBrushIcon;
+  if (stage === "plan" || stage === "plan_approval") return LightBulbIcon;
+  return LightBulbIcon;
+}
 
-// Agent 名称映射
-const agentNameMap: Record<string, string> = {
-  onboarding: "项目初始化",
-  director: "导演",
-  scriptwriter: "编剧",
-  character_artist: "角色设计师",
-  storyboard_artist: "分镜画师",
-  video_generator: "视频生成器",
-  video_merger: "视频合成器",
-};
-
+const agentNameMap = AGENT_NAME_MAP;
 
 export function ChatPanel({
   onSendFeedback,
@@ -71,7 +44,13 @@ export function ChatPanel({
   onGenerate,
   onCancel,
   isGenerating,
+  generateDisabled = false,
+  generateDisabledReason,
+  isPaused = false,
+  onPause,
+  onResume: _onResume,
 }: ChatPanelProps) {
+  const generateDisabledReasonId = generateDisabledReason ? "generate-disabled-reason" : undefined;
   const {
     messages,
     currentAgent,
@@ -79,12 +58,21 @@ export function ChatPanel({
     awaitingAgent,
     currentStage,
     currentRunId,
-  } = useEditorStore();
+    runMode,
+  } = useEditorStore(useShallow((s) => ({
+    messages: s.messages,
+    currentAgent: s.currentAgent,
+    awaitingConfirm: s.awaitingConfirm,
+    awaitingAgent: s.awaitingAgent,
+    currentStage: s.currentStage,
+    currentRunId: s.currentRunId,
+    runMode: s.runMode,
+  })));
 
+  const setRunMode = useEditorStore((s) => s.setRunMode);
   const [input, setInput] = useState("");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // 自动滚动到最新消息
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({
@@ -96,92 +84,104 @@ export function ChatPanel({
 
   const handleSend = () => {
     if (!input.trim()) return;
-
     if (currentRunId || isGenerating || awaitingConfirm) {
       onConfirm(input.trim());
       setInput("");
       return;
     }
-
     onSendFeedback(input);
     setInput("");
   };
 
-  const info = stageInfo[currentStage];
-  const StageIcon = info.icon;
+  const info = getWorkflowStageInfo(currentStage);
+  const StageIcon = getStageIcon(currentStage);
   const hasMessages = messages.length > 0;
   const agentDisplayName = awaitingAgent ? agentNameMap[awaitingAgent] || awaitingAgent : "";
-  const currentAgentDisplayName = currentAgent ? agentNameMap[currentAgent] || currentAgent : "";
+  const isYolo = runMode === "yolo";
+
+  const showManualConfirm = awaitingConfirm && !isYolo;
 
   return (
-    <div className="flex flex-col h-full bg-base-200 rounded-box shadow-lg">
-      {/* Stage Header */}
-      <div className="p-3 sm:p-4 border-b border-base-300">
-        <h3 className="font-heading font-semibold text-primary mb-1 text-sm sm:text-base">
-          <span className="inline-flex items-center gap-2">
-            <StageIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-            {info.title}
-          </span>
-        </h3>
-        <p className="text-xs sm:text-sm text-base-content/80">{info.description}</p>
+    <div className="flex flex-col h-full bg-base-100">
+      <div className="px-2.5 py-1.5 border-b border-base-content/10 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <StageIcon className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+          <span className="text-xs font-heading font-bold">{info.title}</span>
+        </div>
 
-        {isGenerating && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between gap-2 text-sm text-base-content/70">
-              <div className="flex items-center gap-2">
-                {awaitingConfirm ? (
-                  <span className="text-warning font-medium inline-flex items-center gap-1">
-                    <PauseIcon className="w-5 h-5" aria-hidden="true" />
-                    等待您的确认
-                  </span>
-                ) : (
-                  <>
-                    <span className="loading loading-dots loading-xs" />
-                    <span>{currentAgentDisplayName || "处理中"}...</span>
-                  </>
-                )}
-              </div>
-              {!awaitingConfirm && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onCancel}
-                  className="text-error hover:bg-error/10 gap-1 min-w-[44px] min-h-[44px]"
-                  aria-label="停止生成"
-                >
-                  <StopIcon className="w-5 h-5" aria-hidden="true" />
-                  <span>停止</span>
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => setRunMode(isYolo ? "manual" : "yolo")}
+          className={`btn btn-xs gap-0.5 ${isYolo ? "btn-primary btn-sm border-2" : "btn-ghost"} !min-h-0 !h-6 text-xs font-comic`}
+          aria-label={isYolo ? "切换手动模式" : "切换YOLO模式"}
+          title={isYolo ? "YOLO：自动确认" : "手动：逐阶段确认"}
+        >
+          {isYolo ? (
+            <>
+              <BoltIcon className="w-2.5 h-2.5" />
+              YOLO
+            </>
+          ) : (
+            <>
+              <AdjustmentsHorizontalIcon className="w-2.5 h-2.5" />
+              手动
+            </>
+          )}
+        </button>
       </div>
 
-      {/* Content Area */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4">
+      {isGenerating && !awaitingConfirm && (
+        <div className="px-2.5 py-1 border-b border-base-content/10 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs text-base-content/50">
+            <span className="loading loading-dots loading-xs text-primary" />
+            {agentNameMap[currentAgent || ""] || currentAgent || "处理中"}...
+            {isYolo && (
+              <span className="badge badge-primary badge-outline badge-xs gap-0.5 border-2">
+                <BoltIcon className="w-2 h-2" /> AUTO
+              </span>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onCancel}
+            className="text-error hover:bg-error/10 gap-0.5 !px-1 !py-0 !min-h-0 !h-auto text-xs"
+            aria-label="停止生成"
+          >
+            <StopIcon className="w-3 h-3" /> 停止
+          </Button>
+        </div>
+      )}
+
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2.5 py-2 halftone-bg">
         {!hasMessages && !isGenerating ? (
           <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary/10 flex items-center justify-center mb-3 sm:mb-4">
-                <StageIcon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" aria-hidden="true" />
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center mb-2">
+                <StageIcon className="w-4 h-4 text-primary" aria-hidden="true" />
               </div>
-              <h2 className="text-lg sm:text-xl font-heading font-bold mb-2">
-                准备好了吗？
-              </h2>
-              <p className="text-sm sm:text-base text-base-content/80 mb-4 sm:mb-6 max-w-xs">
-                点击下方按钮，AI 会根据你的故事自动生成剧本、角色和分镜
+              <p className="text-xs text-base-content/50 mb-3 max-w-xs">
+                {isYolo
+                  ? "点击开始，AI 全自动生成"
+                  : "点击开始，AI 根据你的故事生成漫剧"}
               </p>
               <Button
                 variant="primary"
                 size="lg"
                 onClick={onGenerate}
-                className="gap-2 touch-target"
+                disabled={generateDisabled}
+                className="gap-1.5 touch-target btn-comic"
                 aria-label="开始生成漫剧"
+                aria-describedby={generateDisabledReasonId}
               >
-                <RocketLaunchIcon className="w-5 h-5" aria-hidden="true" />
-                <span>开始生成</span>
+                <RocketLaunchIcon className="w-4 h-4" aria-hidden="true" />
+                开始生成
               </Button>
+              {generateDisabledReason && (
+                <p id={generateDisabledReasonId} className="mt-1.5 max-w-xs text-xs text-warning" aria-live="polite">
+                  {generateDisabledReason}
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -189,46 +189,40 @@ export function ChatPanel({
         )}
       </div>
 
-
-      {awaitingConfirm && (
-        <div className="p-3 sm:p-4 border-t border-base-300 bg-warning/20">
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="badge badge-warning badge-sm text-warning-content">等待确认</span>
-              <span className="font-medium text-xs sm:text-sm">{agentDisplayName} 已完成</span>
-            </div>
-            <p className="text-xs sm:text-sm text-base-content/80 mb-2">
-              请在右侧查看生成结果。满意的话点击下方按钮继续
-            </p>
-            <p className="text-xs text-base-content/60">
-              <span className="inline-flex items-center gap-1">
-                <LightBulbIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-                需要修改？在下方输入框描述调整意见后点击发送
-              </span>
-            </p>
-          </div>
-          <div className="flex gap-2">
+      {showManualConfirm && (
+        <div className="px-2.5 py-1.5 border-t-2 border-primary/30 bg-primary/5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-base-content/60 font-medium">
+              {agentDisplayName} 已完成 — 确认继续？
+            </span>
             <Button
               variant="primary"
+              size="sm"
               onClick={() => {
                 const feedback = input.trim();
                 onConfirm(feedback || undefined);
                 setInput("");
               }}
-              className="flex-1 touch-target"
+              className="gap-0.5 !px-2.5 !py-0.5 !min-h-0 !h-6 text-xs border-2 shadow-brutal-sm"
             >
-              <span className="inline-flex items-center gap-2">
-                <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-                <span className="hidden sm:inline">满意，继续下一步</span>
-                <span className="sm:hidden">继续</span>
-              </span>
+              <CheckIcon className="w-3 h-3" />
+              通过
             </Button>
           </div>
         </div>
       )}
 
-      {/* Input */}
-      <div className="p-3 sm:p-4 border-t border-base-300">
+      {awaitingConfirm && isYolo && isPaused && onPause && (
+        <div className="px-2.5 py-1 border-t border-base-content/10 bg-primary/5 flex items-center gap-1.5 text-xs text-base-content/50">
+          <BoltIcon className="w-2.5 h-2.5" />
+          YOLO 已暂停
+          <Button size="sm" variant="ghost" onClick={onPause} className="ml-auto !px-1.5 !py-0 !min-h-0 !h-auto text-xs">
+            继续
+          </Button>
+        </div>
+      )}
+
+      <div className="p-2 border-t border-base-content/10">
         <MessageInput
           value={input}
           onChange={setInput}
@@ -236,10 +230,10 @@ export function ChatPanel({
           disabled={false}
           placeholder={
             awaitingConfirm
-              ? "输入修改意见..."
+              ? "修改意见（可选）..."
               : isGenerating
-                ? "输入反馈..."
-                : "输入你的想法..."
+                ? "反馈..."
+                : "你的想法..."
           }
         />
       </div>

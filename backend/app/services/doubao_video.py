@@ -334,26 +334,47 @@ class DoubaoVideoService:
         *,
         prompt: str,
         image_bytes: bytes,
-        **kwargs: Any,
+        mime_type: str = "image/png",
+        duration: Literal[5, 10] = 5,
+        ratio: Literal["16:9", "9:16", "1:1", "adaptive"] = "adaptive",
+        generate_audio: bool = True,
+        watermark: bool = False,
+        model: str | None = None,
+        on_progress: callable | None = None,
     ) -> str:
         """从图片字节流生成视频
 
-        需要先将图片上传到可访问的 URL，然后调用 generate_url。
-        这里假设调用方已经处理好了图片上传。
+        将图片字节转为 base64 data URI 后调用 generate_url。
 
         Args:
             prompt: 视频描述文本
             image_bytes: 图片字节流
-            **kwargs: 其他参数
+            mime_type: 图片 MIME 类型
+            duration: 视频时长（5 或 10 秒）
+            ratio: 视频比例
+            generate_audio: 是否生成音频
+            watermark: 是否添加水印
+            model: 模型 ID
+            on_progress: 进度回调函数
 
         Returns:
             生成的视频 URL
         """
-        # TODO: 实现图片上传到 OSS/CDN 的逻辑
-        # 目前豆包 API 需要图片 URL，不支持直接传 base64
-        raise NotImplementedError(
-            "Doubao API requires image URL, not bytes. "
-            "Please upload the image first and use generate_url with image_url parameter."
+        if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+            raise ValueError(
+                f"Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_SIZE_BYTES} bytes)"
+            )
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        data_uri = f"data:{mime_type};base64,{b64}"
+        return await self.generate_url(
+            prompt=prompt,
+            image_url=data_uri,
+            duration=duration,
+            ratio=ratio,
+            generate_audio=generate_audio,
+            watermark=watermark,
+            model=model,
+            on_progress=on_progress,
         )
 
     async def merge_urls(self, video_urls: list[str]) -> str:

@@ -1,241 +1,324 @@
-import { useState } from "react";
 import {
-  HTMLContainer,
-  Rectangle2d,
-  ShapeUtil,
-  T,
-  type Geometry2d,
-  type RecordProps,
+	HTMLContainer,
+	Rectangle2d,
+	ShapeUtil,
+	T,
+	type Geometry2d,
+	type RecordProps,
 } from "tldraw";
-import { type StoryboardSectionShape } from "./types";
-import {
-  FilmIcon,
-  PencilIcon,
-  PhotoIcon,
-  VideoCameraIcon,
-  TrashIcon,
-  RectangleStackIcon,
-} from "@heroicons/react/24/outline";
+import { useState } from "react";
+import type { StoryboardSectionShape, ReviewedShot } from "./types";
+import { SectionShell } from "./SectionShell";
 import { getStaticUrl } from "~/services/api";
-import type { Shot } from "~/types";
+import {
+	getWorkspaceSectionPlaceholderText,
+	getWorkspaceSectionStatusLabel,
+} from "~/utils/workspaceStatus";
 import { canvasEvents } from "../canvasEvents";
+import type { ShapeActionName } from "../canvasEvents";
+import { SvgIcon } from "~/components/ui/SvgIcon";
+import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
+
+function ShotCard({ shot }: { shot: ReviewedShot }) {
+	const isApproved = shot.approval_state === "approved";
+	const imageUrl = getStaticUrl(shot.image_url);
+	const videoUrl = getStaticUrl(shot.video_url);
+	const [isEditing, setIsEditing] = useState(false);
+	const [editDialogue, setEditDialogue] = useState(shot.dialogue || "");
+	const [editAction, setEditAction] = useState(shot.action || "");
+
+	const handleAction = (action: ShapeActionName) => {
+		if (
+			action === "regenerate" &&
+			!window.confirm(`重新生成镜头 ${shot.order}？`)
+		)
+			return;
+		if (action === "approve" && !window.confirm(`批准镜头 ${shot.order}？`))
+			return;
+		if (action === "edit") {
+			setIsEditing(true);
+			return;
+		}
+		canvasEvents.emit("shape-action", {
+			shapeId: "",
+			action,
+			entityType: "shot",
+			entityId: shot.id,
+			feedbackType: "render",
+		});
+	};
+
+	const handleSaveEdit = () => {
+		setIsEditing(false);
+		const changes: string[] = [];
+		if (editDialogue !== (shot.dialogue || ""))
+			changes.push(`对话: "${editDialogue}"`);
+		if (editAction !== (shot.action || "")) changes.push(`动作: ${editAction}`);
+		if (changes.length > 0) {
+			canvasEvents.emit("shape-action", {
+				shapeId: "",
+				action: "edit",
+				entityType: "shot",
+				entityId: shot.id,
+				feedbackType: "render",
+				shotPatch: {
+					action: editAction || null,
+					dialogue: editDialogue || null,
+				},
+			});
+		}
+	};
+
+	return (
+		<div
+			className={`card card-compact bg-base-200 border-2 border-base-content/15 min-w-0 group relative ${
+				isApproved ? "ring-1 ring-success/20" : ""
+			}`}
+		>
+			{imageUrl ? (
+				<figure className="relative">
+					<img
+						src={imageUrl}
+						alt={`Shot ${shot.order}`}
+						className="w-full object-cover"
+					/>
+					<span className="badge badge-xs absolute top-1 right-1 bg-base-100/80">
+						{shot.duration ? `${shot.duration}s` : "—"}
+					</span>
+					{shot.expression && (
+						<span className="badge badge-xs badge-primary absolute bottom-1 left-1">
+							{shot.expression}
+						</span>
+					)}
+					<div className="absolute inset-0 bg-base-content/0 group-hover:bg-base-content/20 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
+						<button
+							type="button"
+							className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30"
+							title="重新生成"
+							onClick={() => handleAction("regenerate")}
+						>
+							<SvgIcon name="refresh-cw" size={12} />
+						</button>
+						<button
+							type="button"
+							className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30"
+							title="编辑"
+							onClick={() => handleAction("edit")}
+						>
+							<SvgIcon name="pencil" size={12} />
+						</button>
+						{videoUrl && (
+							<button
+								type="button"
+								className="btn btn-xs btn-circle btn-ghost text-base-100 hover:bg-base-100/30"
+								title="预览片段"
+								onClick={() =>
+									canvasEvents.emit("preview-video", {
+										src: videoUrl,
+										title: `镜头 ${shot.order}`,
+									})
+								}
+							>
+								<SvgIcon name="play" size={12} />
+							</button>
+						)}
+						{!isApproved && (
+							<button
+								type="button"
+								className="btn btn-xs btn-circle btn-ghost text-success hover:bg-success/30"
+								title="批准"
+								onClick={() => handleAction("approve")}
+							>
+								<SvgIcon name="check" size={12} />
+							</button>
+						)}
+					</div>
+				</figure>
+			) : (
+				<div className="h-28 flex items-center justify-center bg-base-300">
+					<span className="text-xs opacity-40">生成中...</span>
+				</div>
+			)}
+			<div className="card-body p-2 gap-0.5">
+				<div className="flex items-center gap-1.5">
+					<span
+						className={`w-2 h-2 rounded-full flex-shrink-0 ${
+							isApproved ? "bg-success" : "bg-warning"
+						}`}
+					/>
+					<span className="text-xs font-medium">镜头 {shot.order}</span>
+					{shot.camera && (
+						<span className="badge badge-ghost badge-xs ml-auto">
+							{shot.camera}
+						</span>
+					)}
+				</div>
+				{shot.scene && (
+					<p className="text-xs text-base-content/70 font-semibold">
+						{shot.scene}
+					</p>
+				)}
+				{shot.description && (
+					<p className="text-xs text-base-content/50 line-clamp-2">
+						{shot.description}
+					</p>
+				)}
+				{isEditing ? (
+					<div className="space-y-1 mt-1">
+						<input
+							type="text"
+							className="input input-bordered input-xs bg-base-100/80 w-full text-xs"
+							placeholder="动作"
+							value={editAction}
+							onChange={(e) => setEditAction(e.target.value)}
+						/>
+						<input
+							type="text"
+							className="input input-bordered input-xs bg-base-100/80 w-full text-xs"
+							placeholder="对话"
+							value={editDialogue}
+							onChange={(e) => setEditDialogue(e.target.value)}
+							onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
+						/>
+						<div className="flex gap-1">
+							<button
+								type="button"
+								className="btn btn-xs btn-primary btn-sm"
+								onClick={handleSaveEdit}
+							>
+								保存
+							</button>
+							<button
+								type="button"
+								className="btn btn-xs btn-ghost btn-sm"
+								onClick={() => setIsEditing(false)}
+							>
+								取消
+							</button>
+						</div>
+					</div>
+				) : (
+					<>
+						{shot.action && (
+							<p className="text-xs text-accent/70 flex items-center gap-0.5">
+								<SvgIcon name="chevron-right" size={10} />
+								{shot.action}
+							</p>
+						)}
+						{shot.dialogue && (
+							<p className="text-xs text-primary/80 italic">
+								"{shot.dialogue}"
+							</p>
+						)}
+					</>
+				)}
+				<div className="flex flex-wrap gap-0.5 mt-0.5">
+					{shot.lighting && (
+						<span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5">
+							<SvgIcon name="lightbulb" size={10} />
+							{shot.lighting}
+						</span>
+					)}
+					{shot.sfx && (
+						<span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5">
+							<SvgIcon name="volume-2" size={10} />
+							{shot.sfx}
+						</span>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
 
 export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape> {
-  static override type = "storyboard-section" as const;
+	static override type = "storyboard-section" as const;
 
-  static override props: RecordProps<StoryboardSectionShape> = {
-    w: T.number,
-    h: T.number,
-    shots: T.any,
-  };
+	static override props: RecordProps<StoryboardSectionShape> = {
+		w: T.number,
+		h: T.number,
+		shots: T.any,
+		sectionTitle: T.string,
+		sectionState: T.string,
+		placeholder: T.boolean,
+		statusLabel: T.string,
+		placeholderText: T.string,
+	};
 
-  getDefaultProps(): StoryboardSectionShape["props"] {
-    return {
-      w: 800,
-      h: 500,
-      shots: [],
-    };
-  }
+	getDefaultProps(): StoryboardSectionShape["props"] {
+		return {
+			w: 800,
+			h: 200,
+			shots: [],
+			sectionTitle: "分镜画面",
+			sectionState: "blocked",
+			placeholder: true,
+			statusLabel: getWorkspaceSectionStatusLabel("blocked"),
+			placeholderText: getWorkspaceSectionPlaceholderText("render"),
+		};
+	}
 
-  override canEdit() {
-    return false;
-  }
+	override canEdit() {
+		return true;
+	}
+	override canResize() {
+		return false;
+	}
+	override canCull() {
+		return false;
+	}
 
-  override canResize() {
-    return false;
-  }
+	getGeometry(shape: StoryboardSectionShape): Geometry2d {
+		const size = this.editor ? getShapeSize(this.editor, shape.id) : undefined;
+		return new Rectangle2d({
+			width: shape.props.w,
+			height: size?.height ?? shape.props.h,
+			isFilled: true,
+		});
+	}
 
-  override hideSelectionBoundsFg() {
-    return true;
-  }
+	component(shape: StoryboardSectionShape) {
+		const {
+			shots,
+			sectionTitle,
+			placeholder,
+			placeholderText,
+			statusLabel,
+			w,
+		} = shape.props;
+		const typedShots = (shots ?? []) as ReviewedShot[];
+		const ref = useDomSize(shape, this.editor ?? null);
 
-  override hideSelectionBoundsBg() {
-    return true;
-  }
+		return (
+			<HTMLContainer
+				style={{ width: w, pointerEvents: "all", overflow: "visible" }}
+			>
+				<div ref={ref} style={{ width: w }}>
+					<SectionShell
+						sectionKey="render"
+						sectionTitle={sectionTitle}
+						statusLabel={statusLabel}
+						placeholder={placeholder}
+						placeholderText={placeholderText}
+					>
+						{!placeholder && (
+							<div>
+								{typedShots.length > 0 && (
+									<div className="grid grid-cols-3 gap-2">
+										{typedShots.map((shot) => (
+											<ShotCard key={shot.id} shot={shot} />
+										))}
+									</div>
+								)}
+							</div>
+						)}
+					</SectionShell>
+				</div>
+			</HTMLContainer>
+		);
+	}
 
-  getGeometry(shape: StoryboardSectionShape): Geometry2d {
-    return new Rectangle2d({
-      width: shape.props.w,
-      height: shape.props.h,
-      isFilled: true,
-    });
-  }
-
-  component(shape: StoryboardSectionShape) {
-    const { shots } = shape.props;
-
-    return (
-      <HTMLContainer
-        style={{
-          width: shape.props.w,
-          height: shape.props.h,
-          pointerEvents: "all",
-        }}
-        className="h-full"
-      >
-        <StoryboardSectionContent shots={shots} />
-      </HTMLContainer>
-    );
-  }
-
-  indicator() {
-    return null;
-  }
-}
-
-function ShotCard({ shot }: { shot: Shot }) {
-  const [isHovered, setIsHovered] = useState(false);
-  const imageUrl = getStaticUrl(shot.image_url);
-  const videoUrl = getStaticUrl(shot.video_url);
-
-  const handleEdit = () => {
-    canvasEvents.emit("edit-shot", shot);
-  };
-
-  const handleRegenerateImage = () => {
-    canvasEvents.emit("regenerate-shot", { id: shot.id, type: "image" });
-  };
-
-  const handleRegenerateVideo = () => {
-    canvasEvents.emit("regenerate-shot", { id: shot.id, type: "video" });
-  };
-
-  const handleDelete = () => {
-    canvasEvents.emit("delete-shot", shot);
-  };
-
-  const handlePreviewImage = () => {
-    if (imageUrl) {
-      canvasEvents.emit("preview-image", { src: imageUrl, alt: `镜头 ${shot.order}` });
-    }
-  };
-
-  const handlePreviewVideo = () => {
-    if (videoUrl) {
-      canvasEvents.emit("preview-video", { src: videoUrl, title: `镜头 ${shot.order}` });
-    }
-  };
-
-  return (
-    <div
-      className="bg-base-200 rounded-lg p-2 relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* 操作栏 */}
-      <div
-        className={`absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-lg bg-base-100/90 p-0.5 backdrop-blur-sm transition-all duration-200 ${
-          isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <button
-          className="btn btn-xs btn-circle btn-ghost text-base-content"
-          onClick={(e) => { e.stopPropagation(); handleEdit(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="编辑"
-        >
-          <PencilIcon className="w-3 h-3" />
-        </button>
-        <button
-          className="btn btn-xs btn-circle btn-secondary"
-          onClick={(e) => { e.stopPropagation(); handleRegenerateImage(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="重新生成图片"
-        >
-          <PhotoIcon className="w-3 h-3" />
-        </button>
-        <button
-          className="btn btn-xs btn-circle btn-accent"
-          onClick={(e) => { e.stopPropagation(); handleRegenerateVideo(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="重新生成视频"
-        >
-          <VideoCameraIcon className="w-3 h-3" />
-        </button>
-        <button
-          className="btn btn-xs btn-circle btn-error"
-          onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="删除"
-        >
-          <TrashIcon className="w-3 h-3" />
-        </button>
-      </div>
-
-      {/* 镜头序号 */}
-      <div className="flex items-center gap-1 mb-1">
-        <span className="text-xs font-bold text-base-content">#{shot.order}</span>
-        {videoUrl && (
-          <span className="badge badge-success badge-xs">视频</span>
-        )}
-      </div>
-
-      {/* 图片/视频 */}
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={`镜头 ${shot.order}`}
-          className="w-full h-24 object-cover rounded cursor-zoom-in hover:opacity-90 transition-opacity"
-          onClick={handlePreviewImage}
-          onPointerDown={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <div className="w-full h-24 bg-base-300 rounded flex items-center justify-center">
-          <RectangleStackIcon className="w-6 h-6 text-base-content/20" />
-        </div>
-      )}
-
-      {/* 视频预览按钮 */}
-      {videoUrl && (
-        <button
-          className="absolute bottom-8 right-3 btn btn-xs btn-circle btn-primary"
-          onClick={handlePreviewVideo}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="播放视频"
-        >
-          <span className="text-xs">▶</span>
-        </button>
-      )}
-
-      {/* 描述 */}
-      <p className="text-xs text-base-content/70 mt-1 line-clamp-2">
-        {shot.description}
-      </p>
-    </div>
-  );
-}
-
-function StoryboardSectionContent({ shots }: { shots: Shot[] }) {
-  const sortedShots = [...shots].sort((a, b) => a.order - b.order);
-
-  return (
-    <div className="card-doodle bg-base-100 p-5 h-full">
-      {/* 标题栏 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-          <FilmIcon className="w-4 h-4 text-accent" />
-        </div>
-        <h2 className="text-lg font-heading font-bold text-base-content">分镜图</h2>
-        {shots.length > 0 && (
-          <span className="badge badge-ghost text-base-content/60">
-            {shots.length} 个镜头
-          </span>
-        )}
-      </div>
-
-      {/* 分镜网格 */}
-      {sortedShots.length > 0 ? (
-        <div className="grid grid-cols-4 gap-3">
-          {sortedShots.map((shot) => (
-            <ShotCard key={shot.id} shot={shot} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8 text-base-content/50">
-          <RectangleStackIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">等待分镜图生成...</p>
-        </div>
-      )}
-    </div>
-  );
+	indicator() {
+		return null;
+	}
 }

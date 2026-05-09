@@ -1,382 +1,472 @@
+import { ArrowPathIcon, StopIcon } from "@heroicons/react/24/outline";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import {
-  Bars3Icon,
-  FaceFrownIcon,
-  PencilIcon,
-  StopIcon,
-} from "@heroicons/react/24/outline";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ChatPanel } from "~/components/chat/ChatPanel";
-import { Sidebar } from "~/components/layout/Sidebar";
+	Link,
+	useNavigate,
+	useParams,
+	useSearchParams,
+} from "react-router-dom";
+import { ChatDrawer } from "~/components/chat/ChatDrawer";
+import { TopBar } from "~/components/layout/TopBar";
+import { StagePipeline } from "~/components/layout/StagePipeline";
 import { StageView } from "~/components/layout/StageView";
-import { SettingsModal } from "~/components/settings/SettingsModal";
+import { AssetDrawer } from "~/components/panels/AssetDrawer";
+import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
 import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
-import { useEditorStore } from "~/stores/editorStore";
-import { useSidebarStore } from "~/stores/sidebarStore";
-import { toast } from "~/utils/toast";
+import { useEditorStore, useShallow } from "~/stores/editorStore";
+import type { ProjectProviderSettings, RecoveryControlRead } from "~/types";
 import { ApiError } from "~/types/errors";
+import { toast } from "~/utils/toast";
+import { isWorkflowStage } from "~/utils/workflowStage";
 
 export function ProjectPage() {
-  const { id } = useParams<{ id: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const projectId = parseInt(id || "0");
-  const queryClient = useQueryClient();
-  const store = useEditorStore();
-  const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarStore();
-  const autoStartTriggered = useRef(false);
-  const retryCount = useRef(0);
+	const { id } = useParams<{ id: string }>();
+	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const projectId = parseInt(id || "0", 10);
+	const queryClient = useQueryClient();
+	const {
+		isGenerating: storeIsGenerating,
+		currentRunId: storeCurrentRunId,
+		currentStage: storeCurrentStage,
+		awaitingConfirm: storeAwaitingConfirm,
+		recoveryControl: storeRecoveryControl,
+		runMode: storeRunMode,
+	} = useEditorStore(
+		useShallow((s) => ({
+			isGenerating: s.isGenerating,
+			currentRunId: s.currentRunId,
+			currentStage: s.currentStage,
+			awaitingConfirm: s.awaitingConfirm,
+			recoveryControl: s.recoveryControl,
+			runMode: s.runMode,
+		})),
+	);
+	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
+	const hasRecovery = Boolean(storeRecoveryControl);
+	const [assetsOpen, setAssetsOpen] = useState(false);
+	const [historyOpen, setHistoryOpen] = useState(false);
+	const autoStartTriggered = useRef(false);
+	const generateRequestTokenRef = useRef(0);
+	const retryCount = useRef(0);
 
-  const { send } = useProjectWebSocket(projectId);
+	const { send } = useProjectWebSocket(projectId);
 
-  const { data: project, isLoading: projectLoading, error: projectError } = useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => projectsApi.get(projectId),
-    enabled: projectId > 0,
-    retry: 1,
-  });
+	const syncStoreWithActiveRun = (run: {
+		id: number;
+		current_agent?: string | null;
+		progress?: number | null;
+		provider_snapshot?: ProjectProviderSettings | null;
+	}) => {
+		const s = useEditorStore.getState();
+		s.setGenerating(true);
+		s.setCurrentRunId(run.id);
+		s.setCurrentAgent(run.current_agent ?? "orchestrator");
+		s.setProgress(typeof run.progress === "number" ? run.progress : 0);
+		s.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
+		s.setAwaitingConfirm(false, null, run.id);
+		s.setRecoveryControl(null);
+		s.setRecoverySummary(null);
+		s.setRecoveryGate(null);
+	};
 
-  // 显示项目加载错误
-  useEffect(() => {
-    if (projectError) {
-      const apiError = projectError instanceof ApiError ? projectError : null;
-      toast.error({
-        title: "无法加载项目",
-        message: apiError?.message || "项目数据获取失败，请重试",
-        actions: [
-          {
-            label: "重试",
-            onClick: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
-          },
-        ],
-      });
-    }
-  }, [projectError, projectId, queryClient]);
+	const {
+		data: project,
+		isLoading: projectLoading,
+		error: projectError,
+	} = useQuery({
+		queryKey: ["project", projectId],
+		queryFn: () => projectsApi.get(projectId),
+		enabled: projectId > 0,
+		retry: 1,
+	});
 
-  const { data: characters } = useQuery({
-    queryKey: ["characters", projectId],
-    queryFn: () => projectsApi.getCharacters(projectId),
-    enabled: !!project,
-  });
+	useEffect(() => {
+		if (projectError) {
+			const apiError = projectError instanceof ApiError ? projectError : null;
+			toast.error({
+				title: "无法加载项目",
+				message: apiError?.message || "项目数据获取失败，请重试",
+				actions: [
+					{
+						label: "重试",
+						onClick: () =>
+							queryClient.invalidateQueries({
+								queryKey: ["project", projectId],
+							}),
+					},
+				],
+			});
+		}
+	}, [projectError, projectId, queryClient]);
 
-  const { data: shots } = useQuery({
-    queryKey: ["shots", projectId],
-    queryFn: () => projectsApi.getShots(projectId),
-    enabled: !!project,
-  });
+	const { data: characters } = useQuery({
+		queryKey: ["characters", projectId],
+		queryFn: () => projectsApi.getCharacters(projectId),
+		enabled: !!project,
+	});
 
-  const { data: messages } = useQuery({
-    queryKey: ["messages", projectId],
-    queryFn: () => projectsApi.getMessages(projectId),
-    enabled: !!project,
-  });
+	const { data: shots } = useQuery({
+		queryKey: ["shots", projectId],
+		queryFn: () => projectsApi.getShots(projectId),
+		enabled: !!project,
+	});
 
-  // 当项目数据加载完成后，更新到 store（依赖 projectId 确保切换时重新加载）
-  useEffect(() => {
-    if (characters) store.setCharacters(characters);
-  }, [characters, projectId]);
+	const { data: messages } = useQuery({
+		queryKey: ["messages", projectId],
+		queryFn: () => projectsApi.getMessages(projectId),
+		enabled: !!project,
+	});
 
-  useEffect(() => {
-    if (shots) store.setShots(shots);
-  }, [shots, projectId]);
+	useEffect(() => {
+		if (characters) {
+			useEditorStore.getState().setCharacters(characters);
+		}
+	}, [characters]);
 
-  // 初始化 projectVideoUrl
-  useEffect(() => {
-    if (project?.video_url) {
-      store.setProjectVideoUrl(project.video_url);
-    }
-  }, [project?.video_url]);
+	useEffect(() => {
+		if (shots) {
+			useEditorStore.getState().setShots(shots);
+		}
+	}, [shots]);
 
-  // 加载历史消息（只在数据加载完成后执行一次）
-  const messagesLoadedRef = useRef(false);
+	useEffect(() => {
+		if (project?.video_url) {
+			useEditorStore.getState().setProjectVideoUrl(project.video_url);
+		}
+	}, [project?.video_url]);
 
-  // 当项目 ID 变化时，立即清空状态，确保项目完全独立
-  useEffect(() => {
-    // 重置消息加载标记
-    messagesLoadedRef.current = false;
+	useEffect(() => {
+		if (projectId <= 0) return;
 
-    // 清空消息
-    store.clearMessages();
+		generateRequestTokenRef.current += 1;
+		const editorStore = useEditorStore.getState();
 
-    // 清空生成状态
-    store.setGenerating(false);
-    store.setProgress(0);
-    store.setCurrentAgent(null);
-    store.setCurrentStage("ideate");
+		editorStore.clearMessages();
+		editorStore.resetRunState();
+		editorStore.setCurrentStage("plan");
+		editorStore.setSelectedShot(null);
+		editorStore.setSelectedCharacter(null);
+		editorStore.setHighlightedMessage(null);
+		editorStore.setProjectVideoUrl(null);
+	}, [projectId]);
 
-    // 清空确认状态
-    store.setAwaitingConfirm(false, null, null);
-    store.setCurrentRunId(null);
+	const messagesLoadedRef = useRef(false);
+	useEffect(() => {
+		if (messages && !messagesLoadedRef.current) {
+			messagesLoadedRef.current = true;
+			const editorStore = useEditorStore.getState();
+			messages.forEach((msg) => {
+				editorStore.addMessage({
+					id: `db_${msg.id}`,
+					agent: msg.agent,
+					role: msg.role,
+					content: msg.content,
+					timestamp: msg.created_at,
+					progress: msg.progress ?? undefined,
+					// 从数据库加载的消息不再显示为加载中
+					isLoading: false,
+				});
+			});
+		}
+	}, [messages]);
 
-    // 清空选中状态
-    store.setSelectedShot(null);
-    store.setSelectedCharacter(null);
-    store.setHighlightedMessage(null);
+	const generateMutation = useMutation({
+		mutationFn: ({ requestToken }: { requestToken: number }) =>
+			projectsApi
+				.generate(projectId, { auto_mode: storeRunMode === "yolo" })
+				.then((run) => ({ run, requestToken })),
+		onSuccess: ({ run, requestToken }) => {
+			if (requestToken !== generateRequestTokenRef.current) return;
+			syncStoreWithActiveRun(run);
+			retryCount.current = 0;
+		},
+		onError: async (error: Error | ApiError, variables) => {
+			if (variables?.requestToken !== generateRequestTokenRef.current) return;
+			const apiError = error instanceof ApiError ? error : null;
+			const isConflict =
+				apiError?.status === 409 || error.message.includes("409");
 
-    // 清空项目视频
-    store.setProjectVideoUrl(null);
+			if (isConflict) {
+				retryCount.current = 0;
+				const control = apiError?.response as RecoveryControlRead | undefined;
+				if (control) {
+					useEditorStore.getState().setRecoveryControl(control);
+					useEditorStore
+						.getState()
+						.setRecoverySummary(control.recovery_summary);
+					useEditorStore.getState().setCurrentRunId(control.active_run.id);
+					useEditorStore.getState().setGenerating(control.state === "active");
+					if (control.state === "active") {
+						useEditorStore
+							.getState()
+							.setCurrentAgent(control.active_run.current_agent);
+						useEditorStore.getState().setProgress(control.active_run.progress);
+					}
+				} else {
+					toast.warning({
+						title: "请稍等片刻",
+						message: "另一个任务正在进行，完成后再试",
+					});
+				}
+			} else {
+				toast.error({
+					title: "生成失败",
+					message:
+						apiError?.message ||
+						error.message ||
+						"生成过程出错，请重试或联系支持",
+					details: import.meta.env.DEV
+						? JSON.stringify(apiError?.details)
+						: undefined,
+				});
+			}
+		},
+	});
 
-    // 注意：不清空画布数据（characters/shots），让 React Query 的数据自然覆盖
-    // 避免竞态条件导致数据被清空
-  }, [projectId]);
+	const storeCurrentAgent = useEditorStore((s) => s.currentAgent);
 
-  // 当新项目的消息加载完成后，恢复历史消息
-  useEffect(() => {
-    if (messages && !messagesLoadedRef.current) {
-      messagesLoadedRef.current = true;
-      // 加载历史消息（使用数据库 ID 作为消息 ID）
-      messages.forEach((msg) => {
-        store.addMessage({
-          id: `db_${msg.id}`,
-          agent: msg.agent,
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.created_at,
-          progress: msg.progress ?? undefined,
-          isLoading: msg.is_loading,
-        });
-      });
-    }
-  }, [messages]);
+	const feedbackMutation = useMutation({
+		mutationFn: (content: string) =>
+			projectsApi.feedback(
+				projectId,
+				content,
+				undefined,
+				storeCurrentAgent ?? "plan",
+			),
+		onError: (error: Error | ApiError) => {
+			const apiError = error instanceof ApiError ? error : null;
+			const isConflict =
+				apiError?.status === 409 || error.message.includes("409");
 
-  const generateMutation = useMutation({
-    mutationFn: () => projectsApi.generate(projectId),
-    onSuccess: () => {
-      // 重置重试计数
-      retryCount.current = 0;
-    },
-    onError: async (error: Error | ApiError) => {
-      const apiError = error instanceof ApiError ? error : null;
-      const isConflict = apiError?.status === 409 || error.message.includes("409");
+			if (isConflict) {
+				toast.info({
+					title: "AI 正在思考",
+					message: "请等待当前任务完成",
+				});
+			} else {
+				toast.error({
+					title: "提交失败",
+					message: apiError?.message || error.message || "无法发送反馈，请重试",
+				});
+			}
+		},
+	});
 
-      // 如果是 409 冲突，自动取消并重试（最多重试 1 次）
-      if (isConflict && retryCount.current < 1) {
-        retryCount.current += 1;
-        try {
-          await projectsApi.cancel(projectId);
-          // 取消成功后重新生成
-          generateMutation.mutate();
-        } catch {
-          // 取消失败，提示用户
-          retryCount.current = 0;
-          toast.warning({
-            title: "请稍等片刻",
-            message: "另一个任务正在进行，完成后再试",
-          });
-        }
-      } else if (isConflict) {
-        // 重试次数用尽，提示用户
-        retryCount.current = 0;
-        toast.warning({
-          title: "请稍等片刻",
-          message: "另一个任务正在进行，完成后再试",
-        });
-      } else {
-        // 其他错误
-        toast.error({
-          title: "生成失败",
-          message: apiError?.message || error.message || "生成过程出错，请重试或联系支持",
-          details: import.meta.env.DEV ? JSON.stringify(apiError?.details) : undefined,
-        });
-      }
-    },
-  });
+	const cancelMutation = useMutation({
+		mutationFn: () => projectsApi.cancel(projectId),
+		onSettled: () => {
+			useEditorStore.getState().resetRunState();
+			useEditorStore.getState().addMessage({
+				agent: "system",
+				role: "system",
+				content: "生成已停止",
+				icon: StopIcon,
+				timestamp: new Date().toISOString(),
+			});
+		},
+	});
 
-  const feedbackMutation = useMutation({
-    mutationFn: (content: string) => projectsApi.feedback(projectId, content),
-    onSuccess: () => {
-      // feedback API 成功会创建新的 run，WebSocket 会收到 run_started 事件
-    },
-    onError: (error: Error | ApiError) => {
-      const apiError = error instanceof ApiError ? error : null;
-      const isConflict = apiError?.status === 409 || error.message.includes("409");
+	const resumeMutation = useMutation({
+		mutationFn: () => {
+			const control = storeRecoveryControl;
+			if (!control) {
+				throw new Error("没有可恢复的运行");
+			}
+			return projectsApi.resume(projectId, control.active_run.id);
+		},
+		onSuccess: (run) => {
+			const control = storeRecoveryControl;
+			const s = useEditorStore.getState();
+			s.setGenerating(true);
+			s.setCurrentRunId(run.id);
+			s.setCurrentAgent(run.current_agent);
+			s.setProgress(run.progress);
+			s.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
+			if (control) {
+				const nextStage =
+					control.recovery_summary.next_stage ??
+					control.recovery_summary.current_stage;
+				if (isWorkflowStage(nextStage)) {
+					s.setCurrentStage(nextStage);
+				}
+			}
+			s.setRecoveryControl(null);
+			s.setRecoverySummary(null);
+			s.setRecoveryGate(null);
+		},
+		onError: (error: Error | ApiError) => {
+			const apiError = error instanceof ApiError ? error : null;
+			toast.error({
+				title: "恢复失败",
+				message:
+					apiError?.message || error.message || "无法恢复当前运行，请重试",
+			});
+		},
+	});
 
-      if (isConflict) {
-        toast.info({
-          title: "AI 正在思考",
-          message: "请等待当前任务完成",
-        });
-      } else {
-        toast.error({
-          title: "提交失败",
-          message: apiError?.message || error.message || "无法发送反馈，请重试",
-        });
-      }
-    },
-  });
+	const handleGenerate = async () => {
+		if (generateMutation.isPending || hasActiveRun) return;
+		const requestToken = generateRequestTokenRef.current + 1;
+		generateRequestTokenRef.current = requestToken;
+		useEditorStore.getState().clearMessages();
+		useEditorStore.getState().setCurrentStage("plan");
+		generateMutation.mutate({ requestToken });
+	};
 
-  const cancelMutation = useMutation({
-    mutationFn: () => projectsApi.cancel(projectId),
-    onSettled: () => {
-      store.setGenerating(false);
-      store.setProgress(0);
-      store.setCurrentAgent(null);
-      store.setAwaitingConfirm(false, null, null);
-      store.setCurrentRunId(null);
-      store.addMessage({
-        agent: "system",
-        role: "system",
-        content: "生成已停止",
-        icon: StopIcon,
-        timestamp: new Date().toISOString(),
-      });
-    },
-  });
+	const handleFeedback = (content: string) => {
+		feedbackMutation.mutate(content);
+		useEditorStore.getState().addMessage({
+			agent: "user",
+			role: "user",
+			content,
+			timestamp: new Date().toISOString(),
+		});
+	};
 
-  const handleGenerate = async () => {
-    store.clearMessages();
-    store.setCurrentStage("ideate");
-    generateMutation.mutate();
-  };
+	const handleConfirm = (feedback?: string) => {
+		const runId = storeCurrentRunId;
+		if (runId) {
+			send({ type: "confirm", data: { run_id: runId, feedback } });
+			if (feedback) {
+				useEditorStore.getState().addMessage({
+					agent: "user",
+					role: "user",
+					content: feedback,
+					timestamp: new Date().toISOString(),
+				});
+			}
+		}
+	};
 
-  const handleFeedback = (content: string) => {
-    feedbackMutation.mutate(content);
-    store.addMessage({
-      agent: "user",
-      role: "user",
-      content,
-      timestamp: new Date().toISOString(),
-    });
-  };
+	const handleCancel = () => {
+		const activeRunId =
+			storeCurrentRunId ?? storeRecoveryControl?.active_run.id ?? null;
+		if (
+			!activeRunId &&
+			!storeIsGenerating &&
+			storeRecoveryControl?.state !== "active"
+		) {
+			return;
+		}
+		generateRequestTokenRef.current += 1;
+		cancelMutation.mutate();
+	};
 
-  const handleConfirm = (feedback?: string) => {
-    const runId = store.currentRunId;
-    if (runId) {
-      // 有活跃的 run，通过 WebSocket 发送
-      send({ type: "confirm", data: { run_id: runId, feedback } });
-      if (feedback) {
-        store.addMessage({
-          agent: "user",
-          role: "user",
-          content: feedback,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    } else {
-      // 没有活跃的 run 时，记录警告而不是错误地调用 feedback API
-      console.warn("[handleConfirm] No active run ID, cannot send confirm");
-    }
-  };
+	const handleResume = () => {
+		if (!storeRecoveryControl) return;
+		resumeMutation.mutate();
+	};
 
-  const handleCancel = () => {
-    cancelMutation.mutate();
-  };
+	useEffect(() => {
+		if (!storeIsGenerating) {
+			const progress = useEditorStore.getState().progress;
+			if (progress === 1) {
+				queryClient.invalidateQueries({ queryKey: ["characters", projectId] });
+				queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+			}
+		}
+	}, [storeIsGenerating, projectId, queryClient]);
 
-  useEffect(() => {
-    if (!store.isGenerating && store.progress === 1) {
-      queryClient.invalidateQueries({ queryKey: ["characters", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.isGenerating, store.progress, projectId]);
+	const projectUpdatedAt = useEditorStore((state) => state.projectUpdatedAt);
+	useEffect(() => {
+		if (projectUpdatedAt) {
+			queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+			queryClient.invalidateQueries({ queryKey: ["projects"] });
+		}
+	}, [projectUpdatedAt, projectId, queryClient]);
 
-  // 监听项目更新事件，刷新项目数据
-  const projectUpdatedAt = useEditorStore((state) => state.projectUpdatedAt);
-  useEffect(() => {
-    if (projectUpdatedAt) {
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] }); // 同时刷新列表
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectUpdatedAt, projectId]);
+	useEffect(() => {
+		const autoStart = searchParams.get("autoStart");
+		if (
+			autoStart === "true" &&
+			project &&
+			!autoStartTriggered.current &&
+			!hasActiveRun
+		) {
+			const editorStore = useEditorStore.getState();
+			autoStartTriggered.current = true;
+			setSearchParams({}, { replace: true });
+			const requestToken = generateRequestTokenRef.current + 1;
+			generateRequestTokenRef.current = requestToken;
+			editorStore.clearMessages();
+			editorStore.setCurrentStage("plan");
+			generateMutation.mutate({ requestToken });
+		}
+	}, [project, searchParams, setSearchParams, generateMutation]);
 
-  useEffect(() => {
-    const autoStart = searchParams.get("autoStart");
-    if (
-      autoStart === "true" &&
-      project &&
-      !autoStartTriggered.current &&
-      !store.isGenerating
-    ) {
-      autoStartTriggered.current = true;
-      setSearchParams({}, { replace: true });
-      store.clearMessages();
-      store.setCurrentStage("ideate");
-      generateMutation.mutate();
-    }
-  }, [project, searchParams, setSearchParams, store, generateMutation]);
+	if (projectLoading) {
+		return (
+			<div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base-100">
+				<ArrowPathIcon className="w-6 h-6 animate-pulse text-base-content/60" />
+				<p className="font-sketch text-2xl text-base-content/80">
+					正在加载项目...
+				</p>
+			</div>
+		);
+	}
 
-  if (projectLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base-100">
-        <PencilIcon className="w-6 h-6 animate-bounce" aria-hidden="true" />
-        <p className="font-sketch text-2xl text-base-content/80">
-          正在加载项目...
-        </p>
-      </div>
-    );
-  }
+	if (!project) {
+		return (
+			<div className="min-h-screen flex items-center justify-center bg-base-100">
+				<Card className="text-center">
+					<h1 className="text-2xl font-heading font-bold mb-4">项目未找到</h1>
+					<Link to="/">
+						<Button variant="primary">返回首页</Button>
+					</Link>
+				</Card>
+			</div>
+		);
+	}
 
-  if (!project) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-base-100">
-        <Card className="text-center">
-          <FaceFrownIcon
-            className="w-6 h-6 mx-auto mb-4 animate-wiggle"
-            aria-hidden="true"
-          />
-          <h1 className="text-2xl font-heading font-bold mb-4">项目未找到</h1>
-          <Link to="/">
-            <Button variant="primary">返回首页</Button>
-          </Link>
-        </Card>
-      </div>
-    );
-  }
+	return (
+		<div className="h-screen flex flex-col bg-base-100 font-sans overflow-hidden">
+			<TopBar
+				onToggleAssets={() => setAssetsOpen((v) => !v)}
+				onToggleHistory={() => setHistoryOpen((v) => !v)}
+				assetsOpen={assetsOpen}
+				historyOpen={historyOpen}
+				projectId={projectId}
+			/>
+			<StagePipeline
+				currentStage={storeCurrentStage}
+				isGenerating={storeIsGenerating}
+				awaitingConfirm={storeAwaitingConfirm}
+				hasRecovery={hasRecovery}
+				onResume={handleResume}
+				onCancel={handleCancel}
+			/>
 
-  return (
-    <>
-      <Sidebar />
-      <SettingsModal />
-      <div
-        className={`h-screen flex flex-col bg-base-100 font-sans transition-all duration-300 ease-in-out ${
-          sidebarOpen ? "ml-72" : "ml-0"
-        }`}
-      >
-        <header className="flex-shrink-0 bg-base-100/80 backdrop-blur-sm border-b-3 border-black px-4 z-10">
-          <div className="flex items-center h-14">
-            <div className="w-10">
-              {!sidebarOpen && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="!px-2"
-                  onClick={toggleSidebar}
-                  title="展开侧边栏"
-                >
-                  <Bars3Icon className="w-5 h-5" />
-                </Button>
-              )}
-            </div>
-            <h1
-              className="flex-1 text-lg font-heading font-semibold truncate text-center"
-              title={project.title}
-            >
-              {project.title}
-            </h1>
-            <div className="w-10" />
-          </div>
-        </header>
+			<div className="flex-1 flex overflow-hidden">
+				<div className="flex-1 relative overflow-hidden">
+					<StageView projectId={projectId} />
+				</div>
 
-        <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-2 sm:p-4 gap-2 sm:gap-4">
-          <div className="w-full md:w-2/5 lg:w-1/3 md:min-w-[320px] md:max-w-[480px] h-64 md:h-full flex flex-col">
-            <ChatPanel
-              onSendFeedback={handleFeedback}
-              onConfirm={handleConfirm}
-              onGenerate={handleGenerate}
-              onCancel={handleCancel}
-              isGenerating={store.isGenerating || generateMutation.isPending}
-            />
-          </div>
+				<ChatDrawer
+					onSendFeedback={handleFeedback}
+					onConfirm={handleConfirm}
+					onGenerate={handleGenerate}
+					onCancel={handleCancel}
+					isGenerating={hasActiveRun}
+					generateDisabled={false}
+					generateDisabledReason={undefined}
+				/>
+			</div>
 
-          <div className="flex-1 overflow-hidden min-h-0">
-            <StageView projectId={projectId} />
-          </div>
-        </main>
-      </div>
-    </>
-  );
+			<AssetDrawer
+				open={assetsOpen}
+				onClose={() => setAssetsOpen(false)}
+				projectId={project.id}
+			/>
+			<HistoryDrawer
+				open={historyOpen}
+				onClose={() => setHistoryOpen(false)}
+				onNavigate={(id) => navigate(`/project/${id}`)}
+			/>
+		</div>
+	);
 }

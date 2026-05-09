@@ -1,15 +1,19 @@
 """图片拼接服务 - 用于图生视频"""
+
 from __future__ import annotations
 
 import io
 import logging
-from pathlib import Path
 from uuid import uuid4
 
 import httpx
 from PIL import Image
 
 from app.services.file_cleaner import STATIC_DIR, get_local_path, is_local_file
+from app.services.face_cropper import (
+    compose_face_reference_strip,
+    is_face_cropping_available,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +164,15 @@ class ImageComposer:
         self,
         character_image_urls: list[str],
     ) -> bytes:
-        """拼接角色参考图：多角色横向排列，等高缩放
+        """拼接角色参考图：优先裁剪面部区域，fallback 到全身图拼接。
 
-        布局：
+        面部裁剪模式（InsightFace 可用时）：
+        ┌────────┬────────┬────────┐
+        │  脸1   │  脸2   │  脸3   │
+        └────────┴────────┴────────┘
+        面部占满参考图，模型能清晰识别五官特征。
+
+        Fallback 模式：
         ┌─────────┬─────────┬─────┐
         │ 角色1   │ 角色2   │ ... │
         └─────────┴─────────┴─────┘
@@ -178,22 +188,44 @@ class ImageComposer:
 
         # 下载角色图
         char_imgs: list[Image.Image] = []
+        char_img_bytes: list[bytes] = []
         for url in character_image_urls:
             try:
                 img = await self._download_image(url)
                 char_imgs.append(img)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                char_img_bytes.append(buf.getvalue())
             except Exception:
                 continue
 
         if not char_imgs:
             raise RuntimeError("All character images failed to download")
 
-        # 目标高度：使用与 I2V 相同的角色高度策略
+        # 优先尝试面部裁剪模式
+        if is_face_cropping_available():
+            try:
+                face_strip = compose_face_reference_strip(
+                    char_img_bytes,
+                    expand_ratio=1.8,
+                    face_size=256,
+                    max_width=self.max_width,
+                )
+                if face_strip is not None:
+                    logger.info(
+                        "Composed face reference strip from %d character images",
+                        len(char_img_bytes),
+                    )
+                    return face_strip
+                logger.info("No faces detected, falling back to full-body composition")
+            except Exception as e:
+                logger.warning("Face cropping failed, falling back to full-body: %s", e)
+
+        # Fallback：原有全身图拼接逻辑
         target_height = int(self.max_height * 0.3)
         if target_height <= 0:
-            target_height = min(self.max_height, 256)
+            target_height = max(1, min(self.max_height, 256))
 
-        # 等高缩放
         resized: list[Image.Image] = []
         for img in char_imgs:
             ratio = target_height / img.height
@@ -201,7 +233,6 @@ class ImageComposer:
             resized.append(img.resize((new_w, target_height), Image.Resampling.LANCZOS))
 
         total_width = sum(i.width for i in resized)
-        # 如果总宽超限，再整体等比缩小
         if total_width > self.max_width:
             ratio = self.max_width / total_width
             new_resized: list[Image.Image] = []
