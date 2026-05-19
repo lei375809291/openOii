@@ -147,7 +147,7 @@ function resolveShapeLayout(
 	for (const desired of desiredShapes) {
 		const existing = existingMap.get(desired.id);
 		const manual = isManualShape(existing, lastProjected.get(desired.id));
-		const next = manual
+		const next = existing && manual
 			? ({ ...desired, x: existing.x, y: existing.y, meta: existing.meta } as TLShapePartial)
 			: avoidCollisions(desired, occupied);
 		if (manual) occupied.push(toBounds(next));

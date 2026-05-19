@@ -3,6 +3,7 @@ import { useCanvasLayout } from "./useCanvasLayout";
 import { renderHook } from "@testing-library/react";
 import type { SectionKey } from "./useCanvasLayout";
 import type { Character, Shot } from "~/types";
+import type { TLShapePartial } from "tldraw";
 
 const defaultProps = {
 	projectId: 1,
@@ -75,7 +76,10 @@ function makeShot(id: number, order: number): Shot {
 	} as unknown as Shot;
 }
 
-function shapeProps(result: { current: { shapes: { props?: unknown }[] } }, type: string) {
+function shapeProps(
+	result: { current: { shapes: TLShapePartial[] } },
+	type: string,
+) {
 	return result.current.shapes.find((shape) => shape.type === type)?.props as
 		| Record<string, unknown>
 		| undefined;

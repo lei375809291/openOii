@@ -16,7 +16,6 @@ interface LayoutConfig {
 	startX: number;
 	startY: number;
 	columnGap: number;
-	rowGap: number;
 	cardWidth: number;
 }
 
@@ -24,7 +23,6 @@ const DEFAULT_CONFIG: LayoutConfig = {
 	startX: 100,
 	startY: 100,
 	columnGap: 80,
-	rowGap: 40,
 	cardWidth: 420,
 };
 
@@ -215,7 +213,7 @@ export function useCanvasLayout({
 				.join("；");
 		}
 
-		const { startX, startY, columnGap, rowGap, cardWidth } = config;
+		const { startX, startY, columnGap, cardWidth } = config;
 		const shapes: TLShapePartial[] = [];
 		const planX = startX;
 		const renderX = startX + cardWidth + columnGap;
