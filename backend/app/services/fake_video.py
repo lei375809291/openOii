@@ -159,8 +159,3 @@ class FakeVideoService:
         # Last-resort behavior for explicit remote fixtures: reuse real merger.
         merger = get_video_merger_service()
         return await merger.merge_videos(video_urls)
-
-    @staticmethod
-    def is_local_static_url(url: str) -> bool:
-        """Return whether URL points to a backend static file."""
-        return get_local_path(url) is not None

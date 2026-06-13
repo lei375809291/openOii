@@ -1,6 +1,6 @@
 import type { WorkflowStage } from "~/types";
 
-export const WORKFLOW_STAGE_SEQUENCE: WorkflowStage[] = [
+const WORKFLOW_STAGE_SEQUENCE: WorkflowStage[] = [
 	"plan",
 	"plan_approval",
 	"render",
@@ -59,7 +59,7 @@ const GRANULAR_TO_SIMPLIFIED: Record<string, WorkflowStage> = {
  * to the simplified WorkflowStage used by the UI.  Returns `undefined`
  * for completely unknown values.
  */
-export function toSimplifiedStage(value: unknown): WorkflowStage | undefined {
+function toSimplifiedStage(value: unknown): WorkflowStage | undefined {
 	if (typeof value !== "string") return undefined;
 	return GRANULAR_TO_SIMPLIFIED[value];
 }

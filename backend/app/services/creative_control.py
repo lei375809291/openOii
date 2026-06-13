@@ -25,69 +25,6 @@ def _sanitize_ids(values: Any) -> list[int]:
     return list(dict.fromkeys(cleaned))
 
 
-async def build_review_state(session: AsyncSession, project: Project) -> dict[str, Any]:
-    character_res = await session.execute(
-        select(Character).where(Character.project_id == project.id)
-    )
-    shot_res = await session.execute(
-        select(Shot).where(Shot.project_id == project.id).order_by(Shot.order.asc())
-    )
-
-    characters = list(character_res.scalars().all())
-    shots = list(shot_res.scalars().all())
-    return {
-        "project": {
-            "id": project.id,
-            "title": project.title,
-            "story": project.story,
-            "style": project.style,
-            "status": project.status,
-            "video_url": project.video_url,
-        },
-        "characters": [
-            {
-                "id": character.id,
-                "name": character.name,
-                "description": character.description,
-                "image_url": character.image_url,
-                "approval_state": character.approval_state,
-                "approval_version": character.approval_version,
-                "approved_at": character.approved_at,
-                "approved_name": character.approved_name,
-                "approved_description": character.approved_description,
-                "approved_image_url": character.approved_image_url,
-            }
-            for character in characters
-        ],
-        "shots": [
-            {
-                "id": shot.id,
-                "order": shot.order,
-                "description": shot.description,
-                "prompt": shot.prompt,
-                "image_prompt": shot.image_prompt,
-                "image_url": shot.image_url,
-                "video_url": shot.video_url,
-                "duration": shot.duration,
-                "camera": shot.camera,
-                "motion_note": shot.motion_note,
-                "character_ids": list(shot.character_ids),
-                "approval_state": shot.approval_state,
-                "approval_version": shot.approval_version,
-                "approved_at": shot.approved_at,
-                "approved_description": shot.approved_description,
-                "approved_prompt": shot.approved_prompt,
-                "approved_image_prompt": shot.approved_image_prompt,
-                "approved_duration": shot.approved_duration,
-                "approved_camera": shot.approved_camera,
-                "approved_motion_note": shot.approved_motion_note,
-                "approved_character_ids": list(shot.approved_character_ids),
-            }
-            for shot in shots
-        ],
-    }
-
-
 def _blocking_clip_reason(status: str) -> str:
     return {
         "missing": "当前分镜视频尚未生成",

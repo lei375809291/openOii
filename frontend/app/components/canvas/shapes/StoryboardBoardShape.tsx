@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import {
 	HTMLContainer,
 	Rectangle2d,
@@ -12,7 +12,6 @@ import { getStaticUrl } from "~/services/api";
 import { getShapeSize, useDomSize } from "~/hooks/useDomSize";
 import { getWorkspaceSectionPlaceholderText } from "~/utils/workspaceStatus";
 import { canvasEvents } from "../canvasEvents";
-import type { ShapeActionName, ShapeActionPayload } from "../canvasEvents";
 import { SectionShell } from "./SectionShell";
 import type {
 	ReviewedCharacter,
@@ -47,29 +46,19 @@ function stopCanvasDrag(e: React.PointerEvent<HTMLElement>) {
 	e.stopPropagation();
 }
 
-function emitEntityAction({
-	action,
+function emitVersionHistory({
 	entityType,
 	entityId,
-	feedbackType,
-	shotPatch,
-	feedbackContent,
 }: {
-	action: ShapeActionName;
 	entityType: "character" | "shot";
 	entityId: number;
-	feedbackType: "render";
-	shotPatch?: ShapeActionPayload["shotPatch"];
-	feedbackContent?: string;
 }) {
 	canvasEvents.emit("shape-action", {
 		shapeId: "shape:storyboard-board",
-		action,
+		action: "history",
 		entityType,
 		entityId,
-		feedbackType,
-		shotPatch,
-		feedbackContent,
+		feedbackType: "render",
 	});
 }
 
@@ -79,35 +68,6 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
 	const approvedImage = getStaticUrl(character.approved_image_url);
 	const displayImage =
 		isApproved && approvedImage ? approvedImage : currentImage;
-	const [isEditing, setIsEditing] = useState(false);
-	const [feedbackText, setFeedbackText] = useState(character.description || "");
-
-	const handleAction = (action: ShapeActionName) => {
-		if (action === "edit") {
-			setIsEditing(true);
-			return;
-		}
-		emitEntityAction({
-			action,
-			entityType: "character",
-			entityId: character.id,
-			feedbackType: "render",
-		});
-	};
-
-	const handleSaveEdit = () => {
-		setIsEditing(false);
-		const content = feedbackText.trim();
-		if (content) {
-			emitEntityAction({
-				action: "edit",
-				entityType: "character",
-				entityId: character.id,
-				feedbackType: "render",
-				feedbackContent: content,
-			});
-		}
-	};
 
 	return (
 		<article className="group overflow-hidden card-doodle">
@@ -126,50 +86,17 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
 				<div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-base-content/0 opacity-0 transition group-hover:bg-base-content/25 group-hover:opacity-100">
 					<button
 						type="button"
-						className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target"
-						title="重新生成"
-						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("regenerate")}
-					>
-						<SvgIcon name="refresh-cw" size={14} />
-					</button>
-					<button
-						type="button"
-						className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target"
-						title="编辑"
-						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("edit")}
-					>
-						<SvgIcon name="pencil" size={14} />
-					</button>
-					{!isApproved && (
-						<button
-							type="button"
-							className="btn btn-sm btn-circle btn-ghost text-success hover:bg-success/30 touch-target"
-							title="批准"
-							onPointerDown={stopCanvasDrag}
-							onClick={() => handleAction("approve")}
-						>
-							<SvgIcon name="check" size={14} />
-						</button>
-					)}
-					<button
-						type="button"
 						className="btn btn-sm btn-circle btn-ghost text-info hover:bg-info/30 touch-target"
 						title="版本历史"
 						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("history")}
+						onClick={() =>
+							emitVersionHistory({
+								entityType: "character",
+								entityId: character.id,
+							})
+						}
 					>
 						<SvgIcon name="clock-3" size={14} />
-					</button>
-					<button
-						type="button"
-						className="btn btn-sm btn-circle btn-ghost text-primary hover:bg-primary/30 touch-target"
-						title="添加到资产库"
-						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("add-to-assets")}
-					>
-						<SvgIcon name="star" size={14} />
 					</button>
 				</div>
 				{isApproved && (
@@ -191,47 +118,10 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
 						v{character.approval_version}
 					</span>
 				</div>
-				{isEditing ? (
-					<div className="space-y-1.5 pt-1">
-						<textarea
-							className="input-doodle w-full text-xs p-2 resize-none"
-							rows={2}
-							placeholder="修改意见"
-							value={feedbackText}
-							onPointerDown={stopCanvasDrag}
-							onChange={(e) => setFeedbackText(e.currentTarget.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" && !e.shiftKey) {
-									e.preventDefault();
-									handleSaveEdit();
-								}
-							}}
-						/>
-						<div className="flex gap-1">
-							<button
-								type="button"
-								className="btn btn-xs btn-doodle btn-primary"
-								onPointerDown={stopCanvasDrag}
-								onClick={handleSaveEdit}
-							>
-								提交
-							</button>
-							<button
-								type="button"
-								className="btn btn-xs btn-ghost"
-								onPointerDown={stopCanvasDrag}
-								onClick={() => setIsEditing(false)}
-							>
-								取消
-							</button>
-						</div>
-					</div>
-				) : (
-					character.description && (
-						<p className="m-0 text-xs leading-relaxed text-base-content/60">
-							{character.description}
-						</p>
-					)
+				{character.description && (
+					<p className="m-0 text-xs leading-relaxed text-base-content/60">
+						{character.description}
+					</p>
 				)}
 			</div>
 		</article>
@@ -242,41 +132,6 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 	const isApproved = shot.approval_state === "approved";
 	const imageUrl = getStaticUrl(shot.image_url);
 	const videoUrl = getStaticUrl(shot.video_url);
-	const [isEditing, setIsEditing] = useState(false);
-	const [editDialogue, setEditDialogue] = useState(shot.dialogue || "");
-	const [editAction, setEditAction] = useState(shot.action || "");
-
-	const handleAction = (action: ShapeActionName) => {
-		if (action === "edit") {
-			setIsEditing(true);
-			return;
-		}
-		emitEntityAction({
-			action,
-			entityType: "shot",
-			entityId: shot.id,
-			feedbackType: "render",
-		});
-	};
-
-	const handleSaveEdit = () => {
-		setIsEditing(false);
-		if (
-			editDialogue !== (shot.dialogue || "") ||
-			editAction !== (shot.action || "")
-		) {
-			emitEntityAction({
-				action: "edit",
-				entityType: "shot",
-				entityId: shot.id,
-				feedbackType: "render",
-				shotPatch: {
-					action: editAction || null,
-					dialogue: editDialogue || null,
-				},
-			});
-		}
-	};
 
 	return (
 		<article
@@ -309,24 +164,6 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 					</span>
 				)}
 				<div className="absolute inset-0 flex items-center justify-center gap-1 bg-base-content/0 opacity-0 transition group-hover:bg-base-content/25 group-hover:opacity-100">
-					<button
-						type="button"
-						className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target"
-						title="重新生成"
-						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("regenerate")}
-					>
-						<SvgIcon name="refresh-cw" size={14} />
-					</button>
-					<button
-						type="button"
-						className="btn btn-sm btn-circle btn-ghost text-base-100 hover:bg-base-100/30 touch-target"
-						title="编辑"
-						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("edit")}
-					>
-						<SvgIcon name="pencil" size={14} />
-					</button>
 					{videoUrl && (
 						<button
 							type="button"
@@ -343,34 +180,19 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 							<SvgIcon name="play" size={14} />
 						</button>
 					)}
-					{!isApproved && (
-						<button
-							type="button"
-							className="btn btn-sm btn-circle btn-ghost text-success hover:bg-success/30 touch-target"
-							title="批准"
-							onPointerDown={stopCanvasDrag}
-							onClick={() => handleAction("approve")}
-						>
-							<SvgIcon name="check" size={14} />
-						</button>
-					)}
 					<button
 						type="button"
 						className="btn btn-sm btn-circle btn-ghost text-info hover:bg-info/30 touch-target"
 						title="版本历史"
 						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("history")}
+						onClick={() =>
+							emitVersionHistory({
+								entityType: "shot",
+								entityId: shot.id,
+							})
+						}
 					>
 						<SvgIcon name="clock-3" size={14} />
-					</button>
-					<button
-						type="button"
-						className="btn btn-sm btn-circle btn-ghost text-primary hover:bg-primary/30 touch-target"
-						title="保存到资产库"
-						onPointerDown={stopCanvasDrag}
-						onClick={() => handleAction("add-to-assets")}
-					>
-						<SvgIcon name="star" size={14} />
 					</button>
 				</div>
 			</div>
@@ -398,58 +220,16 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 						{shot.description}
 					</p>
 				)}
-				{isEditing ? (
-					<div className="space-y-1.5 pt-1">
-						<input
-							type="text"
-							className="input-doodle w-full text-xs p-2"
-							placeholder="动作"
-							value={editAction}
-							onPointerDown={stopCanvasDrag}
-							onChange={(e) => setEditAction(e.currentTarget.value)}
-						/>
-						<input
-							type="text"
-							className="input-doodle w-full text-xs p-2"
-							placeholder="对话"
-							value={editDialogue}
-							onPointerDown={stopCanvasDrag}
-							onChange={(e) => setEditDialogue(e.currentTarget.value)}
-							onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
-						/>
-						<div className="flex gap-1">
-							<button
-								type="button"
-								className="btn btn-xs btn-doodle btn-primary"
-								onPointerDown={stopCanvasDrag}
-								onClick={handleSaveEdit}
-							>
-								保存
-							</button>
-							<button
-								type="button"
-								className="btn btn-xs btn-ghost"
-								onPointerDown={stopCanvasDrag}
-								onClick={() => setIsEditing(false)}
-							>
-								取消
-							</button>
-						</div>
-					</div>
-				) : (
-					<>
-						{shot.action && (
-							<p className="m-0 flex items-center gap-1 text-xs text-accent/75">
-								<SvgIcon name="chevron-right" size={10} />
-								{shot.action}
-							</p>
-						)}
-						{shot.dialogue && (
-							<p className="m-0 text-xs italic text-primary/80">
-								"{shot.dialogue}"
-							</p>
-						)}
-					</>
+				{shot.action && (
+					<p className="m-0 flex items-center gap-1 text-xs text-accent/75">
+						<SvgIcon name="chevron-right" size={10} />
+						{shot.action}
+					</p>
+				)}
+				{shot.dialogue && (
+					<p className="m-0 text-xs italic text-primary/80">
+						"{shot.dialogue}"
+					</p>
 				)}
 				<div className="flex flex-wrap gap-1 pt-0.5">
 					{shot.lighting && (

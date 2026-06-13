@@ -18,9 +18,6 @@ DEFAULT_VOICE_MAP: dict[str, str] = {
     "narrator": "zh-CN-YunyangNeural",        # 旁白/新闻播报
 }
 
-# 反向映射：语音名称 → 语音类型（用于调试/展示）
-VOICE_TO_TYPE: dict[str, str] = {v: k for k, v in DEFAULT_VOICE_MAP.items()}
-
 # 关键词 → 语音类型
 _KEYWORD_MAP: dict[str, str] = {
     # 女性青年

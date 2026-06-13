@@ -185,7 +185,13 @@ export function VersionCompareDrawer({
 			<div className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-base-content/10 bg-base-100 p-4">
 				<SvgIcon name="clock-3" size={18} />
 				<h2 className="font-heading text-lg font-bold">版本对比</h2>
-				<button type="button" className="btn btn-sm btn-ghost ml-auto" onClick={onClose}>
+				<button
+					type="button"
+					className="btn btn-sm btn-ghost ml-auto"
+					onClick={onClose}
+					aria-label="关闭版本对比"
+					title="关闭版本对比"
+				>
 					<SvgIcon name="x" size={16} />
 				</button>
 			</div>

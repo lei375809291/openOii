@@ -9,6 +9,7 @@ import {
 	StopIcon,
 	UserIcon,
 	PaintBrushIcon,
+	ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import type { WorkflowStage } from "~/types";
 import { STAGE_PIPELINE, getPipelineStageIndex } from "~/utils/pipeline";
@@ -30,6 +31,7 @@ interface StagePipelineProps {
 	hasRecovery: boolean;
 	onResume: () => void;
 	onCancel: () => void;
+	onToggleChat?: () => void;
 }
 
 export function StagePipeline({
@@ -39,6 +41,7 @@ export function StagePipeline({
 	hasRecovery,
 	onResume,
 	onCancel,
+	onToggleChat,
 }: StagePipelineProps) {
 	const currentIndex = getPipelineStageIndex(currentStage);
 
@@ -97,6 +100,19 @@ export function StagePipeline({
 					</div>
 				)}
 			</div>
+			{onToggleChat && (
+				<Button
+					variant="ghost"
+					size="sm"
+					className="!px-1.5 !py-0 !min-h-0 !h-6 text-xs gap-1"
+					onClick={onToggleChat}
+					title="打开对话面板"
+					aria-label="打开对话面板"
+				>
+					<ChatBubbleLeftRightIcon className="w-3.5 h-3.5" />
+					<span className="hidden sm:inline">对话</span>
+				</Button>
+			)}
 		</div>
 	);
 }

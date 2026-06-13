@@ -172,7 +172,7 @@ class CharacterRead(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _compute_has_embedding(cls, data: object) -> object:
+    def _compute_has_embedding(_cls, data: object) -> object:
         if isinstance(data, dict):
             if "has_embedding" not in data and "face_embedding" in data:
                 data["has_embedding"] = bool(data.get("face_embedding"))

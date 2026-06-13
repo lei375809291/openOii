@@ -1,14 +1,14 @@
 import type { TLBaseShape } from "tldraw";
 import type { Character, ReviewState, Shot } from "~/types";
 
-export interface CanvasSectionStatusProps {
+interface CanvasSectionStatusProps {
 	sectionState: string;
 	placeholder: boolean;
 	statusLabel: string;
 	placeholderText: string;
 }
 
-export interface CharacterReviewSnapshot {
+interface CharacterReviewSnapshot {
 	approval_state: ReviewState;
 	approval_version: number;
 	approved_at: string | null;
@@ -19,7 +19,7 @@ export interface CharacterReviewSnapshot {
 
 export type ReviewedCharacter = Character & CharacterReviewSnapshot;
 
-export interface ShotReviewSnapshot {
+interface ShotReviewSnapshot {
 	approval_state: ReviewState;
 	approval_version: number;
 	approved_at: string | null;

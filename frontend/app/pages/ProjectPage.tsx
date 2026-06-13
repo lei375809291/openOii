@@ -16,8 +16,14 @@ import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { canvasEvents } from "~/components/canvas/canvasEvents";
 import { projectsApi } from "~/services/api";
+import { useChatPanelStore } from "~/stores/chatPanelStore";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
-import type { ProjectProviderSettings, RecoveryControlRead, VersionEntityType } from "~/types";
+import type {
+	ProjectProviderSettings,
+	RecoveryControlRead,
+	VersionEntityType,
+	WorkflowStage,
+} from "~/types";
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
 import { isWorkflowStage } from "~/utils/workflowStage";
@@ -37,6 +43,14 @@ const VersionCompareDrawer = lazy(() =>
 		default: m.VersionCompareDrawer,
 	})),
 );
+
+type FeedbackType = "plan" | "render" | "compose";
+
+function feedbackTypeForStage(stage: WorkflowStage): FeedbackType {
+	if (stage === "render" || stage === "render_approval") return "render";
+	if (stage === "compose") return "compose";
+	return "plan";
+}
 
 export function ProjectPage() {
 	const { id } = useParams<{ id: string }>();
@@ -302,15 +316,13 @@ export function ProjectPage() {
 		},
 	});
 
-	const storeCurrentAgent = useEditorStore((s) => s.currentAgent);
-
 	const feedbackMutation = useMutation({
 		mutationFn: (content: string) =>
 			projectsApi.feedback(
 				projectId,
 				content,
 				undefined,
-				storeCurrentAgent ?? "plan",
+				feedbackTypeForStage(storeCurrentStage),
 			),
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
@@ -517,6 +529,7 @@ export function ProjectPage() {
 				hasRecovery={hasRecovery}
 				onResume={handleResume}
 				onCancel={handleCancel}
+				onToggleChat={() => useChatPanelStore.getState().open()}
 			/>
 
 			<div className="flex-1 flex overflow-hidden">

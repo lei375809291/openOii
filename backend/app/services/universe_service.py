@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.utils import utcnow
 from app.models.universe import Universe, SharedCharacter, UniverseProjectLink
 from app.models.project import Character, Project
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +40,6 @@ class UniverseService:
         await self.session.commit()
         await self.session.refresh(universe)
         return universe
-
-    async def get_universe(self, universe_id: int) -> Universe | None:
-        """获取宇宙"""
-        return await self.session.get(Universe, universe_id)
 
     async def list_universes(self) -> list[Universe]:
         """列出所有宇宙"""
@@ -296,15 +288,6 @@ class UniverseService:
             .order_by(SharedCharacter.name)
         )
         return list(result.scalars().all())
-
-    async def get_universe_for_project(
-        self, project_id: int
-    ) -> Universe | None:
-        """获取项目所属的宇宙"""
-        project = await self.session.get(Project, project_id)
-        if not project or not project.universe_id:
-            return None
-        return await self.session.get(Universe, project.universe_id)
 
     async def auto_import_shared_characters(
         self, project_id: int

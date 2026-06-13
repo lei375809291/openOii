@@ -1,8 +1,7 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional, cast
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import Column, JSON
-from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.db.utils import utcnow
@@ -179,7 +178,7 @@ class Shot(SQLModel, table=True):
 
 
 class ShotCharacterBinding(SQLModel, table=True):
-    __tablename__ = cast("declared_attr[str]", cast(object, "shot_character_binding"))
+    __tablename__ = "shot_character_binding"
 
     shot_id: int = Field(foreign_key="shot.id", primary_key=True, index=True)
     character_id: int = Field(foreign_key="character.id", primary_key=True, index=True)

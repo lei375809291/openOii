@@ -6,7 +6,7 @@ type ActionVariant = "primary" | "secondary" | "accent" | "ghost" | "error";
 // 支持 heroicons 风格的图标组件
 type IconComponent = ComponentType<SVGProps<SVGSVGElement> & { className?: string }>;
 
-export interface ActionItem {
+interface ActionItem {
   icon: IconComponent;
   label: string;
   onClick: () => void;

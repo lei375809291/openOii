@@ -15,7 +15,7 @@ export type WorkspaceSectionState =
   | "superseded"
   | "waiting-for-review";
 
-export interface WorkspaceSectionStatus {
+interface WorkspaceSectionStatus {
   key: WorkspaceSectionKey;
   title: string;
   state: WorkspaceSectionState;
@@ -37,37 +37,6 @@ export interface WorkspaceStatus {
   sections: WorkspaceSectionStatus[];
 }
 
-export function deriveWorkspaceRunState(input: {
-  projectStatus?: string | null;
-  isGenerating?: boolean;
-  awaitingConfirm?: boolean;
-  currentRunId?: number | null;
-}): string {
-  const { projectStatus, isGenerating = false, awaitingConfirm = false, currentRunId = null } = input;
-
-  if (projectStatus === "failed") {
-    return "failed";
-  }
-
-  if (awaitingConfirm) {
-    return "awaiting_confirm";
-  }
-
-  if (isGenerating) {
-    return "running";
-  }
-
-  if (currentRunId) {
-    return "blocked";
-  }
-
-  if (projectStatus === "ready" || projectStatus === "completed") {
-    return "completed";
-  }
-
-  return "draft";
-}
-
 export interface WorkspaceFinalOutputMeta {
   sectionState: WorkspaceSectionState;
   statusLabel: string;
@@ -82,7 +51,7 @@ export interface WorkspaceFinalOutputMeta {
   retryThreadId: string | null;
 }
 
-export const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
+const CANONICAL_SECTIONS: Array<Pick<WorkspaceSectionStatus, "key" | "title">> = [
   { key: "plan", title: "规划" },
   { key: "render", title: "渲染" },
   { key: "compose", title: "合成" },
@@ -315,7 +284,7 @@ export function getWorkspaceSectionPlaceholderText(key: WorkspaceSectionKey) {
   return SECTION_PLACEHOLDERS[key];
 }
 
-export function getProjectFinalVideoDownloadUrl(projectId: number) {
+function getProjectFinalVideoDownloadUrl(projectId: number) {
   return `/api/v1/projects/${projectId}/final-video`;
 }
 

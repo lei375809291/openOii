@@ -7,6 +7,19 @@ import { Input } from "~/components/ui/Input";
 import { toast } from "~/utils/toast";
 import type { StyleTemplateCreatePayload } from "~/types";
 
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+}
+
 interface CreateStyleModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,13 +37,6 @@ export function CreateStyleModal({ isOpen, onClose, onCreated }: CreateStyleModa
     negative_prompt: "",
   });
   const [tagInput, setTagInput] = useState("");
-
-  const slugify = (name: string) =>
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 40);
 
   const createMutation = useMutation({
     mutationFn: styleTemplatesApi.create,
@@ -65,9 +71,15 @@ export function CreateStyleModal({ isOpen, onClose, onCreated }: CreateStyleModa
   };
 
   const handleSubmit = () => {
-    if (!form.name.trim() || !form.slug.trim() || !form.style_prompt.trim()) return;
-    createMutation.mutate(form);
+    const slug = slugify(form.slug);
+    if (!form.name.trim() || !SLUG_PATTERN.test(slug) || !form.style_prompt.trim()) return;
+    createMutation.mutate({ ...form, slug });
   };
+
+  const isSubmitDisabled =
+    !form.name.trim() ||
+    !SLUG_PATTERN.test(form.slug) ||
+    !form.style_prompt.trim();
 
   return (
     <Modal
@@ -79,7 +91,7 @@ export function CreateStyleModal({ isOpen, onClose, onCreated }: CreateStyleModa
           variant="primary"
           onClick={handleSubmit}
           loading={createMutation.isPending}
-          disabled={!form.name.trim() || !form.slug.trim() || !form.style_prompt.trim()}
+          disabled={isSubmitDisabled}
         >
           创建
         </Button>
@@ -96,7 +108,7 @@ export function CreateStyleModal({ isOpen, onClose, onCreated }: CreateStyleModa
           label="Slug（URL标识）"
           placeholder="auto-generated"
           value={form.slug}
-          onChange={(e) => setForm({ ...form, slug: e.target.value })}
+          onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })}
         />
         <div className="form-control">
           <label className="label">

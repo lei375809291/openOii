@@ -557,14 +557,6 @@ export interface ConfigItem {
 	source: "db" | "env" | "default";
 }
 
-export interface ConfigSection {
-	key: string;
-	title: string;
-	items: ConfigItem[];
-}
-
-export type AppConfig = ConfigItem[];
-
 export const AGENT_NAME_MAP: Record<string, string> = {
 	outline: "大纲",
 	plan: "规划",

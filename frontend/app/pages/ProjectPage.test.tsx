@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectPage } from './ProjectPage';
 import { projectsApi } from '~/services/api';
+import { useChatPanelStore } from '~/stores/chatPanelStore';
 import type { AgentRun, Project, RecoveryControlRead } from '~/types';
 import { ApiError } from '~/types/errors';
 import { toast } from '~/utils/toast';
@@ -341,41 +342,55 @@ vi.mock('~/services/api', () => ({
   },
 }));
 
-vi.mock('~/components/chat/ChatDrawer', () => ({
-  ChatDrawer: ({
-    generateDisabled,
-    isGenerating,
-    onGenerate,
-    onSendFeedback,
-    onConfirm,
-    onCancel,
-  }: {
-    generateDisabled?: boolean;
-    isGenerating?: boolean;
-    onGenerate?: () => void;
-    onSendFeedback?: (content: string) => void;
-    onConfirm?: (content?: string) => void;
-    onCancel?: () => void;
-  }) => (
-    <div data-testid="chat-panel">
-      <span data-testid="chat-generating-state">
-        {isGenerating ? 'generating' : 'idle'}
-      </span>
-      <button type="button" disabled={generateDisabled} onClick={onGenerate}>
-        开始生成
-      </button>
-      <button type="button" onClick={() => onSendFeedback?.('继续调整故事节奏')}>
-        发送反馈
-      </button>
-      <button type="button" onClick={() => onConfirm?.('请微调这一版')}>
-        确认并继续
-      </button>
-      <button type="button" onClick={onCancel}>
-        停止生成
-      </button>
-    </div>
-  ),
-}));
+vi.mock('~/components/chat/ChatDrawer', async () => {
+  const { useChatPanelStore } = await vi.importActual<typeof import('~/stores/chatPanelStore')>(
+    '~/stores/chatPanelStore',
+  );
+
+  return {
+    ChatDrawer: ({
+      generateDisabled,
+      isGenerating,
+      onGenerate,
+      onSendFeedback,
+      onConfirm,
+      onCancel,
+    }: {
+      generateDisabled?: boolean;
+      isGenerating?: boolean;
+      onGenerate?: () => void;
+      onSendFeedback?: (content: string) => void;
+      onConfirm?: (content?: string) => void;
+      onCancel?: () => void;
+    }) => {
+      const { isOpen, close } = useChatPanelStore();
+      if (!isOpen) return null;
+
+      return (
+        <div data-testid="chat-panel">
+          <button type="button" aria-label="关闭对话面板" onClick={close}>
+            关闭
+          </button>
+          <span data-testid="chat-generating-state">
+            {isGenerating ? 'generating' : 'idle'}
+          </span>
+          <button type="button" disabled={generateDisabled} onClick={onGenerate}>
+            开始生成
+          </button>
+          <button type="button" onClick={() => onSendFeedback?.('继续调整故事节奏')}>
+            发送反馈
+          </button>
+          <button type="button" onClick={() => onConfirm?.('请微调这一版')}>
+            确认并继续
+          </button>
+          <button type="button" onClick={onCancel}>
+            停止生成
+          </button>
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock('~/components/layout/TopBar', () => ({
   TopBar: ({
@@ -433,10 +448,12 @@ describe('ProjectPage live hydration', () => {
       shotsLoading: false,
       messagesLoading: false,
     };
+    useChatPanelStore.getState().open();
     currentProjectData = projectData;
     storeState.isGenerating = true;
     storeState.progress = 0.35;
     storeState.currentStage = 'storyboard';
+    storeState.currentAgent = null;
     storeState.projectUpdatedAt = null;
     storeState.currentRunId = null;
     storeState.currentRunProviderSnapshot = null;
@@ -617,6 +634,22 @@ describe('ProjectPage live hydration', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始生成' })).toBeEnabled();
+  });
+
+  it('reopens the chat drawer from the pipeline after the drawer is closed', async () => {
+    const user = userEvent.setup();
+
+    render(<ProjectPage />);
+
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭对话面板' }));
+
+    expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '对话' }));
+
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
   });
 
   it('keeps generate enabled when only the video provider is invalid', () => {
@@ -832,6 +865,38 @@ describe('ProjectPage live hydration', () => {
         content: '继续调整故事节奏',
       })
     );
+  });
+
+  it('routes feedback to render when the current workflow stage is render', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+    storeState.currentRunId = null;
+    storeState.currentStage = 'render';
+    storeState.currentAgent = 'orchestrator';
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '发送反馈' }));
+
+    await waitFor(() => {
+      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏', undefined, 'render');
+    });
+  });
+
+  it('routes feedback to compose when the current workflow stage is compose', async () => {
+    const user = userEvent.setup();
+    storeState.isGenerating = false;
+    storeState.currentRunId = null;
+    storeState.currentStage = 'compose';
+    storeState.currentAgent = 'render';
+
+    render(<ProjectPage />);
+
+    await user.click(screen.getByRole('button', { name: '发送反馈' }));
+
+    await waitFor(() => {
+      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏', undefined, 'compose');
+    });
   });
 
   it('sends confirm through websocket when an active run exists', async () => {

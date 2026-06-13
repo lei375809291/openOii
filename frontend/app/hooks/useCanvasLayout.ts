@@ -23,12 +23,6 @@ const DEFAULT_CONFIG: LayoutConfig = {
 
 const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
 
-const SECTION_LABELS: Record<SectionKey, string> = {
-	plan: "规划",
-	render: "渲染",
-	compose: "合成",
-};
-
 const SECTION_PLACEHOLDER_TEXT: Record<SectionKey, string> = {
 	plan: "等待规划生成...",
 	render: "等待角色和分镜渲染生成...",
@@ -124,13 +118,8 @@ function isPlaceholder(
 	}
 }
 
-export type { SectionKey, SectionState };
-export {
-	SECTION_ORDER,
-	SECTION_LABELS,
-	SECTION_PLACEHOLDER_TEXT,
-	SECTION_STATUS_LABELS,
-};
+export type { SectionKey };
+export { SECTION_ORDER };
 
 export interface CanvasLayoutResult {
 	shapes: TLShapePartial[];

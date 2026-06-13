@@ -1,5 +1,5 @@
 // Toast 类型定义
-export type ToastType = "success" | "error" | "warning" | "info";
+type ToastType = "success" | "error" | "warning" | "info";
 
 export interface ToastAction {
   label: string;
