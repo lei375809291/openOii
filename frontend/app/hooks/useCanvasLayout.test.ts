@@ -76,17 +76,14 @@ function makeShot(id: number, order: number): Shot {
 	} as unknown as Shot;
 }
 
-function shapeProps(
-	result: { current: { shapes: TLShapePartial[] } },
-	type: string,
-) {
-	return result.current.shapes.find((shape) => shape.type === type)?.props as
+function boardProps(result: { current: { shapes: TLShapePartial[] } }) {
+	return result.current.shapes[0]?.props as
 		| Record<string, unknown>
 		| undefined;
 }
 
 describe("useCanvasLayout", () => {
-	it("returns an independently movable plan card when plan section is visible", () => {
+	it("returns the single storyboard board when plan section is visible", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -95,7 +92,9 @@ describe("useCanvasLayout", () => {
 		);
 
 		expect(result.current.shapes).toHaveLength(1);
-		expect(result.current.shapes[0]?.type).toBe("plan-section");
+		expect(result.current.shapes[0]?.id).toBe("shape:storyboard-board");
+		expect(result.current.shapes[0]?.type).toBe("storyboard-board");
+		expect(boardProps(result)?.visibleSections).toEqual(["plan"]);
 	});
 
 	it("returns no cards when no sections are visible", () => {
@@ -125,7 +124,7 @@ describe("useCanvasLayout", () => {
 		expect(result.current.shapes).toHaveLength(0);
 	});
 
-	it("passes characters through the character section props", () => {
+	it("passes characters through the board props", () => {
 		const characters = [makeCharacter(1, "Alice"), makeCharacter(2, "Bob")];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -135,10 +134,10 @@ describe("useCanvasLayout", () => {
 			}),
 		);
 
-		expect(shapeProps(result, "character-section")?.characters).toHaveLength(2);
+		expect(boardProps(result)?.characters).toHaveLength(2);
 	});
 
-	it("passes shots through the storyboard section props", () => {
+	it("passes shots through the board props", () => {
 		const shots = [makeShot(10, 1), makeShot(20, 2)];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -148,10 +147,10 @@ describe("useCanvasLayout", () => {
 			}),
 		);
 
-		expect(shapeProps(result, "storyboard-section")?.shots).toHaveLength(2);
+		expect(boardProps(result)?.shots).toHaveLength(2);
 	});
 
-	it("includes compose card when compose is visible", () => {
+	it("includes compose section in the board when compose is visible", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -160,9 +159,8 @@ describe("useCanvasLayout", () => {
 			}),
 		);
 
-		expect(result.current.shapes.map((shape) => shape.type)).toContain(
-			"compose-section",
-		);
+		expect(boardProps(result)?.visibleSections).toContain("compose");
+		expect(boardProps(result)?.videoUrl).toBe("http://example.com/video.mp4");
 	});
 
 	it("does not include compose card when compose is not visible", () => {
@@ -174,9 +172,7 @@ describe("useCanvasLayout", () => {
 			}),
 		);
 
-		expect(result.current.shapes.map((shape) => shape.type)).not.toContain(
-			"compose-section",
-		);
+		expect(boardProps(result)?.visibleSections).not.toContain("compose");
 	});
 
 	it("marks compose card blocked when blocking clips exist", () => {
@@ -190,10 +186,16 @@ describe("useCanvasLayout", () => {
 				],
 			}),
 		);
-		const props = shapeProps(result, "compose-section");
+		const props = boardProps(result);
+		const sectionStates = props?.sectionStates as
+			| Record<string, unknown>
+			| undefined;
+		const placeholderTexts = props?.placeholderTexts as
+			| Record<string, unknown>
+			| undefined;
 
-		expect(props?.sectionState).toBe("blocked");
-		expect(props?.placeholderText).toBe("镜头 2: 视频缺失");
+		expect(sectionStates?.compose).toBe("blocked");
+		expect(placeholderTexts?.compose).toBe("镜头 2: 视频缺失");
 	});
 
 	it("assigns stable card IDs", () => {
@@ -232,7 +234,7 @@ describe("useCanvasLayout", () => {
 		expect(result.current.shapes).toHaveLength(0);
 	});
 
-	it("marks plan card state as complete when story exists", () => {
+	it("marks plan section state as complete when story exists", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -241,7 +243,10 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan"] as SectionKey[],
 			}),
 		);
+		const sectionStates = boardProps(result)?.sectionStates as
+			| Record<string, unknown>
+			| undefined;
 
-		expect(shapeProps(result, "plan-section")?.sectionState).toBe("complete");
+		expect(sectionStates?.plan).toBe("complete");
 	});
 });

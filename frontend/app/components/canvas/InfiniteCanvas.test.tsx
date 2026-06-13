@@ -70,35 +70,32 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 	vi.fn((args: LayoutMockArgs) => ({
 		shapes: [
 			{
-				id: "shape:plan-section",
-				type: "plan-section",
+				id: "shape:storyboard-board",
+				type: "storyboard-board",
 				x: 100,
 				y: 100,
 				props: {
-					w: 420,
-					h: 260,
+					w: 920,
+					h: 600,
 					projectId: 1,
-					story: "",
-					summary: "",
+					story: args.story ?? "",
+					summary: args.summary ?? "",
 					characters: [],
 					shots: [],
-					sectionState: "complete",
-					placeholder: false,
-					statusLabel: "已完成",
-					placeholderText: "",
+					videoUrl: args.videoUrl ?? "",
+					videoTitle: "测试项目",
+					visibleSections: args.visibleSections ?? ["plan"],
+					sectionStates: {
+						plan: "complete",
+						render: args.visibleSections?.includes("render") ? "complete" : "draft",
+						compose: args.blockingClips ? "blocked" : "draft",
+					},
+					placeholders: {},
+					statusLabels: {},
+					placeholderTexts: {},
+					downloadUrl: "/api/v1/projects/1/final-video",
 				},
 			},
-			...(args.visibleSections?.includes("render")
-				? [
-						{
-							id: "shape:character-section",
-							type: "character-section",
-							x: 600,
-							y: 100,
-							props: { w: 420, h: 360 },
-						},
-					]
-				: []),
 		],
 	})),
 );
@@ -332,7 +329,7 @@ vi.mock("~/services/api", () => ({
 }));
 
 describe("InfiniteCanvas", () => {
-	it("mounts independent section cards that are revealed for the current stage", async () => {
+	it("mounts a single storyboard board with sections revealed for the current stage", async () => {
 		render(<InfiniteCanvas projectId={1} />);
 
 		await waitFor(() => {
@@ -344,14 +341,15 @@ describe("InfiniteCanvas", () => {
 			"render",
 		]);
 		expect(mockEditor.createShapes).toHaveBeenCalledWith(
-			expect.arrayContaining([
+			[
 				expect.objectContaining({
-					type: "plan-section",
+					id: "shape:storyboard-board",
+					type: "storyboard-board",
+					props: expect.objectContaining({
+						visibleSections: ["plan", "render"],
+					}),
 				}),
-				expect.objectContaining({
-					type: "character-section",
-				}),
-			]),
+			],
 		);
 	});
 
@@ -384,37 +382,17 @@ describe("InfiniteCanvas", () => {
 		);
 	});
 
-	it("creates bound workflow arrows between adjacent cards", async () => {
+	it("does not create workflow arrows for the single storyboard board", async () => {
 		render(<InfiniteCanvas projectId={1} />);
 
 		await waitFor(() => {
-			expect(mockEditor.createBindings).toHaveBeenCalled();
+			expect(mockEditor.createShapes).toHaveBeenCalled();
 		});
 
-		expect(mockEditor.createShapes).toHaveBeenCalledWith(
-			expect.arrayContaining([
-				expect.objectContaining({
-					type: "arrow",
-					meta: { "openoii-workflow-arrow": true },
-				}),
-			]),
-		);
-		expect(mockEditor.createBindings).toHaveBeenCalledWith(
-			expect.arrayContaining([
-				expect.objectContaining({
-					fromId: expect.stringContaining("workflow-plan-section-to-character-section"),
-					toId: "shape:plan-section",
-					type: "arrow",
-					props: expect.objectContaining({ terminal: "start" }),
-				}),
-				expect.objectContaining({
-					fromId: expect.stringContaining("workflow-plan-section-to-character-section"),
-					toId: "shape:character-section",
-					type: "arrow",
-					props: expect.objectContaining({ terminal: "end" }),
-				}),
-			]),
-		);
+		expect(mockEditor.createBindings).not.toHaveBeenCalled();
+		expect(
+			mockEditor.getCurrentPageShapes().some((shape) => shape.type === "arrow"),
+		).toBe(false);
 	});
 
 	it("does not rewrite the projected canvas when backend data is unchanged", async () => {
@@ -440,7 +418,7 @@ describe("InfiniteCanvas", () => {
 
 		await waitFor(() => {
 			expect(tldrawPersistenceKeys).toContain(
-				"openoii-canvas-v12-project-42",
+				"openoii-canvas-v13-project-42",
 			);
 		});
 	});
@@ -449,6 +427,7 @@ describe("InfiniteCanvas", () => {
 		const defaultLayoutImplementation = useCanvasLayoutMock.getMockImplementation();
 		useCanvasLayoutMock.mockImplementation(() => ({ shapes: [] }));
 		mockEditor.createShapes([
+			{ id: "shape:storyboard-board", type: "storyboard-board" },
 			{ id: "shape:plan-section", type: "plan-section" },
 			{ id: "shape:storyboard-section", type: "storyboard-section" },
 			{
@@ -462,14 +441,9 @@ describe("InfiniteCanvas", () => {
 		render(<InfiniteCanvas projectId={1} />);
 
 		await waitFor(() => {
-			expect(mockEditor.deleteShapes).toHaveBeenCalledWith(
-				expect.arrayContaining([
-					"shape:plan-section",
-					"shape:storyboard-section",
-					"shape:workflow-plan-to-render",
-				]),
-			);
+			expect(mockEditor.getCurrentPageShapes()).toHaveLength(0);
 		});
+		expect(mockEditor.deleteShapes).toHaveBeenCalled();
 		expect(mockEditor.createShapes).not.toHaveBeenCalled();
 		if (defaultLayoutImplementation) {
 			useCanvasLayoutMock.mockImplementation(defaultLayoutImplementation);

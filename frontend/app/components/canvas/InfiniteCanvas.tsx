@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	createShapeId,
 	type Editor,
 	type TLComponents,
 	Tldraw,
 	type TLShape,
-	type TLShapeId,
 	type TLShapePartial,
 } from "tldraw";
 import "tldraw/tldraw.css";
@@ -56,23 +54,21 @@ const components: TLComponents = {
 };
 
 const PROJECTED_SHAPE_TYPES = new Set([
-	"plan-section",
-	"character-section",
-	"storyboard-section",
-	"compose-section",
+	"storyboard-board",
 ]);
 
 const STALE_SHAPE_TYPES = new Set([
 	"connector",
 	"ConnectorShape",
-	"storyboard-board",
 	"script-section",
+	"plan-section",
+	"character-section",
+	"storyboard-section",
 	"video-section",
+	"compose-section",
 ]);
 
 const WORKFLOW_ARROW_META = "openoii-workflow-arrow";
-const MANUAL_POSITION_META = "manualPosition";
-const CARD_PADDING = 32;
 
 function isProjectedCanvasShape(shape: TLShape): boolean {
 	return (
@@ -80,90 +76,6 @@ function isProjectedCanvasShape(shape: TLShape): boolean {
 		STALE_SHAPE_TYPES.has(shape.type) ||
 		(shape.type === "arrow" && shape.meta?.[WORKFLOW_ARROW_META] === true)
 	);
-}
-
-interface ShapeBounds {
-	x: number;
-	y: number;
-	w: number;
-	h: number;
-}
-
-function getShapeSize(shape: TLShapePartial | TLShape): { w: number; h: number } {
-	const props = shape.props as { w?: number; h?: number } | undefined;
-	return {
-		w: props?.w ?? 420,
-		h: props?.h ?? 260,
-	};
-}
-
-function toBounds(shape: TLShapePartial | TLShape): ShapeBounds {
-	const size = getShapeSize(shape);
-	return {
-		x: shape.x ?? 0,
-		y: shape.y ?? 0,
-		w: size.w,
-		h: size.h,
-	};
-}
-
-function boundsOverlap(a: ShapeBounds, b: ShapeBounds): boolean {
-	return !(
-		a.x + a.w + CARD_PADDING <= b.x ||
-		b.x + b.w + CARD_PADDING <= a.x ||
-		a.y + a.h + CARD_PADDING <= b.y ||
-		b.y + b.h + CARD_PADDING <= a.y
-	);
-}
-
-function isManualShape(
-	shape: TLShape | TLShapePartial | undefined,
-	lastProjected?: { x: number; y: number },
-): boolean {
-	if (!shape) return false;
-	if (shape.meta?.[MANUAL_POSITION_META] === true) return true;
-	if (!lastProjected) return false;
-	return shape.x !== lastProjected.x || shape.y !== lastProjected.y;
-}
-
-function avoidCollisions(
-	desired: TLShapePartial,
-	occupied: ShapeBounds[],
-): TLShapePartial {
-	let next = { ...desired };
-	let guard = 0;
-	while (occupied.some((bounds) => boundsOverlap(toBounds(next), bounds))) {
-		const size = getShapeSize(next);
-		next = { ...next, y: (next.y ?? 0) + size.h + CARD_PADDING };
-		guard += 1;
-		if (guard > 50) break;
-	}
-	occupied.push(toBounds(next));
-	return next;
-}
-
-function resolveShapeLayout(
-	desiredShapes: TLShapePartial[],
-	existingShapes: TLShape[],
-	lastProjected: Map<string, { x: number; y: number }>,
-): TLShapePartial[] {
-	const existingMap = new Map(existingShapes.map((shape) => [shape.id, shape]));
-	const occupied = existingShapes
-		.filter((shape) => !PROJECTED_SHAPE_TYPES.has(shape.type))
-		.map(toBounds);
-	const resolved: TLShapePartial[] = [];
-
-	for (const desired of desiredShapes) {
-		const existing = existingMap.get(desired.id);
-		const manual = isManualShape(existing, lastProjected.get(desired.id));
-		const next = existing && manual
-			? ({ ...desired, x: existing.x, y: existing.y, meta: existing.meta } as TLShapePartial)
-			: avoidCollisions(desired, occupied);
-		if (manual) occupied.push(toBounds(next));
-		resolved.push(next);
-	}
-
-	return resolved;
 }
 
 function shapesEqual(existing: TLShape, desired: TLShapePartial): boolean {
@@ -182,102 +94,6 @@ function errorMessage(error: unknown, fallback: string): string {
 	return fallback;
 }
 
-function workflowArrowId(fromId: TLShapeId, toId: TLShapeId): TLShapeId {
-	return createShapeId(`workflow-${fromId.replace("shape:", "")}-to-${toId.replace("shape:", "")}`);
-}
-
-function syncWorkflowArrows(editor: Editor, cardShapes: TLShapePartial[]) {
-	const orderedCards = cardShapes.filter((shape) =>
-		PROJECTED_SHAPE_TYPES.has(shape.type ?? ""),
-	);
-	const desiredPairs = orderedCards.slice(0, -1).map((shape, index) => ({
-		fromId: shape.id as TLShapeId,
-		toId: orderedCards[index + 1]?.id as TLShapeId,
-	}));
-	const desiredArrowIds = new Set(
-		desiredPairs.map((pair) => workflowArrowId(pair.fromId, pair.toId)),
-	);
-	const currentArrows = editor
-		.getCurrentPageShapes()
-		.filter(
-			(shape) =>
-				shape.type === "arrow" &&
-				shape.meta?.[WORKFLOW_ARROW_META] === true,
-		);
-	const staleArrowIds = currentArrows
-		.filter((shape) => !desiredArrowIds.has(shape.id))
-		.map((shape) => shape.id);
-
-	if (staleArrowIds.length > 0) {
-		editor.deleteShapes(staleArrowIds);
-	}
-
-	const existingArrowIds = new Set(
-		currentArrows.map((shape) => shape.id).filter((id) => !staleArrowIds.includes(id)),
-	);
-	const arrowsToCreate: TLShapePartial[] = [];
-	const bindingsToCreate: Parameters<Editor["createBindings"]>[0] = [];
-
-	for (const [index, pair] of desiredPairs.entries()) {
-		const arrowId = workflowArrowId(pair.fromId, pair.toId);
-		if (existingArrowIds.has(arrowId)) continue;
-		arrowsToCreate.push({
-			id: arrowId,
-			type: "arrow",
-			x: 0,
-			y: 0,
-			meta: { [WORKFLOW_ARROW_META]: true },
-			props: {
-				kind: "arc",
-				bend: index % 2 === 0 ? 48 : -48,
-				color: "blue",
-				dash: "draw",
-				fill: "none",
-				labelColor: "black",
-				size: "m",
-				arrowheadStart: "none",
-				arrowheadEnd: "arrow",
-				font: "draw",
-				start: { x: 0, y: 0 },
-				end: { x: 160, y: 0 },
-				labelPosition: 0.5,
-				scale: 1,
-				elbowMidPoint: 0.5,
-				richText: { type: "doc", content: [] },
-			},
-		});
-		bindingsToCreate.push(
-			{
-				fromId: arrowId,
-				toId: pair.fromId,
-				type: "arrow",
-				props: {
-					terminal: "start",
-					normalizedAnchor: { x: 0.5, y: 0.5 },
-					isExact: false,
-					isPrecise: false,
-					snap: "none",
-				},
-			},
-			{
-				fromId: arrowId,
-				toId: pair.toId,
-				type: "arrow",
-				props: {
-					terminal: "end",
-					normalizedAnchor: { x: 0.5, y: 0.5 },
-					isExact: false,
-					isPrecise: false,
-					snap: "none",
-				},
-			},
-		);
-	}
-
-	if (arrowsToCreate.length > 0) editor.createShapes(arrowsToCreate);
-	if (bindingsToCreate.length > 0) editor.createBindings(bindingsToCreate);
-}
-
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const queryClient = useQueryClient();
 	const editorRef = useRef<Editor | null>(null);
@@ -285,7 +101,6 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const lastAppliedShapesSignatureRef = useRef<string | null>(null);
 	const shapesRef = useRef<TLShapePartial[]>([]);
 	const shapesSignatureRef = useRef("");
-	const projectedPositionRef = useRef(new Map<string, { x: number; y: number }>());
 
 	const {
 		characters,
@@ -491,10 +306,14 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		editorRef.current = editor;
 
 
-		// Delete any stale shapes from previous layout architectures
+		// Delete any stale shapes from previous layout architectures.
 		const allShapes = editor.getCurrentPageShapes();
 		const staleShapeIds = allShapes
-			.filter((s) => STALE_SHAPE_TYPES.has(s.type))
+			.filter(
+				(s) =>
+					STALE_SHAPE_TYPES.has(s.type) ||
+					(s.type === "arrow" && s.meta?.[WORKFLOW_ARROW_META] === true),
+			)
 			.map((s) => s.id);
 		if (staleShapeIds.length > 0) {
 			editor.deleteShapes(staleShapeIds);
@@ -510,29 +329,30 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			if (projectedShapeIds.length > 0) {
 				editor.deleteShapes(projectedShapeIds);
 			}
-			projectedPositionRef.current = new Map();
 			lastAppliedShapesSignatureRef.current = currentSignature;
 			setIsInitialized(true);
 			return;
 		}
 
-		const resolvedShapes = resolveShapeLayout(
-			currentShapes,
-			editor.getCurrentPageShapes(),
-			projectedPositionRef.current,
-		);
-
-		if (resolvedShapes.length > 0) {
-			editor.run(() => {
-				editor.createShapes(resolvedShapes);
-				syncWorkflowArrows(editor, resolvedShapes);
-			});
-			projectedPositionRef.current = new Map(
-				resolvedShapes.map((shape) => [
-					shape.id,
-					{ x: shape.x ?? 0, y: shape.y ?? 0 },
-				]),
+		if (currentShapes.length > 0) {
+			const existingMap = new Map(
+				editor.getCurrentPageShapes().map((shape) => [shape.id, shape]),
 			);
+			const toCreate: TLShapePartial[] = [];
+			const toUpdate: TLShapePartial[] = [];
+			for (const desired of currentShapes) {
+				const existing = existingMap.get(desired.id);
+				if (!existing) {
+					toCreate.push(desired);
+				} else if (!shapesEqual(existing, desired)) {
+					toUpdate.push(desired);
+				}
+			}
+
+			editor.run(() => {
+				if (toCreate.length > 0) editor.createShapes(toCreate);
+				if (toUpdate.length > 0) editor.updateShapes(toUpdate);
+			});
 			lastAppliedShapesSignatureRef.current = currentSignature;
 			setTimeout(() => {
 				editor.zoomToFit({ animation: { duration: 300 } });
@@ -544,7 +364,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		setIsInitialized(true);
 	}, []);
 
-	// Sync projected cards when backend data changes; manual card positions stay user-owned.
+	// Sync the projected storyboard board when backend data changes.
 	useEffect(() => {
 		const editor = editorRef.current;
 		if (!editor || !isInitialized) return;
@@ -559,25 +379,22 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			if (toDelete.length > 0) {
 				editor.deleteShapes(toDelete);
 			}
-			projectedPositionRef.current = new Map();
 			lastAppliedShapesSignatureRef.current = shapesSignature;
 			return;
 		}
 
 		const desiredIds = new Set(desiredShapes.map((s) => s.id));
-		const resolvedShapes = resolveShapeLayout(
-			desiredShapes,
-			existingShapes,
-			projectedPositionRef.current,
-		);
 		const existingMap = new Map(existingShapes.map((s) => [s.id, s]));
 
 		editor.run(() => {
 			const toDelete = existingShapes.filter((s) => {
 				if (s.type === "arrow" && s.meta?.[WORKFLOW_ARROW_META] === true) {
-					return false;
+					return true;
 				}
-				return STALE_SHAPE_TYPES.has(s.type) || !desiredIds.has(s.id);
+				return (
+					STALE_SHAPE_TYPES.has(s.type) ||
+					(PROJECTED_SHAPE_TYPES.has(s.type) && !desiredIds.has(s.id))
+				);
 			});
 			if (toDelete.length > 0) {
 				editor.deleteShapes(toDelete.map((s) => s.id));
@@ -585,7 +402,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 			const toCreate: TLShapePartial[] = [];
 			const toUpdate: TLShapePartial[] = [];
-			for (const desired of resolvedShapes) {
+			for (const desired of desiredShapes) {
 				if (!existingMap.has(desired.id)) {
 					toCreate.push(desired);
 				} else {
@@ -596,15 +413,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 			if (toCreate.length > 0) editor.createShapes(toCreate);
 			if (toUpdate.length > 0) editor.updateShapes(toUpdate);
-			syncWorkflowArrows(editor, resolvedShapes);
 		});
-
-		projectedPositionRef.current = new Map(
-			resolvedShapes.map((shape) => [
-				shape.id,
-				{ x: shape.x ?? 0, y: shape.y ?? 0 },
-			]),
-		);
 
 		// If this is the first time we're adding shapes, zoom to fit
 		if (existingShapes.length === 0 && desiredShapes.length > 0) {
@@ -623,7 +432,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					persistenceKey={`openoii-canvas-v12-project-${projectId}`}
+					persistenceKey={`openoii-canvas-v13-project-${projectId}`}
 				>
 					<CanvasToolbar projectId={projectId} />
 					<ShapeContextMenu />
