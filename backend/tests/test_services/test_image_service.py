@@ -178,10 +178,10 @@ async def test_generate_url_chat_completions(monkeypatch):
     )
     service = ImageService(settings)
 
-    async def fake_stream(url, payload):
-        return "result https://cdn.example.com/stream.png done"
+    async def fake_post(url, payload):
+        return {"choices": [{"message": {"content": "result https://cdn.example.com/stream.png done"}}]}
 
-    monkeypatch.setattr(service, "_post_stream_with_retry", fake_stream)
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
 
     url = await service.generate_url(prompt="cat")
     assert url == "https://cdn.example.com/stream.png"
@@ -198,10 +198,10 @@ async def test_generate_url_chat_completions_extracts_markdown_data_url(monkeypa
     )
     service = ImageService(settings)
 
-    async def fake_stream(url, payload):
-        return "![image_1](data:image/png;base64,aGVsbG8=)"
+    async def fake_post(url, payload):
+        return {"choices": [{"message": {"content": "![image_1](data:image/png;base64,aGVsbG8=)"}}]}
 
-    monkeypatch.setattr(service, "_post_stream_with_retry", fake_stream)
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
 
     url = await service.generate_url(prompt="cat")
     assert url == "data:image/png;base64,aGVsbG8="
@@ -300,7 +300,7 @@ async def test_generate_url_uses_dalle_payload_when_image_bytes_without_i2i(monk
 
 
 @pytest.mark.asyncio
-async def test_generate_url_raises_when_stream_has_no_url(monkeypatch):
+async def test_generate_url_raises_when_chat_response_has_no_url(monkeypatch):
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",
         image_provider="openai",
@@ -310,10 +310,10 @@ async def test_generate_url_raises_when_stream_has_no_url(monkeypatch):
     )
     service = ImageService(settings)
 
-    async def fake_stream(url, payload):
-        return "no useful url here"
+    async def fake_post(url, payload):
+        return {"choices": [{"message": {"content": "no useful url here"}}]}
 
-    monkeypatch.setattr(service, "_post_stream_with_retry", fake_stream)
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
 
     with pytest.raises(RuntimeError, match="missing URL"):
         await service.generate_url(prompt="cat")
@@ -382,51 +382,6 @@ async def test_post_json_with_retry_retries_then_succeeds(monkeypatch):
         "ok": True
     }
     assert calls["count"] == 2
-
-
-@pytest.mark.asyncio
-async def test_post_stream_with_retry_collects_reasoning_content(monkeypatch):
-    settings = Settings(
-        database_url="sqlite+aiosqlite:///:memory:", image_base_url="https://img.example.com", image_provider="openai"
-    )
-    service = ImageService(settings, max_retries=1)
-
-    class FakeResponse:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        async def aiter_lines(self):
-            yield 'data: {"choices": [{"delta": {"content": "url:"}}]}'
-            yield 'data: {"choices": [{"delta": {"reasoning_content": " https://cdn.example.com/a.png"}}]}'
-            yield "data: [DONE]"
-
-    class FakeStream:
-        async def __aenter__(self):
-            return FakeResponse()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        def stream(self, *args, **kwargs):
-            return FakeStream()
-
-    monkeypatch.setattr(
-        "app.services.image.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
-    )
-
-    assert (
-        await service._post_stream_with_retry("https://example.com", {"stream": True})
-        == "url: https://cdn.example.com/a.png"
-    )
 
 
 @pytest.mark.asyncio
@@ -910,151 +865,6 @@ async def test_modelscope_generate_missing_task_id_raises(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_post_stream_with_retry_handles_retryable_status(monkeypatch):
-    settings = Settings(
-        database_url="sqlite+aiosqlite:///:memory:",
-        image_provider="openai",
-        image_base_url="https://img.example.com",
-        image_endpoint="/chat/completions",
-        image_api_key="test",
-    )
-    service = ImageService(settings, max_retries=1)
-
-    class FakeStreamResponse:
-        status_code = 500
-
-        def raise_for_status(self):
-            raise httpx.HTTPStatusError("bad", request=None, response=self)
-
-        async def aiter_lines(self):
-            if False:
-                yield ""
-
-    class FakeStreamCtx:
-        async def __aenter__(self):
-            return FakeStreamResponse()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        def stream(self, *args, **kwargs):
-            return FakeStreamCtx()
-
-    monkeypatch.setattr(
-        "app.services.image.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
-    )
-
-    async def fake_sleep(_):
-        return None
-
-    monkeypatch.setattr("app.services.image.asyncio.sleep", fake_sleep)
-
-    with pytest.raises(RuntimeError, match="failed after retries"):
-        await service._post_stream_with_retry(
-            "https://img.example.com/chat/completions", {"prompt": "cat"}
-        )
-
-
-@pytest.mark.asyncio
-async def test_post_stream_with_retry_returns_text(monkeypatch):
-    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
-    service = ImageService(settings)
-
-    class FakeResponse:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        async def aiter_lines(self):
-            yield 'data: {"choices": [{"delta": {"content": "https://cdn.example.com/image.png"}}]}'
-            yield "data: [DONE]"
-
-    class FakeStream:
-        async def __aenter__(self):
-            return FakeResponse()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        def stream(self, *args, **kwargs):
-            return FakeStream()
-
-    monkeypatch.setattr(
-        "app.services.image.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
-    )
-
-    assert (
-        await service._post_stream_with_retry(
-            "https://img.example.com/chat/completions", {"stream": True}
-        )
-        == "https://cdn.example.com/image.png"
-    )
-
-
-@pytest.mark.asyncio
-async def test_post_stream_with_retry_collects_direct_payload_url(monkeypatch):
-    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
-    service = ImageService(settings)
-
-    class FakeResponse:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        async def aiter_lines(self):
-            yield 'data: {"data": [{"url": "https://cdn.example.com/image.png"}]}'
-            yield "data: [DONE]"
-
-    class FakeStream:
-        async def __aenter__(self):
-            return FakeResponse()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        def stream(self, *args, **kwargs):
-            return FakeStream()
-
-    monkeypatch.setattr(
-        "app.services.image.httpx.AsyncClient", lambda *args, **kwargs: FakeClient()
-    )
-
-    assert (
-        await service._post_stream_with_retry(
-            "https://img.example.com/chat/completions",
-            {"stream": True},
-        )
-        == "https://cdn.example.com/image.png"
-    )
-
-
-# --- download_and_save ---
-
-
-@pytest.mark.asyncio
 async def test_download_and_save_success(monkeypatch, tmp_path):
     settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
     service = ImageService(settings)
@@ -1316,11 +1126,11 @@ async def test_generate_url_i2i_chat_completions_multimodal(monkeypatch):
 
     seen = {}
 
-    async def fake_stream(url, payload):
+    async def fake_post(url, payload):
         seen.update(payload)
-        return "https://cdn.example.com/i2i.png"
+        return {"choices": [{"message": {"content": "https://cdn.example.com/i2i.png"}}]}
 
-    monkeypatch.setattr(service, "_post_stream_with_retry", fake_stream)
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
 
     url = await service.generate_url(prompt="cat", image_bytes=b"fakeimg")
     assert url == "https://cdn.example.com/i2i.png"
@@ -1354,11 +1164,11 @@ async def test_generate_url_i2i_chat_completions_compresses_reference(monkeypatc
     original = buffer.getvalue()
     seen = {}
 
-    async def fake_stream(url, payload):
+    async def fake_post(url, payload):
         seen.update(payload)
-        return "https://cdn.example.com/i2i.png"
+        return {"choices": [{"message": {"content": "https://cdn.example.com/i2i.png"}}]}
 
-    monkeypatch.setattr(service, "_post_stream_with_retry", fake_stream)
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
 
     await service.generate_url(prompt="cat", image_bytes=original)
     content = seen["messages"][0]["content"]
@@ -1427,44 +1237,6 @@ async def test_generate_url_i2i_standard_api_missing_url(monkeypatch):
 
 
 # --- _post_stream_with_retry error in stream JSON ---
-
-
-@pytest.mark.asyncio
-async def test_post_stream_with_retry_raises_on_stream_error_json(monkeypatch):
-    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
-    service = ImageService(settings, max_retries=0)
-
-    class FakeResponse:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        async def aiter_lines(self):
-            yield 'data: {"error": "rate limit exceeded"}'
-            yield "data: [DONE]"
-
-    class FakeStream:
-        async def __aenter__(self):
-            return FakeResponse()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        def stream(self, *args, **kwargs):
-            return FakeStream()
-
-    monkeypatch.setattr("app.services.image.httpx.AsyncClient", lambda *a, **k: FakeClient())
-
-    with pytest.raises(RuntimeError, match="Stream error"):
-        await service._post_stream_with_retry("https://example.com", {"stream": True})
 
 
 # --- cache_external_image with known content types ---
@@ -1670,48 +1442,3 @@ async def test_generate_returns_raw_response_even_when_empty(monkeypatch):
 
 
 # --- _post_stream_with_retry non-retryable status ---
-
-
-@pytest.mark.asyncio
-async def test_post_stream_breaks_on_non_retryable_status(monkeypatch):
-    """Lines 322-326: non-retryable status code breaks immediately."""
-    settings = Settings(
-        database_url="sqlite+aiosqlite:///:memory:",
-        image_provider="openai",
-        image_base_url="https://img.example.com",
-        image_endpoint="/chat/completions",
-        image_api_key="test",
-    )
-    service = ImageService(settings, max_retries=3)
-
-    class FakeResponse:
-        status_code = 422
-
-        def raise_for_status(self):
-            raise httpx.HTTPStatusError("bad", request=None, response=self)
-
-        async def aiter_lines(self):
-            if False:
-                yield ""
-
-    class FakeStream:
-        async def __aenter__(self):
-            return FakeResponse()
-
-        async def __aexit__(self, *a):
-            return False
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        def stream(self, *a, **k):
-            return FakeStream()
-
-    monkeypatch.setattr("app.services.image.httpx.AsyncClient", lambda *a, **k: FakeClient())
-
-    with pytest.raises(RuntimeError, match="failed after retries"):
-        await service._post_stream_with_retry("https://example.com", {"stream": True})

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import json
 import logging
 import re
 from io import BytesIO
@@ -454,82 +453,6 @@ class ImageService:
 
         raise RuntimeError(
             f"Image generation request failed after retries: {last_exc}"
-        ) from last_exc
-
-    async def _post_stream_with_retry(self, url: str, payload: dict[str, Any]) -> str:
-        """流式请求，收集所有 chunk 并提取最终 URL"""
-        delay_s = 0.5
-        last_exc: Exception | None = None
-
-        timeout = httpx.Timeout(300.0, connect=30.0)
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            for attempt in range(self.max_retries + 1):
-                try:
-                    collected_content = ""
-                    async with client.stream(
-                        "POST", url, headers=self.settings.image_headers(), json=payload
-                    ) as res:
-                        if (
-                            self._is_retryable_status(res.status_code)
-                            and attempt < self.max_retries
-                        ):
-                            await asyncio.sleep(delay_s)
-                            delay_s = min(delay_s * 2, 8.0)
-                            continue
-                        res.raise_for_status()
-
-                        async for line in res.aiter_lines():
-                            if not line or not line.startswith("data: "):
-                                continue
-                            data_str = line[6:]
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(data_str)
-                                if "error" in chunk:
-                                    raise RuntimeError(f"Stream error: {chunk['error']}")
-                                extracted = self._extract_url_from_payload(chunk)
-                                if extracted:
-                                    collected_content += extracted
-                                    continue
-                                choices = chunk.get("choices", [])
-                                if choices:
-                                    delta = choices[0].get("delta", {})
-                                    # 收集 content 和 reasoning_content
-                                    content = delta.get("content", "")
-                                    reasoning_content = delta.get("reasoning_content", "")
-                                    if content:
-                                        collected_content += content
-                                    if reasoning_content:
-                                        collected_content += reasoning_content
-                            except json.JSONDecodeError as e:
-                                if "error" in data_str:
-                                    try:
-                                        err = json.loads(data_str)
-                                        raise RuntimeError(f"Stream error: {err}")
-                                    except json.JSONDecodeError:
-                                        logger.debug(
-                                            "Non-JSON error line in stream: %s", data_str[:100]
-                                        )
-                                else:
-                                    logger.debug("Skipping non-JSON line in image stream: %s", e)
-                                continue
-
-                    return collected_content
-
-                except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
-                    last_exc = exc
-                    if attempt >= self.max_retries:
-                        break
-                    status = getattr(getattr(exc, "response", None), "status_code", None)
-                    if isinstance(status, int) and not self._is_retryable_status(status):
-                        break
-                    await asyncio.sleep(delay_s)
-                    delay_s = min(delay_s * 2, 8.0)
-
-        raise RuntimeError(
-            f"Image generation stream failed after retries: {last_exc}"
         ) from last_exc
 
     async def generate(
