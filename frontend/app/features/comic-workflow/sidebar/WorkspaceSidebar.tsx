@@ -10,8 +10,9 @@ import { toast } from "~/utils/toast";
 import { ApiError } from "~/types/errors";
 import type { ComicWorkflowNode } from "../graph/types";
 import { WorkflowInspector } from "../inspector/WorkflowInspector";
+import { UniverseTimelinePanel } from "./UniverseTimelinePanel";
 
-export type WorkspaceSidebarTab = "chat" | "inspector" | "assets";
+export type WorkspaceSidebarTab = "chat" | "inspector" | "assets" | "universe";
 
 interface WorkspaceSidebarProps {
 	activeTab: WorkspaceSidebarTab;
@@ -35,7 +36,7 @@ interface WorkspaceSidebarProps {
 	placement?: "left" | "right";
 }
 
-const TABS: Array<{
+const BASE_TABS: Array<{
 	key: WorkspaceSidebarTab;
 	label: string;
 	icon: IconName;
@@ -76,10 +77,18 @@ export function WorkspaceSidebar({
 	universeId = null,
 	placement = "left",
 }: WorkspaceSidebarProps) {
+	const TABS = universeId
+		? [
+				...BASE_TABS,
+				{ key: "universe" as const, label: "宇宙", icon: "star" as IconName },
+			]
+		: BASE_TABS;
+
 	const tabRefs = useRef<Record<WorkspaceSidebarTab, HTMLButtonElement | null>>({
 		chat: null,
 		inspector: null,
 		assets: null,
+		universe: null,
 	});
 	const isLeft = placement === "left";
 
@@ -236,6 +245,12 @@ export function WorkspaceSidebar({
 				) : null}
 				{activeTab === "assets" ? (
 					<AssetsPanel projectId={projectId} active={activeTab === "assets"} />
+				) : null}
+				{activeTab === "universe" && universeId ? (
+					<UniverseTimelinePanel
+						universeId={universeId}
+						currentProjectId={projectId}
+					/>
 				) : null}
 			</div>
 		</aside>

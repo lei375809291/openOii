@@ -238,6 +238,15 @@ export const projectsApi = {
 			body: JSON.stringify({ items }),
 		}),
 
+	fillEmptyShots: (id: number, type: "image" | "video" = "image") =>
+		fetchApi<import("~/types").AgentRun>(
+			`/api/v1/projects/${id}/shots/fill-empty`,
+			{
+				method: "POST",
+				body: JSON.stringify({ type }),
+			},
+		),
+
 	getOutline: (id: number) =>
 		fetchApi<StoryOutline | null>(`/api/v1/projects/${id}/outline`),
 
@@ -738,4 +747,32 @@ export const universesApi = {
 				body: JSON.stringify(data),
 			},
 		),
+
+	timeline: (universeId: number, currentProjectId?: number | null) => {
+		const q =
+			currentProjectId != null
+				? `?current_project_id=${currentProjectId}`
+				: "";
+		return fetchApi<{
+			universe_id: number;
+			universe_name: string;
+			world_setting: string | null;
+			style_rules: string | null;
+			shared_character_count: number;
+			chapters: Array<{
+				project_id: number;
+				chapter_number: number | null;
+				chapter_title: string | null;
+				title: string;
+				summary: string | null;
+				status: string;
+				is_main_story: boolean;
+				is_current: boolean;
+				character_count: number;
+				shot_count: number;
+				has_video: boolean;
+				style: string | null;
+			}>;
+		}>(`/api/v1/universes/${universeId}/timeline${q}`);
+	},
 };

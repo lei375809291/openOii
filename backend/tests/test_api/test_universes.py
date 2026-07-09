@@ -58,6 +58,57 @@ async def test_update_universe_can_clear_nullable_fields(async_client, test_sess
     assert data["cover_image_url"] is None
 
 
+async def test_universe_timeline_lists_chapters_with_counts(async_client, test_session):
+    from app.models.project import Project, Character, Shot
+    from app.models.universe import Universe, UniverseProjectLink
+
+    universe = Universe(name="Timeline World", world_setting="深海文明")
+    test_session.add(universe)
+    await test_session.commit()
+    await test_session.refresh(universe)
+
+    p1 = Project(title="第一章", story="s1", style="anime", summary="开端", status="ready")
+    p2 = Project(title="第二章", story="s2", style="anime", summary="发展", status="draft")
+    test_session.add(p1)
+    test_session.add(p2)
+    await test_session.commit()
+    await test_session.refresh(p1)
+    await test_session.refresh(p2)
+
+    test_session.add(
+        UniverseProjectLink(
+            universe_id=universe.id,
+            project_id=p1.id,
+            chapter_number=1,
+            chapter_title="启程",
+        )
+    )
+    test_session.add(
+        UniverseProjectLink(
+            universe_id=universe.id,
+            project_id=p2.id,
+            chapter_number=2,
+            chapter_title="觉醒",
+        )
+    )
+    test_session.add(Character(project_id=p1.id, name="艾拉", description="勘探员"))
+    test_session.add(Shot(project_id=p1.id, order=1, description="海沟", prompt="p", image_prompt="i"))
+    await test_session.commit()
+
+    res = await async_client.get(
+        f"/api/v1/universes/{universe.id}/timeline?current_project_id={p2.id}"
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["universe_name"] == "Timeline World"
+    assert len(data["chapters"]) == 2
+    current = next(c for c in data["chapters"] if c["project_id"] == p2.id)
+    assert current["is_current"] is True
+    ch1 = next(c for c in data["chapters"] if c["project_id"] == p1.id)
+    assert ch1["character_count"] == 1
+    assert ch1["shot_count"] == 1
+
+
 async def test_shared_character_response_preserves_has_embedding(async_client, test_session):
     universe = Universe(name="Embedding World")
     test_session.add(universe)

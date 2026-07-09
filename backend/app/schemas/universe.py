@@ -119,3 +119,30 @@ class UniverseDetailRead(UniverseRead):
     """Universe 详情，含章节列表和共享角色列表"""
     chapters: list[UniverseProjectLinkRead] = Field(default_factory=list)
     shared_characters: list[SharedCharacterRead] = Field(default_factory=list)
+
+
+class UniverseTimelineChapterRead(BaseModel):
+    """跨章节时间线条目（工作台 continuity 面板）"""
+
+    project_id: int
+    chapter_number: int | None = None
+    chapter_title: str | None = None
+    title: str
+    summary: str | None = None
+    status: str
+    is_main_story: bool = True
+    is_current: bool = False
+    character_count: int = 0
+    shot_count: int = 0
+    has_video: bool = False
+    style: str | None = None
+
+
+class UniverseTimelineRead(BaseModel):
+    universe_id: int
+    universe_name: str
+    world_setting: str | None = None
+    style_rules: str | None = None
+    chapters: list[UniverseTimelineChapterRead] = Field(default_factory=list)
+    shared_character_count: int = 0
+    shared_characters: list[SharedCharacterRead] = Field(default_factory=list)

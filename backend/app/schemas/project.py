@@ -351,6 +351,12 @@ class FeedbackRequest(BaseModel):
     """Multi-select 九宫格 / cast binding — all targeted entity ids."""
 
 
+class FillEmptyShotsRequest(BaseModel):
+    """补齐九宫格空格：只生成缺少首帧或视频的分镜。"""
+
+    type: Literal["image", "video"] = "image"
+
+
 class MessageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

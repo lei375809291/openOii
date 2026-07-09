@@ -10,9 +10,10 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { projectsApi } from "~/services/api";
+import { projectsApi, universesApi } from "~/services/api";
 import { useThemeStore } from "~/stores/themeStore";
 import { useSettingsStore } from "~/stores/settingsStore";
+import { useEditorStore, useShallow } from "~/stores/editorStore";
 import type { Project } from "~/types";
 import { Button } from "~/components/ui/Button";
 
@@ -124,6 +125,41 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 	);
 }
 
+function UniverseChip() {
+	const { universeId, chapterNumber, chapterTitle } = useEditorStore(
+		useShallow((s) => ({
+			universeId: s.projectUniverseId,
+			chapterNumber: s.projectChapterNumber,
+			chapterTitle: s.projectChapterTitle,
+		})),
+	);
+
+	const { data: universe } = useQuery({
+		queryKey: ["universe-chip", universeId],
+		queryFn: () => universesApi.get(universeId!),
+		enabled: Boolean(universeId),
+		staleTime: 60_000,
+	});
+
+	if (!universeId) return null;
+
+	const label =
+		chapterNumber != null
+			? `${universe?.name ?? "宇宙"} · 第${chapterNumber}章`
+			: universe?.name ?? "宇宙";
+
+	return (
+		<Link
+			to={`/universes/${universeId}`}
+			className="touch-target-dense hidden max-w-[11rem] items-center gap-1 truncate rounded-full border border-primary/25 bg-primary/10 px-2 text-[length:var(--text-2xs)] font-bold text-primary transition-colors hover:bg-primary/15 sm:inline-flex"
+			title={chapterTitle || universe?.name || "IP 宇宙"}
+		>
+			<SparklesIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+			<span className="truncate">{label}</span>
+		</Link>
+	);
+}
+
 export function TopBar({ projectId }: TopBarProps) {
 	const { theme, toggleTheme } = useThemeStore();
 	const isDark = theme.endsWith("dark");
@@ -151,6 +187,7 @@ export function TopBar({ projectId }: TopBarProps) {
 							/
 						</span>
 						<ProjectDropdown currentId={projectId} />
+						<UniverseChip />
 					</>
 				) : (
 					<Link

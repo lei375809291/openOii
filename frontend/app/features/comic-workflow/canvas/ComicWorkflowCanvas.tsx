@@ -264,6 +264,7 @@ export function ComicWorkflowCanvas({
 						sortMode={sortMode}
 						sortDisabled={structureLocked}
 						onToggleSortMode={() => setSortMode((v) => !v)}
+						fillDisabled={structureLocked}
 					/>
 				</Tldraw>
 			</div>

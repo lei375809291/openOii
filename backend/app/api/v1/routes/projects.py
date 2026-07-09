@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import cast
 
@@ -9,14 +10,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.api.deps import SessionDep, SettingsDep, WsManagerDep, get_or_404
+from app.agents.base import TargetIds
+from app.agents.compose import ComposeAgent
+from app.agents.render import RenderAgent
+from app.api.deps import SessionDep, SettingsDep, WsManagerDep, get_or_404, require_run_id
 from app.config import Settings
 from app.db.utils import utcnow
+from app.models.agent_run import AgentRun
 from app.models.message import Message
 from app.models.project import Character, Project, Shot
 from app.models.universe import Universe, UniverseProjectLink
 from app.schemas.project import (
+    AgentRunRead,
     CharacterRead,
+    FillEmptyShotsRequest,
     MessageRead,
     ProjectCreate,
     ProjectBatchDeleteRequest,
@@ -30,9 +37,16 @@ from app.schemas.project import (
     StoryOutlineRead,
     StoryOutlineUpdate,
 )
+from app.services.agent_runner import run_agent_plan
+from app.services.creative_control import (
+    collect_project_blocking_clips,
+    invalidate_shot_clip_output,
+    invalidate_shot_storyboard_outputs,
+)
 from app.services.file_cleaner import get_local_path
 from app.services.project_deletion import delete_project_by_id, delete_projects_by_ids
 from app.services.provider_resolution import resolve_project_provider_settings_async
+from app.services.task_manager import task_manager
 from app.ws.manager import ConnectionManager
 
 router = APIRouter()
@@ -384,6 +398,106 @@ async def reorder_shots(
         )
 
     return ShotReorderRead(shots=[ShotRead.model_validate(shot) for shot in ordered_shots])
+
+
+@router.post(
+    "/{project_id}/shots/fill-empty",
+    response_model=AgentRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def fill_empty_shots(
+    project_id: int,
+    payload: FillEmptyShotsRequest | None = None,
+    session: AsyncSession = SessionDep,
+    settings: Settings = SettingsDep,
+    ws: ConnectionManager = WsManagerDep,
+):
+    """补齐九宫格空格：一次 run 只渲染/合成缺少产物的分镜。"""
+    if payload is None:
+        payload = FillEmptyShotsRequest(type="image")
+
+    project = await get_or_404(session, Project, project_id)
+
+    active = await session.execute(
+        select(AgentRun)
+        .where(AgentRun.project_id == project_id)
+        .where(AgentRun.status.in_(("queued", "running")))
+        .limit(1)
+    )
+    if active.scalars().first() is not None:
+        raise HTTPException(status_code=409, detail="Project already has an active run")
+
+    shot_res = await session.execute(
+        select(Shot).where(Shot.project_id == project_id).order_by(Shot.order.asc())
+    )
+    shots = list(shot_res.scalars().all())
+    if not shots:
+        raise HTTPException(status_code=400, detail="No shots to fill")
+
+    if payload.type == "image":
+        empty = [s for s in shots if s.id is not None and not s.image_url]
+        if not empty:
+            raise HTTPException(status_code=400, detail="All shot cells already have images")
+        for shot in empty:
+            await invalidate_shot_storyboard_outputs(session, project, shot)
+        agent_plan = [RenderAgent()]
+        resource_type = "shot_fill_image"
+    else:
+        empty = [s for s in shots if s.id is not None and not s.video_url]
+        if not empty:
+            raise HTTPException(status_code=400, detail="All shot cells already have videos")
+        await invalidate_shot_clip_output(session, project)
+        agent_plan = [ComposeAgent()]
+        resource_type = "shot_fill_video"
+
+    await session.commit()
+    await session.refresh(project)
+    blocking_clips = await collect_project_blocking_clips(session, project)
+    await ws.send_event(
+        project_id,
+        {
+            "type": "project_updated",
+            "data": {
+                "project": {
+                    "id": project_id,
+                    "video_url": project.video_url,
+                    "status": project.status,
+                    "blocking_clips": blocking_clips,
+                }
+            },
+        },
+    )
+
+    target_ids = TargetIds(
+        shot_ids=[s.id for s in empty if s.id is not None],
+        character_ids=[],
+    )
+    run = AgentRun(
+        project_id=project_id,
+        status="running",
+        current_agent=getattr(agent_plan[0], "name", None),
+        progress=0.0,
+        error=None,
+        resource_type=resource_type,
+        resource_id=None,
+    )
+    session.add(run)
+    await session.commit()
+    await session.refresh(run)
+    run_id = require_run_id(run)
+
+    task = asyncio.create_task(
+        run_agent_plan(
+            project_id=project_id,
+            run_id=run_id,
+            agent_plan=agent_plan,
+            settings=settings,
+            ws=ws,
+            target_ids=target_ids,
+        )
+    )
+    task_manager.register(project_id, task)
+    return AgentRunRead.model_validate(run)
 
 
 @router.get("/{project_id}/messages", response_model=list[MessageRead])

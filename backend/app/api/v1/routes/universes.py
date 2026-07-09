@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import SessionDep, get_or_404
 from app.models.universe import Universe, SharedCharacter, UniverseProjectLink
-from app.models.project import Project, Character
+from app.models.project import Project, Character, Shot
 from app.schemas.universe import (
     UniverseCreate,
     UniverseUpdate,
@@ -16,6 +16,8 @@ from app.schemas.universe import (
     UniverseDetailRead,
     UniverseProjectLinkCreate,
     UniverseProjectLinkRead,
+    UniverseTimelineChapterRead,
+    UniverseTimelineRead,
     ImportedCharacterRead,
     SharedCharacterRead,
     SharedCharacterPromote,
@@ -157,6 +159,59 @@ async def get_universe(
         chapters=chapter_reads,
         shared_characters=[_shared_character_read(sc) for sc in shared_chars],
     ).model_dump(mode="json")
+
+
+@router.get("/{universe_id}/timeline", response_model=UniverseTimelineRead)
+async def get_universe_timeline(
+    universe_id: int,
+    current_project_id: int | None = None,
+    session: AsyncSession = SessionDep,
+):
+    """跨章节时间线：章节状态、摘要、镜头/角色计数，供工作台 continuity 面板。"""
+    universe = await get_or_404(session, Universe, universe_id)
+    svc = UniverseService(session)
+    chapters = await svc.get_universe_chapters(universe_id)
+    shared_chars = await svc.get_universe_shared_characters(universe_id)
+
+    chapter_reads: list[UniverseTimelineChapterRead] = []
+    for ch in chapters:
+        project = await session.get(Project, ch.project_id)
+        if project is None:
+            continue
+        char_count_res = await session.execute(
+            select(func.count()).select_from(Character).where(Character.project_id == project.id)
+        )
+        shot_count_res = await session.execute(
+            select(func.count()).select_from(Shot).where(Shot.project_id == project.id)
+        )
+        chapter_reads.append(
+            UniverseTimelineChapterRead(
+                project_id=project.id if project.id is not None else 0,
+                chapter_number=ch.chapter_number or project.chapter_number,
+                chapter_title=ch.chapter_title or project.chapter_title,
+                title=project.title,
+                summary=project.summary,
+                status=project.status,
+                is_main_story=ch.is_main_story,
+                is_current=bool(
+                    current_project_id is not None and project.id == current_project_id
+                ),
+                character_count=int(char_count_res.scalar() or 0),
+                shot_count=int(shot_count_res.scalar() or 0),
+                has_video=bool(project.video_url),
+                style=project.style,
+            )
+        )
+
+    return UniverseTimelineRead(
+        universe_id=universe.id if universe.id is not None else 0,
+        universe_name=universe.name,
+        world_setting=universe.world_setting,
+        style_rules=universe.style_rules,
+        chapters=chapter_reads,
+        shared_character_count=len(shared_chars),
+        shared_characters=[_shared_character_read(sc) for sc in shared_chars],
+    )
 
 
 @router.put("/{universe_id}", response_model=UniverseRead)

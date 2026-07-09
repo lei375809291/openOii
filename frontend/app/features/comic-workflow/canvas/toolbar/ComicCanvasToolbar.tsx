@@ -9,7 +9,7 @@ import {
 	MagnifyingGlassPlusIcon,
 	Squares2X2Icon,
 } from "@heroicons/react/24/outline";
-import { exportApi, getStaticUrl } from "~/services/api";
+import { exportApi, getStaticUrl, projectsApi } from "~/services/api";
 import { toast } from "~/utils/toast";
 import type { ExportResponse } from "~/types";
 
@@ -19,6 +19,7 @@ interface ComicCanvasToolbarProps {
 	sortMode?: boolean;
 	sortDisabled?: boolean;
 	onToggleSortMode?: () => void;
+	fillDisabled?: boolean;
 }
 
 export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
@@ -27,11 +28,13 @@ export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
 	sortMode = false,
 	sortDisabled = false,
 	onToggleSortMode,
+	fillDisabled = false,
 }: ComicCanvasToolbarProps) {
 	const editor = useEditor();
 	const currentTool = editor.getCurrentToolId();
 	const zoomPercent = Math.round(editor.getZoomLevel() * 100);
 	const [exporting, setExporting] = useState(false);
+	const [filling, setFilling] = useState(false);
 
 	const handleZoomIn = useCallback(() => {
 		editor.zoomIn(editor.getViewportScreenCenter(), {
@@ -63,6 +66,28 @@ export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
 			return pollExportStatus(exportId);
 		},
 		[projectId],
+	);
+
+	const handleFillEmpty = useCallback(
+		async (type: "image" | "video") => {
+			if (fillDisabled || filling) return;
+			setFilling(true);
+			try {
+				await projectsApi.fillEmptyShots(projectId, type);
+				toast.success({
+					title: type === "image" ? "补齐空格 · 首帧" : "补齐空格 · 视频",
+					message: "已启动，仅生成缺少产物的分镜格",
+				});
+			} catch (error) {
+				toast.error({
+					title: "补齐失败",
+					message: error instanceof Error ? error.message : "请稍后重试",
+				});
+			} finally {
+				setFilling(false);
+			}
+		},
+		[fillDisabled, filling, projectId],
 	);
 
 	const handleExportWebtoon = useCallback(
@@ -174,6 +199,15 @@ export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
 					<span className="font-mono text-[10px] font-bold">3×N</span>
 				</ToolButton>
 			) : null}
+			<ToolButton
+				disabled={fillDisabled || filling}
+				label="补齐空格 · 首帧"
+				showLabel
+				labelText={filling ? "补齐中" : "补齐"}
+				onClick={() => handleFillEmpty("image")}
+			>
+				<span className="font-mono text-[10px] font-bold">空</span>
+			</ToolButton>
 
 			<Divider />
 
