@@ -86,7 +86,6 @@ async def _project_read_model(project: Project, settings: Settings) -> ProjectRe
         chapter_number=project.chapter_number,
         chapter_title=project.chapter_title,
         skill_id=getattr(project, "skill_id", None),
-        reimagine_meta=getattr(project, "reimagine_meta", None),
     )
 
 
@@ -129,7 +128,6 @@ async def create_project(
         chapter_number=payload.chapter_number,
         chapter_title=payload.chapter_title,
         skill_id=skill_defaults["skill_id"],
-        reimagine_meta=payload.reimagine_meta,
     )
     session.add(project)
     await session.commit()

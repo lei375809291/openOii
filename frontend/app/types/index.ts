@@ -32,7 +32,6 @@ export interface ProjectProviderOverridesPayload {
 
 export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
 	skill_id?: string | null;
-	reimagine_meta?: Record<string, unknown> | null;
 	title: string;
 	story?: string;
 	style?: string;
@@ -62,6 +61,7 @@ export type UpdateProjectPayload = Partial<
 			| "universe_id"
 			| "chapter_number"
 			| "chapter_title"
+			| "skill_id"
 	> &
 		ProjectProviderOverridesPayload
 >;
@@ -119,7 +119,6 @@ export interface Project {
 	chapter_number?: number | null;
 	chapter_title?: string | null;
 	skill_id?: string | null;
-	reimagine_meta?: Record<string, unknown> | null;
 }
 
 export interface Character {
@@ -540,10 +539,49 @@ export interface ProjectUpdatedPayload {
 	universe_id?: number | null;
 	chapter_number?: number | null;
 	chapter_title?: string | null;
+	skill_id?: string | null;
 	story_outline?: StoryOutline | null;
 	visual_bible?: string | null;
 	outline_approved?: boolean | null;
 	blocking_clips?: BlockingClip[] | null;
+}
+
+export interface DataClearedEventData {
+	cleared_types: string[];
+	start_agent?: string | null;
+	mode?: string | null;
+}
+
+export interface UniverseTimelineChapter {
+	project_id: number;
+	chapter_number: number | null;
+	chapter_title: string | null;
+	title: string;
+	summary: string | null;
+	status: string;
+	is_main_story: boolean;
+	is_current: boolean;
+	character_count: number;
+	shot_count: number;
+	has_video: boolean;
+	style: string | null;
+}
+
+export interface UniverseTimelineRead {
+	universe_id: number;
+	universe_name: string;
+	world_setting: string | null;
+	style_rules: string | null;
+	shared_character_count: number;
+	chapters: UniverseTimelineChapter[];
+	shared_characters?: SharedCharacterRead[];
+}
+
+export interface ImportSharedCastRead {
+	project_id: number;
+	imported_count: number;
+	imported: ImportedCharacterRead[];
+	skipped_existing: number;
 }
 
 export interface Message {
@@ -583,6 +621,7 @@ export interface ConfigItem {
 export const AGENT_NAME_MAP: Record<string, string> = {
 	outline: "大纲",
 	plan: "规划",
+	render: "渲染",
 	character: "角色",
 	shot: "分镜",
 	compose: "合成",

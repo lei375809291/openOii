@@ -108,6 +108,9 @@ class RunCancelledEventData(BaseModel):
 
 class DataClearedEventData(BaseModel):
     cleared_types: list[str] = Field(default_factory=list)
+    # Present on full re-plan wipes; optional on incremental media clear
+    start_agent: str | None = None
+    mode: str | None = None
 
 
 class ErrorEventData(BaseModel):
@@ -206,6 +209,7 @@ class ProjectUpdatedPayload(BaseModel):
     universe_id: int | None = None
     chapter_number: int | None = None
     chapter_title: str | None = None
+    skill_id: str | None = None
     story_outline: StoryOutlineRead | None = None
     visual_bible: str | None = None
     outline_approved: bool | None = None

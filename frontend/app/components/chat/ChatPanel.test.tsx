@@ -51,6 +51,16 @@ vi.mock("./MessageList", () => ({
 	MessageList: () => <div data-testid="message-list" />,
 }));
 
+const toastInfo = vi.fn();
+vi.mock("~/utils/toast", () => ({
+	toast: {
+		info: (...args: unknown[]) => toastInfo(...args),
+		error: vi.fn(),
+		success: vi.fn(),
+		warning: vi.fn(),
+	},
+}));
+
 function renderChatPanel(isGenerating = false) {
 	return render(
 		<ChatPanel
@@ -178,6 +188,7 @@ describe("ChatPanel", () => {
 		const user = userEvent.setup();
 		storeState.currentRunId = 99;
 		storeState.awaitingConfirm = false;
+		toastInfo.mockClear();
 
 		renderChatPanel(true);
 
@@ -186,6 +197,7 @@ describe("ChatPanel", () => {
 
 		expect(onConfirm).not.toHaveBeenCalled();
 		expect(onSendFeedback).not.toHaveBeenCalled();
+		expect(toastInfo).toHaveBeenCalled();
 	});
 
 	it("shows render stage icon when currentStage is render", () => {

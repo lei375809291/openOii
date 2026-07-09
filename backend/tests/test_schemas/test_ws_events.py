@@ -307,6 +307,17 @@ class TestRunCancelledEventData:
 
 
 class TestDataClearedEventData:
+    def test_keeps_start_agent_and_mode(self):
+        d = DataClearedEventData.model_validate(
+            {
+                "cleared_types": ["shots"],
+                "start_agent": "render",
+                "mode": "incremental",
+            }
+        )
+        assert d.start_agent == "render"
+        assert d.mode == "incremental"
+
     def test_with_cleared_types(self):
         d = DataClearedEventData.model_validate(
             {

@@ -1243,4 +1243,5 @@ class GenerationOrchestrator:
             auto_mode=skill.auto_mode,
             entity_type=request.entity_type,
             entity_id=request.entity_id,
+            entity_ids=getattr(request, "entity_ids", None),
         )

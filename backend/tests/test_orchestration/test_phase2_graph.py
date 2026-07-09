@@ -511,9 +511,9 @@ async def test_review_node_routes_to_plan_and_cleans_up(monkeypatch):
 
     cleaned = {"called": False}
 
-    async def fake_cleanup(project_id, start_agent, mode="full"):
+    async def fake_cleanup(project_id, start_agent, mode="full", target_ids=None):
         cleaned["called"] = True
-        cleaned["args"] = (project_id, start_agent, mode)
+        cleaned["args"] = (project_id, start_agent, mode, target_ids)
 
     monkeypatch.setattr(orchestrator, "_cleanup_for_rerun", fake_cleanup)
 
@@ -525,6 +525,6 @@ async def test_review_node_routes_to_plan_and_cleans_up(monkeypatch):
     state = await review_node({"approval_feedback": "need shorter"}, runtime)
 
     assert cleaned["called"] is True
-    assert cleaned["args"] == (1, "plan", "incremental")
+    assert cleaned["args"][0:3] == (1, "plan", "incremental")
     assert state["route_stage"] == "plan_characters"
     assert state["route_mode"] == "incremental"

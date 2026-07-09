@@ -268,6 +268,7 @@ export const projectsApi = {
 			skill_id?: string;
 			entity_type?: string;
 			entity_id?: number;
+			entity_ids?: number[];
 		},
 	) =>
 		fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
@@ -701,14 +702,10 @@ export const universesApi = {
 		),
 
 	importSharedCast: (projectId: number) =>
-		fetchApi<{
-			project_id: number;
-			imported_count: number;
-			imported: Array<{ id: number; name: string; project_id: number }>;
-			skipped_existing: number;
-		}>(`/api/v1/universes/projects/${projectId}/import-shared-cast`, {
-			method: "POST",
-		}),
+		fetchApi<import("~/types").ImportSharedCastRead>(
+			`/api/v1/universes/projects/${projectId}/import-shared-cast`,
+			{ method: "POST" },
+		),
 
 	syncCharacter: (characterId: number) =>
 		fetchApi<import("~/types").SharedCharacterRead>(
@@ -739,26 +736,8 @@ export const universesApi = {
 			currentProjectId != null
 				? `?current_project_id=${currentProjectId}`
 				: "";
-		return fetchApi<{
-			universe_id: number;
-			universe_name: string;
-			world_setting: string | null;
-			style_rules: string | null;
-			shared_character_count: number;
-			chapters: Array<{
-				project_id: number;
-				chapter_number: number | null;
-				chapter_title: string | null;
-				title: string;
-				summary: string | null;
-				status: string;
-				is_main_story: boolean;
-				is_current: boolean;
-				character_count: number;
-				shot_count: number;
-				has_video: boolean;
-				style: string | null;
-			}>;
-		}>(`/api/v1/universes/${universeId}/timeline${q}`);
+		return fetchApi<import("~/types").UniverseTimelineRead>(
+			`/api/v1/universes/${universeId}/timeline${q}`,
+		);
 	},
 };

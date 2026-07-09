@@ -98,7 +98,6 @@ class ProjectCreate(BaseModel):
     chapter_number: int | None = None
     chapter_title: str | None = None
     skill_id: str | None = None
-    reimagine_meta: dict | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -118,7 +117,6 @@ class ProjectUpdate(BaseModel):
     chapter_number: int | None = None
     chapter_title: str | None = None
     skill_id: str | None = None
-    reimagine_meta: dict | None = None
 
 
 class ProjectBatchDeleteRequest(BaseModel):
@@ -150,7 +148,6 @@ class ProjectRead(BaseModel):
     chapter_number: int | None = None
     chapter_title: str | None = None
     skill_id: str | None = None
-    reimagine_meta: dict | None = None
 
 
 class ProjectListRead(BaseModel):
@@ -289,6 +286,7 @@ class GenerateRequest(BaseModel):
     # Optional selection focus for partial re-runs (mirrors FeedbackRequest)
     entity_type: str | None = None
     entity_id: int | None = None
+    entity_ids: list[int] | None = None
 
 
 class ResumeRequest(BaseModel):

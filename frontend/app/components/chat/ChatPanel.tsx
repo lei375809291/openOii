@@ -16,6 +16,7 @@ import {
   AdjustmentsHorizontalIcon,
 } from "@heroicons/react/24/outline";
 import { getWorkflowStageInfo } from "~/utils/workflowStage";
+import { toast } from "~/utils/toast";
 
 interface ChatPanelProps {
   onSendFeedback: (content: string) => void;
@@ -93,6 +94,10 @@ export function ChatPanel({
     }
     if (isGenerating || currentRunId) {
       // Active run without a gate: wait for 通过 / stop first, then feedback.
+      toast.info({
+        title: "请稍候",
+        message: "当前阶段进行中；待审阅确认后再反馈，或先停止任务。",
+      });
       return;
     }
     onSendFeedback(input);
