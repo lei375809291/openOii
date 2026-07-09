@@ -13,6 +13,8 @@ interface SkillWallProps {
 	onSelect: (skill: SkillPreset) => void;
 	/** Optional externally-resolved catalog (Home may pass shared list) */
 	skills?: SkillPreset[];
+	/** Embedded in create desk: denser chips, no big section chrome */
+	embedded?: boolean;
 }
 
 const ACCENT_BAR: Record<SkillPreset["accent"], string> = {
@@ -35,7 +37,12 @@ function badgeLabel(badge: SkillBadge): string {
 	return "预览";
 }
 
-export function SkillWall({ activeSkillId, onSelect, skills }: SkillWallProps) {
+export function SkillWall({
+	activeSkillId,
+	onSelect,
+	skills,
+	embedded = false,
+}: SkillWallProps) {
 	const { data: apiSkills } = useQuery({
 		queryKey: ["skills"],
 		queryFn: () => skillsApi.list(),
@@ -52,22 +59,40 @@ export function SkillWall({ activeSkillId, onSelect, skills }: SkillWallProps) {
 	return (
 		<section
 			aria-labelledby="skill-wall-heading"
-			className="w-full"
+			className={clsx("w-full", embedded && "min-w-0")}
 			data-shell="skill-wall"
+			data-embedded={embedded ? "true" : undefined}
 		>
-			<div className="mb-[var(--space-2)] flex items-baseline justify-between gap-2">
+			<div
+				className={clsx(
+					"flex items-baseline justify-between gap-2",
+					embedded ? "mb-1.5" : "mb-[var(--space-2)]",
+				)}
+			>
 				<h2
 					id="skill-wall-heading"
-					className="m-0 font-heading text-[length:var(--text-md)] font-bold leading-[var(--leading-tight)] tracking-tight text-pretty"
+					className={clsx(
+						"m-0 font-heading font-bold leading-[var(--leading-tight)] tracking-tight text-pretty",
+						embedded
+							? "text-[length:var(--text-xs)] text-base-content/70"
+							: "text-[length:var(--text-md)]",
+					)}
 				>
-					Skill · 点选开工
+					{embedded ? "工作流" : "Skill · 点选开工"}
 				</h2>
 				<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/40">
 					{catalog.length} 项
 				</span>
 			</div>
 
-			<ul className="m-0 grid list-none grid-cols-2 gap-[var(--space-2)] p-0 sm:grid-cols-3 lg:grid-cols-4">
+			<ul
+				className={clsx(
+					"m-0 grid list-none p-0",
+					embedded
+						? "grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-4"
+						: "grid-cols-2 gap-[var(--space-2)] sm:grid-cols-3 lg:grid-cols-4",
+				)}
+			>
 				{catalog.map((skill) => {
 					const active = activeSkillId === skill.id;
 					return (
@@ -77,26 +102,38 @@ export function SkillWall({ activeSkillId, onSelect, skills }: SkillWallProps) {
 								onClick={() => onSelect(skill)}
 								aria-pressed={active}
 								className={clsx(
-									"group flex h-full min-h-[var(--touch-target-dense)] w-full flex-col rounded-[var(--radius-md)] border-2 bg-base-100 p-[var(--space-2)] text-left",
+									"group flex h-full w-full flex-col rounded-[var(--radius-md)] border-2 bg-base-100 text-left",
 									"transition-[border-color,box-shadow,transform] duration-[var(--duration-fast)]",
 									"hover:-translate-y-px hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+									embedded
+										? "min-h-[var(--touch-target-dense)] p-1.5"
+										: "min-h-[var(--touch-target-dense)] p-[var(--space-2)]",
 									active
 										? clsx(ACCENT_RING[skill.accent], "shadow-brutal-sm")
 										: "border-base-content/10",
 								)}
 							>
-								<span
-									className={clsx(
-										"mb-1 block h-0.5 w-6 rounded-full",
-										ACCENT_BAR[skill.accent],
-									)}
-									aria-hidden="true"
-								/>
+								{!embedded ? (
+									<span
+										className={clsx(
+											"mb-1 block h-0.5 w-6 rounded-full",
+											ACCENT_BAR[skill.accent],
+										)}
+										aria-hidden="true"
+									/>
+								) : null}
 								<div className="flex items-start justify-between gap-1">
-									<h3 className="m-0 font-heading text-[length:var(--text-sm)] font-bold leading-snug">
+									<h3
+										className={clsx(
+											"m-0 font-heading font-bold leading-snug",
+											embedded
+												? "text-[length:var(--text-2xs)] sm:text-[length:var(--text-xs)]"
+												: "text-[length:var(--text-sm)]",
+										)}
+									>
 										{skill.title}
 									</h3>
-									{skill.badge ? (
+									{skill.badge && !embedded ? (
 										<span
 											className={clsx(
 												"shrink-0 rounded px-1 font-mono text-[length:var(--text-2xs)] font-bold uppercase leading-4",
@@ -109,9 +146,11 @@ export function SkillWall({ activeSkillId, onSelect, skills }: SkillWallProps) {
 										</span>
 									) : null}
 								</div>
-								<p className="m-0 mt-1 line-clamp-2 text-[length:var(--text-2xs)] leading-snug text-base-content/55">
-									{skill.description}
-								</p>
+								{!embedded ? (
+									<p className="m-0 mt-1 line-clamp-2 text-[length:var(--text-2xs)] leading-snug text-base-content/55">
+										{skill.description}
+									</p>
+								) : null}
 							</button>
 						</li>
 					);

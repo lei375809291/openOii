@@ -365,10 +365,6 @@ export function HomePage() {
 		}
 	};
 
-	const hour = new Date().getHours();
-	const greeting =
-		hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
-
 	const navChip =
 		"touch-target-dense inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-2 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)] hover:bg-base-200";
 	const settingChip = (active: boolean) =>
@@ -406,16 +402,7 @@ export function HomePage() {
 			)}
 			<PageBody className="workbench-surface px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)] sm:py-[var(--space-4)]">
 				<div className="mx-auto flex w-full max-w-6xl flex-col gap-[var(--space-3)]">
-					<header className="flex flex-wrap items-center justify-between gap-2">
-						<div className="min-w-0">
-							{/* One display face (Bangers) per screen */}
-							<h1 className="m-0 font-comic text-[length:var(--text-display)] leading-none tracking-wide text-primary text-pretty">
-								{greeting}，导演
-							</h1>
-							<p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/60">
-								Skill 开工 · 或直接写故事
-							</p>
-						</div>
+					<header className="flex flex-wrap items-center justify-end gap-2">
 						<nav className="flex flex-wrap gap-1" aria-label="首页入口">
 							<button
 								type="button"
@@ -448,8 +435,6 @@ export function HomePage() {
 							</Link>
 						</nav>
 					</header>
-
-					<SkillWall activeSkillId={activeSkillId} onSelect={handleSkillSelect} />
 
 					{reimagineOpen ? (
 						<Card className="card-comic w-full overflow-hidden !p-0" data-shell="reimagine">
@@ -588,14 +573,26 @@ export function HomePage() {
 						data-shell="create-desk"
 					>
 						<div className="flex flex-wrap items-center justify-between gap-2 border-b border-base-content/10 bg-base-200/30 px-[var(--space-3)] py-1.5">
-							<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
-								创作台
-							</h2>
+							<div className="min-w-0">
+								<h1 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
+									创作台
+								</h1>
+								<p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
+									选工作流，写一句话开工
+								</p>
+							</div>
 							{activeSkillId ? (
 								<span className="rounded border border-primary/25 bg-primary/10 px-1.5 py-px font-mono text-[length:var(--text-2xs)] font-bold text-primary">
 									{activeSkillId}
 								</span>
 							) : null}
+						</div>
+						<div className="border-b border-base-content/10 bg-base-100/60 px-[var(--space-3)] py-2">
+							<SkillWall
+								embedded
+								activeSkillId={activeSkillId}
+								onSelect={handleSkillSelect}
+							/>
 						</div>
 						<div className="grid lg:grid-cols-[minmax(0,1fr)_14rem]">
 							<section className="min-w-0 p-[var(--space-3)]">

@@ -69,9 +69,9 @@ describe("HomePage", () => {
 
   it("renders title and textarea", () => {
     renderHomePage();
-    expect(screen.getByText(/导演/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "创作台" })).toBeInTheDocument();
     expect(screen.getByLabelText("输入你的故事创意")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Skill/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "工作流" })).toBeInTheDocument();
   });
 
   it("applies skill preset to creation form", async () => {
