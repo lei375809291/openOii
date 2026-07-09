@@ -29,18 +29,19 @@ export function ChatDrawer({
 	if (!isOpen) return null;
 
 	return (
-		<div className="flex-shrink-0 w-[360px] flex flex-col bg-base-100 border-l border-base-300 h-full">
-			<div className="flex items-center justify-end px-2 py-1.5 border-b border-base-300">
+		<div className="flex h-full w-[var(--workbench-sidebar)] shrink-0 flex-col border-l border-base-content/12 bg-base-100">
+			<div className="flex items-center justify-end border-b border-base-content/10 px-1.5 py-1">
 				<button
-					className="btn btn-xs btn-circle btn-ghost"
+					type="button"
+					className="btn btn-ghost btn-circle touch-target-dense h-7 min-h-7 w-7"
 					onClick={close}
 					aria-label="关闭对话面板"
 				>
-					<XMarkIcon className="w-4 h-4" />
+					<XMarkIcon className="h-3.5 w-3.5" />
 				</button>
 			</div>
 
-			<div className="flex-1 overflow-hidden">
+			<div className="min-h-0 flex-1 overflow-hidden">
 				<ChatPanel
 					onSendFeedback={onSendFeedback}
 					onConfirm={onConfirm}

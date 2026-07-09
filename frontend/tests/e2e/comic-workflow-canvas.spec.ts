@@ -240,7 +240,7 @@ test("comic workflow canvas supports core review interactions", async ({ page })
 
 	await expect(page.getByRole("heading", { name: "Brief" })).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Elements" })).toBeVisible();
-	await expect(page.getByRole("heading", { name: "Shotline" })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "九宫格分镜" })).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Output" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "一致性评估" })).toHaveCount(0);
 

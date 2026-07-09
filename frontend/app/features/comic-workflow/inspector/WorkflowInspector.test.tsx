@@ -58,7 +58,7 @@ describe("WorkflowInspector", () => {
 			/>,
 		);
 
-		expect(screen.getByText("选择一个画布卡片查看细节")).toBeInTheDocument();
+		expect(screen.getByText("选择画布卡片查看细节")).toBeInTheDocument();
 	});
 
 	it("locks write actions while generation is active", async () => {

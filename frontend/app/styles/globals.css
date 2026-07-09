@@ -5,8 +5,23 @@
 @tailwind utilities;
 
 @layer base {
+  /* App shell: lock document scroll; pages own internal scroll panes */
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
-    @apply bg-base-100 text-base-content min-h-screen font-sans;
+    @apply bg-base-100 text-base-content h-full overflow-hidden font-sans;
+    /* iOS safe area without growing past viewport */
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  #root {
+    height: 100%;
+    max-height: 100dvh;
+    overflow: hidden;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -158,6 +173,29 @@
   }
   [data-theme="doodle-dark"] .halftone-bg-accent {
     background-image: radial-gradient(circle, oklch(var(--p) / 0.3) 1.2px, transparent 1.2px);
+  }
+
+  /* Comic Workbench: paper surface for director desk pages */
+  .workbench-surface {
+    background-color: oklch(var(--b1));
+    background-image:
+      radial-gradient(circle, oklch(var(--p) / 0.12) 1.1px, transparent 1.1px),
+      linear-gradient(180deg, oklch(var(--b2) / 0.35) 0%, transparent 28%);
+    background-size: 7px 7px, 100% 100%;
+  }
+  [data-theme="doodle-dark"] .workbench-surface {
+    background-image:
+      radial-gradient(circle, oklch(var(--p) / 0.22) 1.1px, transparent 1.1px),
+      linear-gradient(180deg, oklch(var(--b2) / 0.45) 0%, transparent 32%);
+    background-size: 7px 7px, 100% 100%;
+  }
+
+  .workbench-canvas-frame {
+    background-image: radial-gradient(circle, oklch(var(--bc) / 0.06) 1px, transparent 1px);
+    background-size: 12px 12px;
+  }
+  [data-theme="doodle-dark"] .workbench-canvas-frame {
+    background-image: radial-gradient(circle, oklch(var(--bc) / 0.14) 1px, transparent 1px);
   }
 
   .speech-bubble {

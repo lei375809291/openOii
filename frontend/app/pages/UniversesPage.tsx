@@ -11,6 +11,7 @@ import { GlobeAltIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
 import type { Universe } from "~/types";
 import { Link } from "react-router-dom";
+import { PageBody, PageShell } from "~/components/layout/PageShell";
 
 export function UniversesPage() {
 	const queryClient = useQueryClient();
@@ -76,75 +77,82 @@ export function UniversesPage() {
 	};
 
 	return (
-		<div className="min-h-screen bg-base-100 font-sans">
-			<header className="navbar bg-base-200 border-b border-base-300">
+		<PageShell data-shell="universes-list">
+			<header className="chrome-row z-[var(--z-fixed)] gap-2 border-b border-base-content/12 bg-base-200 px-2 sm:px-3">
 				<div className="flex-1">
-					<Link to="/" className="btn btn-ghost">
+					<Link to="/" className="btn btn-ghost btn-sm touch-target-dense h-8 min-h-8">
 						← 返回首页
 					</Link>
 				</div>
-				<div className="font-comic text-lg text-base-content font-bold tracking-wider">
-					<span className="inline-flex items-center gap-2">
-						<GlobeAltIcon className="w-5 h-5" aria-hidden="true" />
+				<div className="font-comic text-base font-bold tracking-wider text-base-content">
+					<span className="inline-flex items-center gap-1.5">
+						<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />
 						IP 宇宙
 					</span>
 				</div>
-				<div className="flex-1" />
-			</header>
-
-			<main className="container mx-auto px-4 py-8 max-w-6xl">
-				{/* Header */}
-				<div className="flex items-center justify-between mb-8">
-					<div>
-						<h1 className="text-3xl font-heading font-bold underline-sketch">
-							IP 宇宙
-						</h1>
-						<p className="text-sm text-base-content/70 mt-1">
-							管理跨项目的共享世界观和角色库
-						</p>
-					</div>
-					<Button onClick={() => setShowCreate(true)}>
-						<PlusIcon className="w-4 h-4 mr-1" />
-						创建宇宙
+				<div className="flex flex-1 justify-end">
+					<Button
+						size="sm"
+						className="h-8 min-h-8 gap-1 px-2"
+						onClick={() => setShowCreate(true)}
+					>
+						<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+						创建
 					</Button>
 				</div>
+			</header>
 
-				{/* Loading */}
+			<PageBody className="mx-auto w-full max-w-6xl px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]">
+				<div className="mb-3 flex items-end justify-between gap-2">
+					<div className="min-w-0">
+						<h1 className="m-0 font-heading text-[length:var(--text-xl)] font-bold leading-tight">
+							IP 宇宙
+						</h1>
+						<p className="m-0 mt-0.5 text-[length:var(--text-sm)] text-base-content/60">
+							跨项目世界观与角色库
+						</p>
+					</div>
+					<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/40">
+						{isLoading ? "…" : `${universes.length} 个`}
+					</span>
+				</div>
+
 				{isLoading && (
-					<div className="flex items-center justify-center py-20">
-						<span className="loading loading-spinner loading-lg text-primary" />
+					<div className="flex items-center justify-center py-12">
+						<span
+							className="loading loading-spinner loading-md text-primary"
+							aria-label="加载中"
+						/>
 					</div>
 				)}
 
-				{/* Empty state */}
 				{!isLoading && universes.length === 0 && (
-					<Card className="text-center py-16">
+					<Card className="py-10 text-center">
 						<GlobeAltIcon
-							className="w-16 h-16 mx-auto mb-4 text-primary/70"
+							className="mx-auto mb-3 h-10 w-10 text-primary/70"
 							aria-hidden="true"
 						/>
-						<h2 className="text-xl font-heading font-bold mb-2">
+						<h2 className="mb-1 font-heading text-[length:var(--text-lg)] font-bold">
 							还没有 IP 宇宙
 						</h2>
-						<p className="text-sm text-base-content/70 mb-6">
-							创建你的第一个 IP 宇宙，开始构建跨项目的故事世界
+						<p className="mb-4 text-[length:var(--text-sm)] text-base-content/60">
+							创建第一个宇宙，开始跨项目故事
 						</p>
-						<Button onClick={() => setShowCreate(true)}>
-							<PlusIcon className="w-4 h-4 mr-1" />
+						<Button size="sm" onClick={() => setShowCreate(true)}>
+							<PlusIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
 							创建第一个宇宙
 						</Button>
 					</Card>
 				)}
 
-				{/* Universe grid */}
 				{!isLoading && universes.length > 0 && (
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+					<div className="grid grid-cols-1 gap-[var(--space-3)] sm:grid-cols-2 lg:grid-cols-3">
 						{universes.map((u) => (
 							<UniverseCard key={u.id} universe={u} onDelete={setDeleteTarget} />
 						))}
 					</div>
 				)}
-			</main>
+			</PageBody>
 
 			{/* Create modal */}
 			{showCreate && (
@@ -228,19 +236,19 @@ export function UniversesPage() {
 				</Modal>
 			)}
 
-		{/* Delete confirm modal */}
-		{deleteTarget && (
-			<ConfirmModal
-				isOpen={true}
-				onClose={() => setDeleteTarget(null)}
-				onConfirm={() => deleteMutation.mutate(deleteTarget.id)}
-				title="删除 IP 宇宙"
-				message={`确定要删除宇宙「${deleteTarget.name}」吗？此操作不可撤销。关联的项目将被保留但不再属于该宇宙。`}
-				confirmText="删除"
-				variant="danger"
-				isLoading={deleteMutation.isPending}
-			/>
-		)}
-		</div>
+			{/* Delete confirm modal */}
+			{deleteTarget && (
+				<ConfirmModal
+					isOpen={true}
+					onClose={() => setDeleteTarget(null)}
+					onConfirm={() => deleteMutation.mutate(deleteTarget.id)}
+					title="删除 IP 宇宙"
+					message={`确定要删除宇宙「${deleteTarget.name}」吗？此操作不可撤销。关联的项目将被保留但不再属于该宇宙。`}
+					confirmText="删除"
+					variant="danger"
+					isLoading={deleteMutation.isPending}
+				/>
+			)}
+		</PageShell>
 	);
 }

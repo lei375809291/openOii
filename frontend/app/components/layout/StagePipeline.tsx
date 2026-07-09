@@ -1,29 +1,15 @@
 import {
 	CheckIcon,
 	ExclamationTriangleIcon,
-	FilmIcon,
-	LightBulbIcon,
-	SparklesIcon,
-	CubeIcon,
 	ArrowPathIcon,
 	StopIcon,
-	UserIcon,
-	PaintBrushIcon,
+	SparklesIcon,
 	ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import type { WorkflowStage } from "~/types";
 import { STAGE_PIPELINE, getPipelineStageIndex } from "~/utils/pipeline";
 import { Button } from "~/components/ui/Button";
 import type { WorkbenchStatus } from "~/features/comic-workflow/state/deriveWorkbenchStatus";
-
-const STAGE_ICONS: Record<string, typeof LightBulbIcon> = {
-	bulb: LightBulbIcon,
-	sparkle: SparklesIcon,
-	film: FilmIcon,
-	cube: CubeIcon,
-	user: UserIcon,
-	palette: PaintBrushIcon,
-};
 
 interface StagePipelineProps {
 	currentStage: WorkflowStage;
@@ -39,16 +25,19 @@ interface StagePipelineProps {
 	generateDisabled?: boolean;
 }
 
-const WORKBENCH_STATUS_CLASSES: Record<WorkbenchStatus["state"], string> = {
-	idle: "border-base-content/15 bg-base-200 text-base-content/80",
-	generating: "border-warning/35 bg-warning/15 text-base-content",
-	awaitingConfirm: "border-info/40 bg-info/15 text-base-content",
-	recoverable: "border-warning/40 bg-warning/15 text-base-content",
-	cancelled: "border-base-content/15 bg-base-200 text-base-content/75",
-	ready: "border-success/40 bg-success/15 text-base-content",
-	superseded: "border-warning/40 bg-warning/15 text-base-content",
-	blocked: "border-error/40 bg-error/15 text-base-content",
+const STATUS_DOT: Record<WorkbenchStatus["state"], string> = {
+	idle: "bg-base-content/35",
+	generating: "bg-warning animate-pulse",
+	awaitingConfirm: "bg-info",
+	recoverable: "bg-warning",
+	cancelled: "bg-base-content/35",
+	ready: "bg-success",
+	superseded: "bg-warning",
+	blocked: "bg-error",
 };
+
+const chromeBtn =
+	"touch-target-dense !h-8 !min-h-8 gap-1 !px-2 text-xs transition-colors duration-[var(--duration-fast)]";
 
 export function StagePipeline({
 	currentStage,
@@ -66,144 +55,149 @@ export function StagePipeline({
 	const currentIndex = getPipelineStageIndex(currentStage);
 	const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
 	const generateLabel =
-		workbenchStatus.state === "idle" ? "开始生成" : "重新生成项目";
+		workbenchStatus.state === "idle" ? "开始生成" : "重新生成";
 
 	return (
-		<div className="z-20 flex min-h-[4rem] flex-shrink-0 flex-col gap-2 border-b border-base-content/10 bg-base-200/65 px-3 py-1.5 lg:min-h-12 lg:flex-row lg:items-center lg:gap-4">
+		<div
+			className="chrome-toolbar z-[var(--z-sticky)] gap-2 border-b border-base-content/10 bg-base-200/80 px-2 sm:gap-3 sm:px-3"
+			data-shell="stage-pipeline"
+		>
 			<span className="sr-only" aria-live="polite">
 				工作台状态：{workbenchStatus.label}
 			</span>
-			<div className="flex min-w-0 items-center gap-3">
+
+			<div
+				className="flex min-w-0 items-center gap-2"
+				title={workbenchStatus.description}
+			>
 				<span
-					className={`inline-flex h-8 shrink-0 items-center rounded-full border px-3 font-mono text-xs font-semibold tracking-wide ${WORKBENCH_STATUS_CLASSES[workbenchStatus.state]}`}
-					title={workbenchStatus.description}
-				>
+					className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[workbenchStatus.state]}`}
+					aria-hidden="true"
+				/>
+				<span className="hidden max-w-[5.5rem] truncate font-mono text-[length:var(--text-2xs)] font-semibold tabular-nums text-base-content/75 sm:inline">
 					{workbenchStatus.label}
 				</span>
-				<div className="flex min-w-[7.5rem] flex-1 items-center gap-2 sm:max-w-[14rem] lg:flex-none">
+				<div
+					className="h-1 w-14 overflow-hidden rounded-full bg-base-content/10 sm:w-20"
+					role="progressbar"
+					aria-label="生成进度"
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-valuenow={progressPercent}
+				>
 					<div
-						className="h-2 flex-1 overflow-hidden rounded-full bg-base-content/10"
-						role="progressbar"
-						aria-label="生成进度"
-						aria-valuemin={0}
-						aria-valuemax={100}
-						aria-valuenow={progressPercent}
-					>
-						<div
-							className="h-full rounded-full bg-primary transition-[width] duration-200"
-							style={{ width: `${progressPercent}%` }}
-						/>
-					</div>
-					<span className="w-10 text-right font-mono text-xs text-base-content/80">
-						{progressPercent}%
-					</span>
+						className="h-full rounded-full bg-primary transition-[width] duration-[var(--duration-normal)]"
+						style={{ width: `${progressPercent}%` }}
+					/>
 				</div>
+				<span className="w-8 font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/70">
+					{progressPercent}%
+				</span>
 			</div>
 
-			<div className="flex min-w-0 flex-1 items-center gap-3">
-				<nav
-					className="flex min-w-0 flex-1 items-center overflow-x-auto pb-1 lg:justify-center lg:overflow-visible lg:pb-0"
-					aria-label="Pipeline stages"
-				>
-					{STAGE_PIPELINE.map((stage, index) => {
-						const isCurrent = stage.key === currentStage;
-						const isPast = index < currentIndex;
-						const isGeneratingHere = isCurrent && isGenerating;
-						const isAwaiting = isCurrent && awaitingConfirm;
-						const isRecoveryPoint = isCurrent && hasRecovery;
-						const IconComponent = STAGE_ICONS[stage.icon];
+			<nav
+				className="flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto"
+				aria-label="生成阶段"
+			>
+				{STAGE_PIPELINE.map((stage, index) => {
+					const past = currentIndex >= 0 && index < currentIndex;
+					const current = currentIndex === index;
 
-						let dotClass = "bg-base-content/20 border-base-content/20";
-						if (isPast) dotClass = "bg-success border-success/50";
-						if (isCurrent) dotClass = "bg-primary border-primary/50";
-						if (isGeneratingHere) dotClass = "bg-warning border-warning/50 animate-pulse";
-						if (isAwaiting) dotClass = "bg-info border-info/50";
-
-						return (
-							<div key={stage.key} className="flex shrink-0 items-center">
-								<div
-									className={`flex h-9 items-center gap-1.5 rounded-lg px-2.5 transition-colors duration-150 ${
-										isCurrent ? "bg-primary/10 border-2 border-primary/25" : "border-2 border-transparent"
-									}`}
-									aria-current={isCurrent ? "step" : undefined}
-								>
-									<div className={`w-3 h-3 rounded-full border-2 ${dotClass}`} />
-									<IconComponent className={`w-3.5 h-3.5 ${isPast ? "text-base-content/75" : isCurrent ? "text-base-content" : "text-base-content/70"}`} />
-									<span className={`text-xs font-heading font-bold uppercase tracking-wide ${isPast ? "text-base-content/80" : isCurrent ? "text-base-content" : "text-base-content/75"}`}>
-										{stage.label}
-									</span>
-									{isPast && <CheckIcon className="w-2.5 h-2.5 text-success" />}
-									{isRecoveryPoint && !isGenerating && (
-										<ExclamationTriangleIcon className="w-2.5 h-2.5 text-warning" />
-									)}
-								</div>
-								{index < STAGE_PIPELINE.length - 1 && (
-									<div className={`w-5 h-[3px] mx-1 rounded-full ${index < currentIndex ? "bg-success/70" : "bg-base-content/12"}`} />
-								)}
-							</div>
-						);
-					})}
-				</nav>
-
-				<div className="flex shrink-0 items-center gap-2">
-					{hasRecovery && !isGenerating ? (
-						<>
-							<Button
-								variant="primary"
-								size="sm"
-								className="gap-1 border-2 shadow-brutal-sm"
-								onClick={onResume}
+					return (
+						<div key={stage.key} className="flex shrink-0 items-center">
+							<span
+								className={`inline-flex h-7 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[length:var(--text-2xs)] font-bold uppercase tracking-wide ${
+									current
+										? "bg-primary text-primary-content"
+										: past
+											? "text-base-content/70"
+											: "text-base-content/40"
+								}`}
+								aria-current={current ? "step" : undefined}
 							>
-								<ArrowPathIcon className="h-4 w-4" />
-								恢复
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="gap-1"
-								onClick={onCancel}
-								aria-label="停止当前任务"
-							>
-								<StopIcon className="h-4 w-4" />
-							</Button>
-						</>
-					) : null}
-					{isGenerating ? (
+								{past ? (
+									<CheckIcon className="h-3 w-3" aria-hidden="true" />
+								) : null}
+								{stage.label}
+								{current && hasRecovery && !isGenerating ? (
+									<ExclamationTriangleIcon
+										className="h-3 w-3 text-warning-content"
+										aria-hidden="true"
+									/>
+								) : null}
+							</span>
+							{index < STAGE_PIPELINE.length - 1 ? (
+								<span
+									className={`mx-0.5 h-px w-3 ${past ? "bg-success/60" : "bg-base-content/15"}`}
+									aria-hidden="true"
+								/>
+							) : null}
+						</div>
+					);
+				})}
+			</nav>
+
+			<div className="flex shrink-0 items-center gap-1">
+				{hasRecovery && !isGenerating ? (
+					<>
+						<Button
+							variant="primary"
+							size="sm"
+							className={chromeBtn}
+							onClick={onResume}
+						>
+							<ArrowPathIcon className="h-3.5 w-3.5" aria-hidden="true" />
+							恢复
+						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
-							className="gap-1 text-error"
+							className={chromeBtn}
 							onClick={onCancel}
+							aria-label="停止当前任务"
 						>
-							<StopIcon className="h-4 w-4" />
-							停止
+							<StopIcon className="h-3.5 w-3.5" aria-hidden="true" />
 						</Button>
-					) : null}
-					{awaitingConfirm && onToggleChat ? (
-						<Button
-							variant="primary"
-							size="sm"
-							className="gap-1"
-							onClick={onToggleChat}
-							aria-label="打开对话面板"
-						>
-							<ChatBubbleLeftRightIcon className="h-4 w-4" />
-							去确认
-						</Button>
-					) : null}
-					{!isGenerating && !hasRecovery && !awaitingConfirm && onGenerate ? (
-						<Button
-							variant="primary"
-							size="sm"
-							className="gap-1"
-							onClick={onGenerate}
-							disabled={generateDisabled}
-						>
-							<SparklesIcon className="h-4 w-4" />
-							{generateLabel}
-						</Button>
-					) : null}
-				</div>
+					</>
+				) : null}
+				{isGenerating ? (
+					<Button
+						variant="ghost"
+						size="sm"
+						className={`${chromeBtn} text-error`}
+						onClick={onCancel}
+					>
+						<StopIcon className="h-3.5 w-3.5" aria-hidden="true" />
+						停止
+					</Button>
+				) : null}
+				{awaitingConfirm && onToggleChat ? (
+					<Button
+						variant="primary"
+						size="sm"
+						className={chromeBtn}
+						onClick={onToggleChat}
+						aria-label="打开对话面板"
+					>
+						<ChatBubbleLeftRightIcon
+							className="h-3.5 w-3.5"
+							aria-hidden="true"
+						/>
+						确认
+					</Button>
+				) : null}
+				{!isGenerating && !hasRecovery && !awaitingConfirm && onGenerate ? (
+					<Button
+						variant="primary"
+						size="sm"
+						className={chromeBtn}
+						onClick={onGenerate}
+						disabled={generateDisabled}
+					>
+						<SparklesIcon className="h-3.5 w-3.5" aria-hidden="true" />
+						{generateLabel}
+					</Button>
+				) : null}
 			</div>
 		</div>
 	);

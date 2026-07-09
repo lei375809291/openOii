@@ -170,7 +170,7 @@ describe("buildComicWorkflow", () => {
 		expect(graph.sections.map((section) => section.countLabel)).toEqual([
 			"0 brief",
 			"0 elements",
-			"0 shots",
+			"0 格",
 			"0 final",
 		]);
 		expect(graph.nodes).toEqual([]);

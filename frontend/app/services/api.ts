@@ -252,7 +252,14 @@ export const projectsApi = {
 
 	generate: (
 		id: number,
-		data?: { seed?: number; notes?: string; auto_mode?: boolean },
+		data?: {
+			seed?: number;
+			notes?: string;
+			auto_mode?: boolean;
+			skill_id?: string;
+			entity_type?: string;
+			entity_id?: number;
+		},
 	) =>
 		fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
 			method: "POST",
@@ -450,6 +457,47 @@ export const versionsApi = {
 		fetchApi<VersionCompareRead>(
 			`/api/v1/projects/${projectId}/versions/compare?entity_type=${entityType}&entity_id=${entityId}&v1=${v1}&v2=${v2}`,
 		),
+};
+
+export const skillsApi = {
+	list: () =>
+		fetchApi<
+			Array<{
+				id: string;
+				title: string;
+				description: string;
+				badge: string | null;
+				start_stage: string;
+				start_agent: string;
+				prefer_auto_mode: boolean;
+				default_style: string | null;
+				story_prefix: string;
+				available: boolean;
+			}>
+		>("/api/v1/skills"),
+};
+
+export const reimagineApi = {
+	analyze: (data: {
+		source_brief: string;
+		replacements?: Record<string, string>;
+		style_hint?: string | null;
+	}) =>
+		fetchApi<{
+			dimensions: Array<{ key: string; label: string; value: string }>;
+			slots: Array<{
+				key: string;
+				label: string;
+				current_value: string;
+				replaceable: boolean;
+			}>;
+			reconstructed_prompt: string;
+			source_brief: string;
+			skill_id: string;
+		}>("/api/v1/reimagine/analyze", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
 };
 
 export const configApi = {

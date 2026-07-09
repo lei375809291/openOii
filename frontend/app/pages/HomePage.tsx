@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, universesApi } from "~/services/api";
+import { projectsApi, reimagineApi, universesApi } from "~/services/api";
 import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import {
@@ -11,7 +11,10 @@ import {
 	PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
+import { PageBody, PageShell } from "~/components/layout/PageShell";
+import { SkillWall } from "~/components/home/SkillWall";
 import { SvgIcon } from "~/components/ui/SvgIcon";
+import type { SkillPreset } from "~/features/skills/skillCatalog";
 
 const AssetDrawer = lazy(() =>
 	import("~/components/panels/AssetDrawer").then((m) => ({
@@ -87,6 +90,20 @@ export function HomePage() {
 	const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 	const [assetsOpen, setAssetsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
+	const [activeSkillId, setActiveSkillId] = useState<string | null>("story-anime");
+	const [storyPlaceholder, setStoryPlaceholder] = useState(
+		"主角、冲突、关键画面、情绪基调。",
+	);
+	const [reimagineOpen, setReimagineOpen] = useState(false);
+	const [reimagineBrief, setReimagineBrief] = useState("");
+	const [reimagineBusy, setReimagineBusy] = useState(false);
+	const [reimagineSlots, setReimagineSlots] = useState<
+		Array<{ key: string; label: string; current_value: string }>
+	>([]);
+	const [reimagineReplacements, setReimagineReplacements] = useState<
+		Record<string, string>
+	>({});
+	const storyInputRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		setSelectedUniverseId(
@@ -130,7 +147,8 @@ export function HomePage() {
 				}
 				setPendingFiles([]);
 			}
-			navigate(`/project/${project.id}?autoStart=true`);
+			const skillQ = activeSkillId ? `&skill=${encodeURIComponent(activeSkillId)}` : "";
+			navigate(`/project/${project.id}?autoStart=true${skillQ}`);
 		},
 	});
 
@@ -170,6 +188,7 @@ export function HomePage() {
 			universe_id: selectedUniverseId,
 			chapter_number: chapterNumber,
 			chapter_title: chapterTitle,
+			skill_id: activeSkillId,
 			text_provider_override: null,
 			image_provider_override: null,
 			video_provider_override: null,
@@ -251,12 +270,90 @@ export function HomePage() {
 		setPendingFiles(pendingFiles.filter((_, i) => i !== index));
 	};
 
+	const handleSkillSelect = useCallback((skill: SkillPreset) => {
+		setActiveSkillId(skill.id);
+		if (skill.prefill.style) setStyle(skill.prefill.style);
+		if (skill.prefill.creationMode) setCreationMode(skill.prefill.creationMode);
+		if (skill.prefill.placeholder) setStoryPlaceholder(skill.prefill.placeholder);
+		if (skill.prefill.storyHint !== undefined && !story.trim()) {
+			setStory(skill.prefill.storyHint);
+		}
+		if (skill.id === "video-reimagine") {
+			setReimagineOpen(true);
+		}
+		requestAnimationFrame(() => {
+			storyInputRef.current?.focus();
+			storyInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+		});
+	}, [story]);
+
+	const handleReimagineAnalyze = async () => {
+		const brief = reimagineBrief.trim();
+		if (!brief || reimagineBusy) return;
+		setReimagineBusy(true);
+		try {
+			const result = await reimagineApi.analyze({
+				source_brief: brief,
+				replacements: reimagineReplacements,
+				style_hint: style,
+			});
+			setReimagineSlots(result.slots);
+			setStory(result.reconstructed_prompt);
+			setActiveSkillId("video-reimagine");
+			setCreationMode("review");
+		} catch (e) {
+			if (import.meta.env.DEV) console.error("[reimagine]", e);
+			alert("拉片分析失败，请稍后重试");
+		} finally {
+			setReimagineBusy(false);
+		}
+	};
+
+	const applyReimagineWithReplacements = async () => {
+		const brief = reimagineBrief.trim();
+		if (!brief || reimagineBusy) return;
+		setReimagineBusy(true);
+		try {
+			const result = await reimagineApi.analyze({
+				source_brief: brief,
+				replacements: reimagineReplacements,
+				style_hint: style,
+			});
+			setStory(result.reconstructed_prompt);
+			setReimagineOpen(false);
+			storyInputRef.current?.focus();
+		} catch (e) {
+			if (import.meta.env.DEV) console.error("[reimagine]", e);
+			alert("应用替换失败，请稍后重试");
+		} finally {
+			setReimagineBusy(false);
+		}
+	};
+
+	const hour = new Date().getHours();
+	const greeting =
+		hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
+
+	const navChip =
+		"touch-target-dense inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-2 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)] hover:bg-base-200";
+	const settingChip = (active: boolean) =>
+		`touch-target-dense rounded-[var(--radius-md)] border-2 px-2 py-1.5 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)] ${
+			active
+				? "border-primary bg-primary text-primary-content"
+				: "border-base-content/15 bg-base-100 text-base-content/70 hover:border-primary/40"
+		}`;
+	const metaChip =
+		"rounded-full border border-base-content/10 bg-base-200 px-2 py-0.5 text-[length:var(--text-2xs)] font-semibold text-base-content/75";
+	const sectionLabel =
+		"m-0 font-heading text-[length:var(--text-sm)] font-bold leading-tight";
+
 	return (
-		<div
-			className="min-h-screen bg-base-100 font-sans"
-			onDrop={handleDrop}
-			onDragOver={(e) => e.preventDefault()}
-		>
+		<PageShell data-shell="home">
+			<div
+				className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+				onDrop={handleDrop}
+				onDragOver={(e) => e.preventDefault()}
+			>
 			<TopBar />
 			{assetsOpen && (
 				<Suspense fallback={null}>
@@ -272,69 +369,182 @@ export function HomePage() {
 					/>
 				</Suspense>
 			)}
-			<div className="halftone-bg-accent min-h-[calc(100vh-56px)] px-4 py-6 sm:px-6 lg:py-10">
-				<main className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-					<header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+			<PageBody className="workbench-surface px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)] sm:py-[var(--space-4)]">
+				<div className="mx-auto flex w-full max-w-6xl flex-col gap-[var(--space-3)]">
+					<header className="flex flex-wrap items-center justify-between gap-2">
 						<div className="min-w-0">
-							<h1 className="m-0 pb-1 font-comic text-5xl leading-[1.05] tracking-wider text-primary sm:text-7xl">
-								openOii
+							{/* One display face (Bangers) per screen */}
+							<h1 className="m-0 font-comic text-[length:var(--text-display)] leading-none tracking-wide text-primary text-pretty">
+								{greeting}，导演
 							</h1>
-							<p className="m-0 mt-2 max-w-2xl text-base font-semibold text-base-content/70">
-								把一个故事点子变成可审阅的漫剧分镜和视频。
+							<p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/60">
+								Skill 开工 · 或直接写故事
 							</p>
 						</div>
-						<nav className="flex flex-wrap gap-2" aria-label="首页入口">
+						<nav className="flex flex-wrap gap-1" aria-label="首页入口">
 							<button
 								type="button"
-								className={`touch-target inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors hover:bg-base-200 hover:text-primary ${
-									historyOpen ? "bg-primary text-primary-content" : "text-base-content/70"
+								className={`${navChip} ${
+									historyOpen ? "bg-primary text-primary-content" : "text-base-content/65"
 								}`}
 								onClick={() => setHistoryOpen((v) => !v)}
 								aria-pressed={historyOpen}
 							>
-								<SvgIcon name="clock-3" size={16} />
-								所有项目
+								<SvgIcon name="clock-3" size={14} />
+								项目
 							</button>
 							<button
 								type="button"
-								className={`touch-target inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors hover:bg-base-200 hover:text-primary ${
-									assetsOpen ? "bg-primary text-primary-content" : "text-base-content/70"
+								className={`${navChip} ${
+									assetsOpen ? "bg-primary text-primary-content" : "text-base-content/65"
 								}`}
 								onClick={() => setAssetsOpen((v) => !v)}
 								aria-pressed={assetsOpen}
 							>
-								<SvgIcon name="archive" size={16} />
-								资产库
+								<SvgIcon name="archive" size={14} />
+								资产
 							</button>
 							<Link
 								to="/universes"
-								className="touch-target inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold text-base-content/70 transition-colors hover:bg-base-200 hover:text-primary"
+								className={`${navChip} text-base-content/65`}
 							>
-								<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />
-								IP 宇宙
+								<GlobeAltIcon className="h-3.5 w-3.5" aria-hidden="true" />
+								宇宙
 							</Link>
 						</nav>
 					</header>
 
-					<Card className="card-comic animate-draw-in w-full overflow-hidden !p-0">
-						<div className="grid lg:grid-cols-[minmax(0,1fr)_18rem]">
-							<section className="min-w-0 p-4 sm:p-6 lg:p-7">
+					<SkillWall activeSkillId={activeSkillId} onSelect={handleSkillSelect} />
+
+					{reimagineOpen ? (
+						<Card className="card-comic w-full overflow-hidden !p-0" data-shell="reimagine">
+							<div className="flex flex-wrap items-center justify-between gap-2 border-b border-base-content/10 bg-secondary/10 px-[var(--space-3)] py-[var(--space-2)]">
+								<div className="min-w-0">
+									<p className="m-0 font-mono text-[length:var(--text-2xs)] font-semibold uppercase tracking-wide text-base-content/45">
+										Reimagine
+									</p>
+									<h2 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
+										拉片复刻 v0
+									</h2>
+								</div>
+								<button
+									type="button"
+									className="touch-target-dense text-[length:var(--text-xs)] font-bold text-base-content/55 transition-colors hover:text-primary"
+									onClick={() => setReimagineOpen(false)}
+								>
+									收起
+								</button>
+							</div>
+							<p className="m-0 border-b border-base-content/8 px-[var(--space-3)] py-1.5 text-[length:var(--text-2xs)] text-base-content/55">
+								粘贴参考片描述 / 口播 / 分镜笔记 → 拆维度与槽位 → 写入创作台
+							</p>
+							<div className="grid gap-[var(--space-3)] p-[var(--space-3)] lg:grid-cols-[minmax(0,1fr)_14rem]">
+								<div>
+									<label
+										htmlFor="reimagine-brief"
+										className="mb-1 block font-heading text-[length:var(--text-sm)] font-bold"
+									>
+										参考片要点
+									</label>
+									<textarea
+										id="reimagine-brief"
+										name="reimagine_brief"
+										className="input-doodle min-h-24 w-full resize-y p-2 text-[length:var(--text-sm)]"
+										placeholder="例：末日办公室，员工一拳打向老板，快节奏剪辑…"
+										value={reimagineBrief}
+										onChange={(e) => setReimagineBrief(e.target.value)}
+										disabled={reimagineBusy}
+										autoComplete="off"
+									/>
+									<div className="mt-2 flex flex-wrap gap-2">
+										<Button
+											variant="secondary"
+											size="sm"
+											loading={reimagineBusy}
+											disabled={!reimagineBrief.trim() || reimagineBusy}
+											onClick={handleReimagineAnalyze}
+										>
+											分析拆解
+										</Button>
+										<Button
+											variant="primary"
+											size="sm"
+											loading={reimagineBusy}
+											disabled={!reimagineBrief.trim() || reimagineBusy}
+											onClick={applyReimagineWithReplacements}
+										>
+											写入创作台
+										</Button>
+									</div>
+								</div>
+								<div className="space-y-1.5">
+									<p className={sectionLabel}>元素替换</p>
+									{(reimagineSlots.length > 0
+										? reimagineSlots
+										: [
+												{ key: "characters", label: "角色", current_value: "" },
+												{ key: "scenes", label: "场景", current_value: "" },
+												{ key: "visual_style", label: "画面风格", current_value: "" },
+											]
+									).map((slot) => (
+										<label key={slot.key} className="form-control">
+											<span className="label px-0 py-0">
+												<span className="label-text font-mono text-[length:var(--text-2xs)] text-base-content/60">
+													{slot.label}
+												</span>
+											</span>
+											<input
+												className="input input-bordered input-sm h-8 min-h-8 bg-base-100"
+												placeholder={slot.current_value || `替换${slot.label}`}
+												value={reimagineReplacements[slot.key] ?? ""}
+												onChange={(e) =>
+													setReimagineReplacements((prev) => ({
+														...prev,
+														[slot.key]: e.target.value,
+													}))
+												}
+												autoComplete="off"
+											/>
+										</label>
+									))}
+								</div>
+							</div>
+						</Card>
+					) : null}
+
+					<Card
+						className="card-comic animate-draw-in w-full overflow-hidden !p-0"
+						data-shell="create-desk"
+					>
+						<div className="flex flex-wrap items-center justify-between gap-2 border-b border-base-content/10 bg-base-200/30 px-[var(--space-3)] py-1.5">
+							<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
+								创作台
+							</h2>
+							{activeSkillId ? (
+								<span className="rounded border border-primary/25 bg-primary/10 px-1.5 py-px font-mono text-[length:var(--text-2xs)] font-bold text-primary">
+									{activeSkillId}
+								</span>
+							) : null}
+						</div>
+						<div className="grid lg:grid-cols-[minmax(0,1fr)_14rem]">
+							<section className="min-w-0 p-[var(--space-3)]">
 								<div onPaste={handlePaste}>
-									<div className="mb-3 flex items-center justify-between gap-3">
+									<div className="mb-1.5 flex items-center justify-between gap-2">
 										<label
 											htmlFor="story-input"
-											className="font-heading text-lg font-bold"
+											className="font-heading text-[length:var(--text-md)] font-bold"
 										>
 											故事创意
 										</label>
-										<span className="font-mono text-xs text-base-content/70">
+										<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/60">
 											{story.length}/5000
 										</span>
 									</div>
 									<textarea
 										id="story-input"
-										className="input-doodle w-full min-h-40 resize-none bg-base-100/85 p-4 text-base leading-relaxed sm:min-h-52"
-										placeholder="主角、冲突、关键画面、情绪基调。"
+										ref={storyInputRef}
+										className="input-doodle w-full min-h-24 resize-none bg-base-100/85 p-2.5 text-[length:var(--text-sm)] leading-[var(--leading-normal)] sm:min-h-32"
+										placeholder={storyPlaceholder}
 										value={story}
 										onChange={(e) => setStory(e.target.value)}
 										onKeyDown={handleKeyDown}
@@ -343,49 +553,48 @@ export function HomePage() {
 										disabled={createMutation.isPending}
 										aria-label="输入你的故事创意"
 										maxLength={5000}
-										rows={7}
+										rows={4}
+										name="story"
+										autoComplete="off"
+										spellCheck
 									/>
 									{story.length > 4500 && (
-										<p className="m-0 mt-2 text-xs font-bold text-warning">
+										<p className="m-0 mt-1 text-[length:var(--text-2xs)] font-bold text-warning">
 											还可输入 {5000 - story.length} 字
 										</p>
 									)}
 								</div>
 
-								<div className="mt-4 flex flex-col gap-3 border-t border-base-content/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-									<div className="flex min-w-0 flex-wrap gap-2 text-xs font-semibold text-base-content/75">
-										<span className="rounded-full border border-base-content/10 bg-base-200 px-3 py-1">
-											{selectedStyleLabel}
-										</span>
-										<span className="rounded-full border border-base-content/10 bg-base-200 px-3 py-1">
-											{creationModeLabel}
-										</span>
+								<div className="mt-3 flex flex-col gap-2 border-t border-base-content/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+									<div className="flex min-w-0 flex-wrap gap-1.5">
+										<span className={metaChip}>{selectedStyleLabel}</span>
+										<span className={metaChip}>{creationModeLabel}</span>
 										{referenceImages.length > 0 && (
-											<span className="rounded-full border border-base-content/10 bg-base-200 px-3 py-1">
+											<span className={metaChip}>
 												参考图 {referenceImages.length}
 											</span>
 										)}
 										{activeCharacterHints.length > 0 && (
-											<span className="rounded-full border border-base-content/10 bg-base-200 px-3 py-1">
+											<span className={metaChip}>
 												角色 {activeCharacterHints.length}
 											</span>
 										)}
 										{selectedUniverse && (
-											<span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-primary">
+											<span className={`${metaChip} border-primary/30 bg-primary/10 text-primary`}>
 												{selectedUniverse.name} · 第 {nextChapterNumber} 章
 											</span>
 										)}
 									</div>
 									<Button
 										variant="primary"
-										size="lg"
-										className="w-full justify-center gap-2 sm:w-auto"
+										size="md"
+										className="w-full min-h-[var(--touch-target-min)] justify-center gap-2 sm:w-auto"
 										onClick={handleSubmit}
 										disabled={!story.trim() || createMutation.isPending}
 										loading={createMutation.isPending}
 									>
 										{!createMutation.isPending && (
-											<PaperAirplaneIcon className="h-5 w-5" aria-hidden="true" />
+											<PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
 										)}
 										生成并进入画布
 									</Button>
@@ -393,21 +602,18 @@ export function HomePage() {
 							</section>
 
 							<aside
-								className="border-t border-base-content/10 bg-base-200/45 p-4 sm:p-5 lg:border-l lg:border-t-0"
+								className="border-t border-base-content/10 bg-base-200/40 p-[var(--space-3)] lg:border-l lg:border-t-0"
 								aria-label="创作设置"
 							>
-								<div className="space-y-5">
+								<div className="space-y-2.5">
 									<section aria-labelledby="universe-heading">
-										<div className="mb-2 flex items-center justify-between gap-3">
-											<h2
-												id="universe-heading"
-												className="m-0 font-heading text-sm font-bold"
-											>
+										<div className="mb-1 flex items-center justify-between gap-2">
+											<h2 id="universe-heading" className={sectionLabel}>
 												IP 宇宙
 											</h2>
 											<Link
 												to="/universes"
-												className="text-xs font-bold text-base-content/60 transition-colors hover:text-primary"
+												className="text-[length:var(--text-2xs)] font-bold text-base-content/55 transition-colors hover:text-primary"
 											>
 												管理
 											</Link>
@@ -415,7 +621,7 @@ export function HomePage() {
 										<select
 											id="home-universe-select"
 											name="universe_id"
-											className="select select-bordered min-h-11 w-full bg-base-100 text-sm font-semibold"
+											className="select select-bordered h-9 min-h-9 w-full bg-base-100 text-[length:var(--text-sm)] font-semibold"
 											value={selectedUniverseId ?? ""}
 											onChange={(event) => {
 												const value = event.target.value;
@@ -425,7 +631,7 @@ export function HomePage() {
 											aria-label="选择 IP 宇宙"
 										>
 											<option value="">
-												{universesLoading ? "加载宇宙..." : "独立项目"}
+												{universesLoading ? "加载宇宙…" : "独立项目"}
 											</option>
 											{universes.map((universe) => (
 												<option key={universe.id} value={universe.id}>
@@ -433,21 +639,18 @@ export function HomePage() {
 												</option>
 											))}
 										</select>
-										<p className="m-0 mt-2 text-xs leading-relaxed text-base-content/60">
+										<p className="m-0 mt-1 text-[length:var(--text-2xs)] leading-snug text-base-content/55">
 											{selectedUniverse
-												? `将作为第 ${nextChapterNumber} 章创建，沿用该宇宙的世界观、风格规则和共享角色。`
-												: "不选择宇宙时会创建独立工作区。"}
+												? `第 ${nextChapterNumber} 章 · 沿用世界观与共享角色`
+												: "不选则独立项目"}
 										</p>
 									</section>
 
 									<section aria-labelledby="mode-heading">
-										<h2
-											id="mode-heading"
-											className="m-0 mb-2 font-heading text-sm font-bold"
-										>
+										<h2 id="mode-heading" className={`${sectionLabel} mb-1`}>
 											生成方式
 										</h2>
-										<div className="grid grid-cols-2 gap-2">
+										<div className="grid grid-cols-2 gap-1.5">
 											{[
 												{ value: "review", label: "审阅", icon: "check" },
 												{ value: "quick", label: "快速", icon: "zap" },
@@ -455,40 +658,31 @@ export function HomePage() {
 												<button
 													key={mode.value}
 													type="button"
-													className={`touch-target flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-colors ${
-														creationMode === mode.value
-															? "border-primary bg-primary text-primary-content"
-															: "border-base-content/15 bg-base-100 text-base-content/70 hover:border-primary/40"
-													}`}
+													className={settingChip(creationMode === mode.value)}
 													onClick={() =>
 														setCreationMode(mode.value as "review" | "quick")
 													}
 													aria-pressed={creationMode === mode.value}
 												>
-													<SvgIcon name={mode.icon as "check" | "zap"} size={16} />
-													{mode.label}
+													<span className="inline-flex items-center justify-center gap-1">
+														<SvgIcon name={mode.icon as "check" | "zap"} size={14} />
+														{mode.label}
+													</span>
 												</button>
 											))}
 										</div>
 									</section>
 
 									<section aria-labelledby="style-heading">
-										<h2
-											id="style-heading"
-											className="m-0 mb-2 font-heading text-sm font-bold"
-										>
+										<h2 id="style-heading" className={`${sectionLabel} mb-1`}>
 											常用风格
 										</h2>
-										<div className="grid grid-cols-2 gap-2">
+										<div className="grid grid-cols-2 gap-1.5">
 											{PRIMARY_STYLE_OPTIONS.map((opt) => (
 												<button
 													key={opt.value}
 													type="button"
-													className={`touch-target rounded-lg border-2 px-3 py-2 text-sm font-bold transition-colors ${
-														style === opt.value
-															? "border-primary bg-primary text-primary-content shadow-brutal-sm"
-															: "border-base-content/15 bg-base-100 text-base-content/70 hover:border-primary/40"
-													}`}
+													className={settingChip(style === opt.value)}
 													onClick={() => setStyle(opt.value)}
 													aria-pressed={style === opt.value}
 												>
@@ -499,38 +693,37 @@ export function HomePage() {
 									</section>
 
 									<section aria-labelledby="reference-heading">
-										<div className="mb-2 flex items-center justify-between gap-3">
-											<h2
-												id="reference-heading"
-												className="m-0 font-heading text-sm font-bold"
-											>
+										<div className="mb-1 flex items-center justify-between gap-2">
+											<h2 id="reference-heading" className={sectionLabel}>
 												参考图
 											</h2>
-											<span className="font-mono text-xs text-base-content/70">
+											<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/60">
 												{referenceImages.length}/7
 											</span>
 										</div>
 										{referenceImages.length > 0 ? (
-											<div className="flex flex-wrap gap-2">
+											<div className="flex flex-wrap gap-1.5">
 												{referenceImages.map((img, i) => (
 													<div
 														key={i}
-														className="group relative h-14 w-14 overflow-hidden rounded-lg border-2 border-base-content/10"
+														className="group relative h-11 w-11 overflow-hidden rounded-[var(--radius-md)] border-2 border-base-content/10"
 													>
 														<img
 															src={img}
 															alt={`参考图 ${i + 1}`}
 															className="h-full w-full object-cover"
+															width={44}
+															height={44}
 														/>
 														<button
 															type="button"
-															className="absolute inset-0 flex items-center justify-center bg-error/60 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+															className="absolute inset-0 flex items-center justify-center bg-error/60 opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 focus:opacity-100"
 															onClick={() => removeReferenceImage(i)}
 															aria-label={`删除参考图 ${i + 1}`}
 														>
 															<SvgIcon
 																name="x"
-																size={18}
+																size={16}
 																className="text-error-content"
 															/>
 														</button>
@@ -539,21 +732,21 @@ export function HomePage() {
 												{referenceImages.length < 7 && (
 													<button
 														type="button"
-														className="touch-target flex h-14 w-14 items-center justify-center rounded-lg border-2 border-dashed border-base-content/20 text-base-content/70 transition-colors hover:border-primary/50 hover:text-primary"
+														className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border-2 border-dashed border-base-content/20 text-base-content/70 transition-colors hover:border-primary/50 hover:text-primary"
 														onClick={() => fileInputRef.current?.click()}
 														aria-label="添加参考图"
 													>
-														<SvgIcon name="plus" size={18} />
+														<SvgIcon name="plus" size={16} />
 													</button>
 												)}
 											</div>
 										) : (
 											<button
 												type="button"
-												className="touch-target inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-base-content/20 bg-base-100/70 px-3 py-2 text-sm font-semibold text-base-content/75 transition-colors hover:border-primary/50 hover:text-primary"
+												className="touch-target-dense inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-md)] border-2 border-dashed border-base-content/20 bg-base-100/70 px-2 py-1.5 text-[length:var(--text-xs)] font-semibold text-base-content/70 transition-colors hover:border-primary/50 hover:text-primary"
 												onClick={() => fileInputRef.current?.click()}
 											>
-												<SvgIcon name="image" size={16} />
+												<SvgIcon name="image" size={14} />
 												添加参考图
 											</button>
 										)}
@@ -574,28 +767,28 @@ export function HomePage() {
 
 									<button
 										type="button"
-										className="touch-target flex w-full items-center justify-between rounded-lg border border-base-content/10 bg-base-100 px-3 text-sm font-bold text-base-content/75 transition-colors hover:border-primary/40 hover:text-primary"
+										className="touch-target-dense flex w-full items-center justify-between rounded-[var(--radius-md)] border border-base-content/10 bg-base-100 px-2 text-[length:var(--text-xs)] font-bold text-base-content/70 transition-colors hover:border-primary/40 hover:text-primary"
 										onClick={() => setShowAdvanced(!showAdvanced)}
 										aria-expanded={showAdvanced}
 									>
 										<span>更多设置</span>
 										{showAdvanced ? (
-											<ChevronUpIcon className="h-4 w-4" aria-hidden="true" />
+											<ChevronUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
 										) : (
-											<ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
+											<ChevronDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
 										)}
 									</button>
 
 									{showAdvanced && (
-										<div className="space-y-3 border-t border-base-content/10 pt-4">
+										<div className="space-y-2 border-t border-base-content/10 pt-2">
 											<label className="form-control">
-												<span className="label px-0 pb-1">
-													<span className="label-text text-xs font-mono uppercase text-base-content/70">
+												<span className="label px-0 py-0 pb-0.5">
+													<span className="label-text font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
 														完整风格
 													</span>
 												</span>
 												<select
-													className="select select-bordered min-h-11 bg-base-100 text-sm font-semibold"
+													className="select select-bordered h-9 min-h-9 bg-base-100 text-[length:var(--text-sm)] font-semibold"
 													value={style}
 													onChange={(event) => setStyle(event.target.value)}
 													aria-label="完整风格"
@@ -613,12 +806,12 @@ export function HomePage() {
 											</label>
 
 											<label className="form-control">
-												<span className="label px-0 pb-1">
-													<span className="label-text text-xs font-mono uppercase text-base-content/70">
+												<span className="label px-0 py-0 pb-0.5">
+													<span className="label-text font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
 														镜头数
 													</span>
 												</span>
-												<div className="flex items-center gap-2">
+												<div className="flex items-center gap-1.5">
 													<input
 														id="shot-count"
 														type="number"
@@ -631,12 +824,13 @@ export function HomePage() {
 																e.target.value ? Number(e.target.value) : undefined,
 															)
 														}
-														className="input input-bordered min-h-11 flex-1 bg-base-100 text-sm font-semibold"
+														className="input input-bordered h-9 min-h-9 flex-1 bg-base-100 text-[length:var(--text-sm)] font-semibold"
 														aria-label="镜头数"
+														autoComplete="off"
 													/>
 													<button
 														type="button"
-														className="btn btn-ghost min-h-11 px-3 text-xs"
+														className="btn btn-ghost h-9 min-h-9 px-2 text-[length:var(--text-2xs)]"
 														onClick={() => setShotCount(undefined)}
 													>
 														自动
@@ -646,39 +840,40 @@ export function HomePage() {
 
 											<div>
 												<div className="mb-1 flex items-center justify-between gap-2">
-													<p className="m-0 text-xs font-mono uppercase text-base-content/70">
+													<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
 														角色提示
 													</p>
 													{characterHints.length < 6 ? (
 														<button
 															type="button"
-															className="btn btn-ghost btn-sm min-h-11 px-3 text-base-content/80 hover:text-primary"
+															className="btn btn-ghost btn-sm h-8 min-h-8 px-2 text-[length:var(--text-2xs)] text-base-content/70 hover:text-primary"
 															onClick={addCharacterHint}
 														>
 															添加
 														</button>
 													) : null}
 												</div>
-												<div className="space-y-2">
+												<div className="space-y-1.5">
 													{characterHints.map((hint, i) => (
-														<div key={i} className="flex gap-2">
+														<div key={i} className="flex gap-1.5">
 															<input
 																type="text"
-																className="input input-bordered input-sm min-h-11 min-w-0 flex-1 bg-base-100 text-sm"
+																className="input input-bordered input-sm h-8 min-h-8 min-w-0 flex-1 bg-base-100 text-[length:var(--text-sm)]"
 																placeholder={`角色 ${i + 1}`}
 																value={hint}
 																onChange={(e) =>
 																	updateCharacterHint(i, e.target.value)
 																}
+																autoComplete="off"
 															/>
 															{characterHints.length > 1 ? (
 																<button
 																	type="button"
-																	className="btn btn-ghost btn-sm btn-square min-h-11 text-error"
+																	className="btn btn-ghost btn-sm btn-square h-8 min-h-8 text-error"
 																	onClick={() => removeCharacterHint(i)}
 																	aria-label={`删除角色 ${i + 1}`}
 																>
-																	<SvgIcon name="x" size={15} />
+																	<SvgIcon name="x" size={14} />
 																</button>
 															) : null}
 														</div>
@@ -691,8 +886,9 @@ export function HomePage() {
 							</aside>
 						</div>
 					</Card>
-				</main>
+				</div>
+			</PageBody>
 			</div>
-		</div>
+		</PageShell>
 	);
 }

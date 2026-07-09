@@ -7,7 +7,9 @@ from app.api.v1.routes.consistency import router as consistency_router
 from app.api.v1.routes.export import router as export_router
 from app.api.v1.routes.generation import router as generation_router
 from app.api.v1.routes.projects import router as projects_router
+from app.api.v1.routes.reimagine import router as reimagine_router
 from app.api.v1.routes.shots import router as shots_router
+from app.api.v1.routes.skills import router as skills_router
 from app.api.v1.routes.style_templates import router as style_templates_router
 from app.api.v1.routes.text import router as text_router
 from app.api.v1.routes.universes import router as universes_router
@@ -26,3 +28,5 @@ api_router.include_router(export_router, prefix="/projects", tags=["export"])
 api_router.include_router(versions_router, tags=["versions"])
 api_router.include_router(consistency_router, prefix="/projects", tags=["consistency"])
 api_router.include_router(universes_router, prefix="/universes", tags=["universes"])
+api_router.include_router(skills_router)
+api_router.include_router(reimagine_router)

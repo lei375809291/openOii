@@ -103,6 +103,10 @@ class Phase2State(TypedDict, total=False):
     video_generation_skipped: bool
     critique_scores: dict
     critique_round: int
+    # Skill / selection focus (propagated for routing + observability)
+    skill_id: str
+    focus_entity_type: str
+    focus_entity_id: int
 
 
 @dataclass(slots=True)
@@ -111,3 +115,4 @@ class Phase2RuntimeContext:
     agent_context: Any
     start_stage: Phase2Stage = "plan_outline"
     auto_mode: bool = False
+    skill_id: str | None = None

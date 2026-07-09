@@ -1,36 +1,87 @@
 /**
- * Design Tokens
- * Centralized design values for consistent theming
+ * Design Contract — executable source of truth (ADR 0002).
+ * Density: Dense Comic Workbench (D2). Docs: DESIGN.md updated same PR.
  */
 
 @layer base {
   :root {
-    /* CMYK Registration Colors (theme-aware) */
+    /* —— Brand plates (CMYK registration, theme-aware) —— */
     --cmyk-cyan: 0.55 0.14 180;
     --cmyk-magenta: 0.55 0.26 330;
 
-    /* Spacing Scale */
-    --space-xs: 0.25rem;  /* 4px */
-    --space-sm: 0.5rem;   /* 8px */
-    --space-md: 1rem;     /* 16px */
-    --space-lg: 1.5rem;   /* 24px */
-    --space-xl: 2rem;     /* 32px */
-    --space-2xl: 3rem;    /* 48px */
+    /* —— Spacing (dense default; use for new chrome) —— */
+    --space-0: 0;
+    --space-1: 0.25rem; /* 4 */
+    --space-2: 0.5rem; /* 8 */
+    --space-3: 0.75rem; /* 12 */
+    --space-4: 1rem; /* 16 */
+    --space-5: 1.25rem; /* 20 */
+    --space-6: 1.5rem; /* 24 */
+    --space-8: 2rem; /* 32 */
+    --space-10: 2.5rem; /* 40 */
+    --space-12: 3rem; /* 48 */
 
-    /* Border Widths */
-    --border-thin: 2px;
-    --border-medium: 3px;
-    --border-thick: 4px;
+    /* Legacy aliases (keep call sites working) */
+    --space-xs: var(--space-1);
+    --space-sm: var(--space-2);
+    --space-md: var(--space-4);
+    --space-lg: var(--space-6);
+    --space-xl: var(--space-8);
+    --space-2xl: var(--space-12);
 
-    /* Touch Targets */
-    --touch-target-min: 44px;
+    /* —— Type scale (dense desk; display stays splash-only) —— */
+    --text-2xs: 0.625rem; /* 10 — mono labels */
+    --text-xs: 0.75rem; /* 12 */
+    --text-sm: 0.8125rem; /* 13 */
+    --text-base: 0.875rem; /* 14 body on desk */
+    --text-md: 1rem; /* 16 */
+    --text-lg: 1.125rem; /* 18 */
+    --text-xl: 1.25rem; /* 20 */
+    --text-display: clamp(1.5rem, 4vw, 2.5rem);
 
-    /* Animation Durations */
+    --leading-tight: 1.15;
+    --leading-snug: 1.35;
+    --leading-normal: 1.5;
+
+    /* —— Radius —— */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    /* —— Borders —— */
+    --border-thin: 1px;
+    --border-medium: 2px;
+    --border-thick: 3px;
+
+    /* —— Touch —— */
+    --touch-target-min: 44px; /* primary actions, WCAG-friendly */
+    --touch-target-dense: 32px; /* chrome chips only; not sole target for critical ops */
+
+    /* —— Motion —— */
     --duration-fast: 150ms;
     --duration-normal: 200ms;
     --duration-slow: 300ms;
 
-    /* Z-Index Scale */
+    /* —— Workbench Shell geometry (viewport-locked desk) —— */
+    --workbench-header: 2.75rem; /* TopBar */
+    --workbench-toolbar: 2.75rem; /* StagePipeline */
+    --workbench-sidebar: 18rem; /* Agent Column */
+    --workbench-sidebar-collapsed: 2.75rem;
+    --workbench-chrome-total: calc(
+      var(--workbench-header) + var(--workbench-toolbar)
+    );
+
+    /* —— Canvas / Shot Grid density —— */
+    --canvas-gap-section: 3rem;
+    --canvas-gap-card: 0.875rem;
+    --canvas-frame-pad: 1.25rem;
+    --canvas-frame-header: 3.5rem;
+    --shot-card-w: 13.75rem; /* 220 */
+    --shot-card-h: 18.75rem; /* 300 */
+    --shot-grid-columns: 3;
+
+    /* —— Z-Index —— */
     --z-dropdown: 10;
     --z-sticky: 20;
     --z-fixed: 30;
@@ -46,17 +97,59 @@
   }
 }
 
-/* Utility Classes for Design Tokens */
 @layer utilities {
-  /* Touch Target */
   .touch-target {
     min-width: var(--touch-target-min);
     min-height: var(--touch-target-min);
   }
 
-  /* Brutal Shadow Hover Pattern */
+  .touch-target-dense {
+    min-width: var(--touch-target-dense);
+    min-height: var(--touch-target-dense);
+  }
+
+  /* Viewport-locked page root (prefer PageShell component) */
+  .page-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .page-body {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Dense chrome rows (TopBar / StagePipeline) */
+  .chrome-row,
+  .chrome-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .chrome-row {
+    height: var(--workbench-header);
+    max-height: var(--workbench-header);
+  }
+
+  .chrome-toolbar {
+    height: var(--workbench-toolbar);
+    max-height: var(--workbench-toolbar);
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
   .brutal-hover {
-    @apply transition-all duration-200;
+    transition-property: box-shadow, transform;
+    transition-duration: var(--duration-normal);
   }
 
   .brutal-hover:hover {

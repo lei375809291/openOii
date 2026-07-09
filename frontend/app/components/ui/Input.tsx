@@ -11,24 +11,28 @@ export function Input({ label, error, className, ...props }: InputProps) {
   const id = useId();
 
   return (
-    <div className="form-control w-full">
+    <div className="form-control w-full gap-1">
       {label && (
-        <label htmlFor={id} className="label">
-          <span className="label-text font-heading font-medium">{label}</span>
+        <label htmlFor={id} className="label min-h-0 p-0">
+          <span className="label-text font-heading text-[length:var(--text-xs)] font-medium">
+            {label}
+          </span>
         </label>
       )}
       <input
         id={id}
         className={clsx(
-          "input-doodle w-full px-4 py-3 text-base",
+          "input-doodle h-9 min-h-9 w-full px-2.5 py-1.5 text-[length:var(--text-base)]",
           error && "border-error",
-          className
+          className,
         )}
         {...props}
       />
       {error && (
-        <label className="label">
-          <span className="label-text-alt text-error">{error}</span>
+        <label className="label min-h-0 p-0">
+          <span className="label-text-alt text-[length:var(--text-2xs)] text-error">
+            {error}
+          </span>
         </label>
       )}
     </div>

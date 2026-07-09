@@ -19,20 +19,22 @@ export function Button({
   type = "button",
   ...props
 }: ButtonProps) {
-  const baseStyles = "btn-doodle font-heading cursor-pointer";
+  const baseStyles =
+    "btn-doodle font-heading cursor-pointer inline-flex items-center justify-center";
 
   const variantStyles = {
     primary: "bg-primary text-primary-content hover:bg-primary/90",
     secondary: "bg-secondary text-secondary-content hover:bg-secondary/90",
     accent: "bg-accent text-accent-content hover:bg-accent/90",
-    ghost: "bg-transparent border-transparent shadow-none hover:bg-base-200 hover:shadow-brutal-sm",
+    ghost:
+      "bg-transparent border-transparent shadow-none hover:bg-base-200 hover:shadow-brutal-sm",
     error: "bg-error text-error-content hover:bg-error/90",
   };
 
   const sizeStyles = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-5 py-2.5 text-base",
-    lg: "px-7 py-3 text-lg",
+    sm: "h-8 min-h-8 touch-target-dense gap-1 px-2.5 py-1 text-sm",
+    md: "h-9 min-h-9 touch-target-dense gap-1.5 px-3.5 py-1.5 text-base",
+    lg: "h-11 min-h-11 touch-target gap-2 px-5 py-2 text-lg",
   };
 
   const handleClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -48,17 +50,20 @@ export function Button({
         baseStyles,
         variantStyles[variant],
         sizeStyles[size],
-        "touch-target", // 确保触摸目标尺寸
         loading && "loading",
         isDisabled && "opacity-50 cursor-not-allowed",
-        className
+        className,
       )}
       disabled={isDisabled}
       onClick={handleClick}
       type={type}
       {...props}
     >
-      {loading ? <span className="loading loading-spinner loading-sm" /> : children}
+      {loading ? (
+        <span className="loading loading-spinner loading-sm" />
+      ) : (
+        children
+      )}
     </button>
   );
 }

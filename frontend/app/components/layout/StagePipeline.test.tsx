@@ -49,13 +49,16 @@ describe("StagePipeline", () => {
 	});
 
 	it("announces the current workbench status", () => {
-		renderStagePipeline({
+		const { container } = renderStagePipeline({
 			workbenchStatus: getWorkbenchStatusMeta("awaitingConfirm"),
 		});
 
 		expect(screen.getByText("工作台状态：待确认")).toBeInTheDocument();
-		expect(screen.getByTitle("正在等待创作者确认后继续")).toHaveTextContent(
-			"待确认",
+		expect(
+			screen.getByTitle("正在等待创作者确认后继续"),
+		).toBeInTheDocument();
+		expect(container.querySelector("[data-shell='stage-pipeline']")).toHaveClass(
+			"chrome-toolbar",
 		);
 	});
 });

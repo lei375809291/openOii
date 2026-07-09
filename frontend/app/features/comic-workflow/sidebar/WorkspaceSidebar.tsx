@@ -25,6 +25,10 @@ interface WorkspaceSidebarProps {
 	isGenerating: boolean;
 	collapsed?: boolean;
 	onCollapsedChange?: (collapsed: boolean) => void;
+	/** Optional selection label shown above chat (canvas → Agent binding). */
+	selectionLabel?: string | null;
+	/** OiiOii-style default: agent chat on the left of canvas. */
+	placement?: "left" | "right";
 }
 
 const TABS: Array<{
@@ -63,12 +67,15 @@ export function WorkspaceSidebar({
 	isGenerating,
 	collapsed = false,
 	onCollapsedChange,
+	selectionLabel = null,
+	placement = "left",
 }: WorkspaceSidebarProps) {
 	const tabRefs = useRef<Record<WorkspaceSidebarTab, HTMLButtonElement | null>>({
 		chat: null,
 		inspector: null,
 		assets: null,
 	});
+	const isLeft = placement === "left";
 
 	const selectTab = (tab: WorkspaceSidebarTab) => {
 		onTabChange(tab);
@@ -106,21 +113,27 @@ export function WorkspaceSidebar({
 	return (
 		<aside
 			className={clsx(
-				"absolute right-0 z-30 flex shrink-0 flex-col border-base-content/15 bg-base-100 shadow-brutal transition-all duration-200 lg:relative lg:inset-auto lg:h-full lg:border-l-2 lg:shadow-none",
+				"z-[var(--z-sticky)] flex shrink-0 flex-col border-base-content/12 bg-base-100 transition-[width] duration-[var(--duration-normal)]",
+				"absolute inset-x-1.5 bottom-1.5 top-auto rounded-[var(--radius-lg)] border-2 shadow-brutal lg:relative lg:inset-auto lg:rounded-none lg:shadow-none",
+				isLeft
+					? "lg:border-r lg:border-y-0 lg:border-l-0"
+					: "lg:border-l lg:border-y-0 lg:border-r-0",
 				collapsed
-					? "inset-y-0 h-full w-14 border-l-2"
-					: "inset-x-2 bottom-2 top-auto h-[min(70vh,620px)] rounded-xl border-2 lg:inset-y-0 lg:left-auto lg:right-0 lg:w-[360px] lg:rounded-none lg:border-y-0 lg:border-r-0",
+					? "h-auto w-auto lg:h-full lg:w-[var(--workbench-sidebar-collapsed)]"
+					: "h-[min(58vh,520px)] lg:h-full lg:w-[var(--workbench-sidebar)]",
+				collapsed && "max-lg:hidden",
 			)}
-			aria-label="工作区"
+			aria-label="Agent 工作区"
+			data-shell="agent-column"
 		>
 			<div
 				className={clsx(
-					"grid gap-1 border-b border-base-content/10 p-1",
-					collapsed ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_44px]",
+					"grid gap-0.5 border-b border-base-content/10 p-0.5",
+					collapsed ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_var(--touch-target-dense)]",
 				)}
 			>
 				<div
-					className={clsx("grid gap-1", collapsed ? "grid-cols-1" : "grid-cols-3")}
+					className={clsx("grid gap-0.5", collapsed ? "grid-cols-1" : "grid-cols-3")}
 					role="tablist"
 					aria-label="工作区面板"
 					aria-orientation={collapsed ? "vertical" : "horizontal"}
@@ -135,10 +148,10 @@ export function WorkspaceSidebar({
 							}}
 							id={tabId(tab.key)}
 							className={clsx(
-								"flex h-11 items-center justify-center gap-1 rounded-md text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50",
+								"touch-target-dense flex items-center justify-center gap-1 rounded-[var(--radius-sm)] text-[length:var(--text-2xs)] font-semibold transition-colors duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
 								activeTab === tab.key
 									? "bg-primary text-primary-content"
-									: "text-base-content/70 hover:bg-base-200",
+									: "text-base-content/65 hover:bg-base-200",
 							)}
 							onClick={() => selectTab(tab.key)}
 							aria-label={tab.label}
@@ -148,22 +161,31 @@ export function WorkspaceSidebar({
 							aria-controls={panelId(tab.key)}
 							tabIndex={activeTab === tab.key ? 0 : -1}
 						>
-							<SvgIcon name={tab.icon} size={13} />
+							<SvgIcon name={tab.icon} size={12} />
 							<span className={collapsed ? "sr-only" : ""}>{tab.label}</span>
 						</button>
 					))}
 				</div>
 				<button
 					type="button"
-					className="flex h-11 items-center justify-center rounded-md text-base-content/55 transition-colors hover:bg-base-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+					className="touch-target-dense flex items-center justify-center rounded-[var(--radius-sm)] text-base-content/50 transition-colors duration-[var(--duration-fast)] hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
 					onClick={() => onCollapsedChange?.(!collapsed)}
 					aria-label={collapsed ? "展开工作区" : "收起工作区"}
 					title={collapsed ? "展开工作区" : "收起工作区"}
 				>
 					<SvgIcon
 						name="chevron-right"
-						size={15}
-						className={collapsed ? "rotate-180" : ""}
+						size={13}
+						className={clsx(
+							"transition-transform duration-[var(--duration-fast)]",
+							isLeft
+								? collapsed
+									? ""
+									: "rotate-180"
+								: collapsed
+									? "rotate-180"
+									: "",
+						)}
 					/>
 				</button>
 			</div>
@@ -176,12 +198,26 @@ export function WorkspaceSidebar({
 				tabIndex={0}
 			>
 				{activeTab === "chat" ? (
-					<ChatPanel
-						onSendFeedback={onSendFeedback}
-						onConfirm={onConfirm}
-						onCancel={onCancel}
-						isGenerating={isGenerating}
-					/>
+					<div className="flex h-full min-h-0 flex-col">
+						{selectionLabel ? (
+							<div className="shrink-0 border-b border-accent/25 bg-accent/10 px-2 py-1">
+								<p className="m-0 truncate text-[length:var(--text-2xs)] font-bold text-accent">
+									<span className="font-mono font-normal text-base-content/45">
+										绑定 ·{" "}
+									</span>
+									{selectionLabel}
+								</p>
+							</div>
+						) : null}
+						<div className="min-h-0 flex-1 overscroll-contain">
+							<ChatPanel
+								onSendFeedback={onSendFeedback}
+								onConfirm={onConfirm}
+								onCancel={onCancel}
+								isGenerating={isGenerating}
+							/>
+						</div>
+					</div>
 				) : null}
 				{activeTab === "inspector" ? (
 					<WorkflowInspector

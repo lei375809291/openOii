@@ -31,6 +31,7 @@ export interface ProjectProviderOverridesPayload {
 }
 
 export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
+	skill_id?: string | null;
 	title: string;
 	story?: string;
 	style?: string;

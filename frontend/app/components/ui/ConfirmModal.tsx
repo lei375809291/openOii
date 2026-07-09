@@ -46,43 +46,49 @@ export function ConfirmModal({
   const styles = variantStyles[variant];
 
   return (
-    <dialog className="modal modal-open" open>
-      <div className="modal-box bg-base-100 border-3 border-base-content/30 shadow-brutal">
-        <div className="flex items-start gap-4">
-          {/* 图标 */}
-          <div className={`p-3 rounded-full ${styles.iconBg}`}>
-            <ExclamationTriangleIcon className={`w-6 h-6 ${styles.icon}`} />
+    <dialog className="modal modal-open" open role="dialog" aria-modal="true">
+      <div className="modal-box max-w-md border-2 border-base-content/20 bg-base-100 p-4 shadow-brutal-sm">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${styles.iconBg}`}
+          >
+            <ExclamationTriangleIcon className={`h-5 w-5 ${styles.icon}`} />
           </div>
 
-          {/* 内容 */}
-          <div className="flex-1">
-            <h3 className="font-heading font-bold text-lg">{title}</h3>
-            <p className="text-base-content/70 mt-2">{message}</p>
+          <div className="min-w-0 flex-1">
+            <h3 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
+              {title}
+            </h3>
+            <p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/70">
+              {message}
+            </p>
           </div>
         </div>
 
-        {/* 操作按钮 */}
-        <div className="modal-action">
+        <div className="modal-action mt-3 gap-2">
           <button
-            className="btn btn-ghost border-2 border-base-content/30 cursor-pointer"
+            type="button"
+            className="btn btn-ghost h-9 min-h-9 border-2 border-base-content/20 px-3 text-[length:var(--text-sm)]"
             onClick={onClose}
             disabled={isLoading}
           >
             {cancelText}
           </button>
           <button
-            className={`btn ${styles.button} border-2 border-base-content/30 cursor-pointer`}
+            type="button"
+            className={`btn ${styles.button} h-9 min-h-9 border-2 border-base-content/20 px-3 text-[length:var(--text-sm)]`}
             onClick={onConfirm}
             disabled={isLoading}
           >
-            {isLoading && <span className="loading loading-spinner loading-sm"></span>}
+            {isLoading && (
+              <span className="loading loading-spinner loading-sm" />
+            )}
             {confirmText}
           </button>
         </div>
       </div>
 
-      {/* 背景遮罩 */}
-      <form method="dialog" className="modal-backdrop bg-neutral/50">
+      <form method="dialog" className="modal-backdrop bg-neutral/45">
         <button type="button" onClick={onClose} disabled={isLoading}>
           close
         </button>

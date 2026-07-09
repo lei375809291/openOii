@@ -19,18 +19,14 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 	const isSensitive = item.is_sensitive;
 	const isMasked = item.is_masked;
 
-	// 切换显示/隐藏
 	const handleToggleReveal = async () => {
 		if (isRevealed) {
-			// 当前是显示状态，切换为隐藏
 			setIsRevealed(false);
 		} else {
-			// 当前是隐藏状态，调用 API 获取真实值
 			setIsRevealing(true);
 			try {
 				const result = await configApi.revealValue(item.key);
 				setIsRevealed(true);
-				// 同步真实值到 formState，使后续编辑生效
 				if (result.value !== null) {
 					onChange({
 						target: { name: item.key, value: result.value },
@@ -45,13 +41,14 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 		}
 	};
 
-	// 敏感字段特殊处理
+	const fieldClass =
+		"input input-bordered h-9 min-h-9 w-full border-2 border-base-content/25 bg-base-100 px-2.5 font-mono text-[length:var(--text-xs)]";
+
 	if (isSensitive) {
-		// 揭示后用 formState 的 value（可编辑），未揭示时显示脱敏值
 		const displayValue = isRevealed ? value : isMasked ? value : "••••••••";
 
 		return (
-			<div className="space-y-2">
+			<div className="space-y-1.5">
 				<div className="relative">
 					<input
 						id={item.key}
@@ -59,7 +56,7 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 						type="text"
 						value={displayValue}
 						onChange={onChange}
-						className="input input-bordered w-full border-2 border-base-content/30 font-mono pr-12"
+						className={`${fieldClass} pr-10`}
 						autoComplete="off"
 						placeholder={isRevealed ? "输入新值..." : ""}
 					/>
@@ -67,25 +64,25 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 						type="button"
 						onClick={handleToggleReveal}
 						disabled={isRevealing}
-						className="absolute inset-y-0 right-0 flex items-center pr-3 text-base-content/60 hover:text-accent transition-colors"
+						className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-base-content/55 transition-colors hover:text-accent"
 						title={isRevealed ? "隐藏真实值" : "显示真实值"}
 					>
 						{isRevealing ? (
-							<span className="loading loading-spinner loading-xs"></span>
+							<span className="loading loading-spinner loading-xs" />
 						) : isRevealed ? (
-							<EyeSlashIcon className="w-5 h-5" />
+							<EyeSlashIcon className="h-4 w-4" />
 						) : (
-							<EyeIcon className="w-5 h-5" />
+							<EyeIcon className="h-4 w-4" />
 						)}
 					</button>
 				</div>
 				{!isRevealed && isMasked && (
-					<p className="text-xs text-base-content/50">
+					<p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
 						已配置（显示脱敏值），点击眼睛图标可查看真实值
 					</p>
 				)}
 				{isRevealed && (
-					<p className="text-xs text-warning inline-flex items-center gap-1">
+					<p className="m-0 inline-flex items-center gap-1 text-[length:var(--text-2xs)] text-warning">
 						<SvgIcon name="triangle-alert" size={12} />
 						真实值已显示，请注意保护隐私
 					</p>
@@ -94,7 +91,6 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 		);
 	}
 
-	// 普通文本输入框
 	return (
 		<input
 			id={item.key}
@@ -102,7 +98,7 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 			type="text"
 			value={value}
 			onChange={onChange}
-			className="input input-bordered w-full border-2 border-base-content/30 font-mono"
+			className={fieldClass}
 			autoComplete="off"
 		/>
 	);

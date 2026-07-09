@@ -137,26 +137,30 @@ function CreateAssetForm({ isOpen, onClose, onCreated }: CreateAssetFormProps) {
 
 	return (
 		<>
-			{/* Backdrop */}
-			<div className="fixed inset-0 bg-black/40 z-[60]" onClick={handleClose} />
-			{/* Modal — positioned within the drawer area */}
-			<div className="fixed right-0 top-0 h-full w-80 bg-base-100 border-l-2 border-base-content/15 z-[61] flex flex-col">
-				<div className="flex items-center justify-between p-3 border-b-2 border-base-content/10">
+			<div
+				className="fixed inset-0 z-[var(--z-popover)] bg-neutral/45"
+				onClick={handleClose}
+			/>
+			<div className="fixed right-0 top-0 z-[calc(var(--z-popover)+1)] flex h-full w-72 flex-col border-l-2 border-base-content/15 bg-base-100 shadow-brutal-sm">
+				<div className="flex items-center justify-between border-b-2 border-base-content/10 px-2.5 py-2">
 					<div className="flex items-center gap-1.5">
 						<SvgIcon name="plus" size={14} className="text-primary" />
-						<h3 className="text-sm font-bold">新建资产</h3>
+						<h3 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
+							新建资产
+						</h3>
 					</div>
 					<Button
 						variant="ghost"
 						size="sm"
-						className="!px-1 !min-h-0 !h-6"
+						className="!h-7 !min-h-7 !px-1"
 						onClick={handleClose}
+						aria-label="关闭新建资产"
 					>
 						<SvgIcon name="x" size={14} />
 					</Button>
 				</div>
 
-				<div className="p-3 flex flex-col gap-3 overflow-y-auto flex-1">
+				<div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
 					{/* Name */}
 					<div className="form-control">
 						<label className="label py-1">
@@ -429,42 +433,47 @@ export function AssetDrawer({ open, onClose, projectId }: AssetDrawerProps) {
 	return (
 		<>
 			{open && (
-				<div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+				<div
+					className="fixed inset-0 z-[var(--z-modal-backdrop)] bg-neutral/40"
+					onClick={onClose}
+				/>
 			)}
 			<div
-				className={`fixed right-0 top-0 h-full w-80 bg-base-100 border-l-2 border-base-content/15 z-50 transform transition-transform duration-200 ${open ? "translate-x-0" : "translate-x-full"}`}
+				className={`fixed right-0 top-0 z-[var(--z-modal)] h-full w-72 transform border-l-2 border-base-content/15 bg-base-100 shadow-brutal-sm transition-transform duration-200 ${open ? "translate-x-0" : "translate-x-full"}`}
 			>
-				{/* Header */}
-				<div className="flex items-center justify-between p-3 border-b-2 border-base-content/10">
+				<div className="flex items-center justify-between border-b-2 border-base-content/10 px-2.5 py-2">
 					<div className="flex items-center gap-1.5">
-						<SvgIcon name="archive" size={16} className="text-primary" />
-						<h3 className="text-sm font-bold">资产库</h3>
-						<span className="badge badge-xs badge-ghost">
+						<SvgIcon name="archive" size={14} className="text-primary" />
+						<h3 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
+							资产库
+						</h3>
+						<span className="badge badge-xs badge-ghost tabular-nums">
 							{data?.total ?? 0}
 						</span>
 					</div>
-					<div className="flex items-center gap-1">
+					<div className="flex items-center gap-0.5">
 						<Button
 							variant="ghost"
 							size="sm"
-							className="!px-1 !min-h-0 !h-6 text-primary hover:text-primary-focus"
+							className="!h-7 !min-h-7 !px-1 text-primary hover:text-primary-focus"
 							onClick={() => setShowCreateForm(true)}
 							title="新建资产"
+							aria-label="新建资产"
 						>
 							<SvgIcon name="plus" size={14} />
 						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
-							className="!px-1 !min-h-0 !h-6"
+							className="!h-7 !min-h-7 !px-1"
 							onClick={onClose}
+							aria-label="关闭资产库"
 						>
 							<SvgIcon name="x" size={14} />
 						</Button>
 					</div>
 				</div>
 
-				{/* Tabs */}
 				<div className="flex border-b-2 border-base-content/10">
 					{ASSET_TABS.map((tab) => (
 						<button

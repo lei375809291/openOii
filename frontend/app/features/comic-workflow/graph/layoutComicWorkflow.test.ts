@@ -120,7 +120,7 @@ describe("layoutComicWorkflow", () => {
 		expect(layout.frames[3].x).toBeGreaterThan(layout.frames[2].x);
 	});
 
-	it("keeps shot cards in ascending order on the x axis", () => {
+	it("lays out ordered shots left-to-right in a 3-column grid", () => {
 		const graph = buildComicWorkflow({
 			project: project(),
 			characters: [],
@@ -138,8 +138,54 @@ describe("layoutComicWorkflow", () => {
 			"shot:11",
 			"shot:12",
 		]);
+		// Single row of three: x increases, y is shared
 		expect(shotNodes[0].x).toBeLessThan(shotNodes[1].x);
 		expect(shotNodes[1].x).toBeLessThan(shotNodes[2].x);
+		expect(shotNodes[0].y).toBe(shotNodes[1].y);
+		expect(shotNodes[1].y).toBe(shotNodes[2].y);
+	});
+
+	it("wraps the fourth shot onto the next grid row", () => {
+		const graph = buildComicWorkflow({
+			project: project(),
+			characters: [],
+			shots: [shot(1, 1), shot(2, 2), shot(3, 3), shot(4, 4)],
+			blockingClips: [],
+			isGenerating: false,
+		});
+
+		const shotNodes = layoutComicWorkflow(graph).nodes.filter((node) =>
+			node.id.startsWith("shot:"),
+		);
+
+		expect(shotNodes).toHaveLength(4);
+		// Cell 4 aligns under cell 1
+		expect(shotNodes[3].x).toBe(shotNodes[0].x);
+		expect(shotNodes[3].y).toBeGreaterThan(shotNodes[0].y);
+	});
+
+	it("sizes a full 3×3 grid frame for nine shots", () => {
+		const shots = Array.from({ length: 9 }, (_, i) => shot(i + 1, i + 1));
+		const graph = buildComicWorkflow({
+			project: project(),
+			characters: [],
+			shots,
+			blockingClips: [],
+			isGenerating: false,
+		});
+
+		const layout = layoutComicWorkflow(graph);
+		const shotNodes = layout.nodes.filter((n) => n.id.startsWith("shot:"));
+		const shotFrame = layout.frames.find((frame) => frame.section === "shotline");
+
+		expect(shotNodes).toHaveLength(9);
+		// 3 unique x, 3 unique y → 九宫格
+		const xs = new Set(shotNodes.map((n) => n.x));
+		const ys = new Set(shotNodes.map((n) => n.y));
+		expect(xs.size).toBe(3);
+		expect(ys.size).toBe(3);
+		expect(shotFrame?.w).toBeGreaterThan(600);
+		expect(shotFrame?.h).toBeGreaterThan(800);
 	});
 
 	it("keeps shot cards tall enough for media, copy, and metadata", () => {
@@ -155,8 +201,8 @@ describe("layoutComicWorkflow", () => {
 		const shotNode = layout.nodes.find((node) => node.id === "shot:10");
 		const shotFrame = layout.frames.find((frame) => frame.section === "shotline");
 
-		expect(shotNode?.w).toBe(320);
-		expect(shotNode?.h).toBe(430);
-		expect(shotFrame?.h).toBeGreaterThanOrEqual(560);
+		expect(shotNode?.w).toBe(220);
+		expect(shotNode?.h).toBe(300);
+		expect(shotFrame?.h).toBeGreaterThanOrEqual(360);
 	});
 });

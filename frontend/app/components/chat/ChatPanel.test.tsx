@@ -92,7 +92,7 @@ describe("ChatPanel", () => {
 
 		renderChatPanel(true);
 
-		expect(screen.getByText("规划...")).toBeInTheDocument();
+		expect(screen.getByText(/规划…|处理中…/)).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "停止生成" })).toBeInTheDocument();
 	});
 

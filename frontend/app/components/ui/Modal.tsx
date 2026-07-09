@@ -13,19 +13,15 @@ export function Modal({ isOpen, onClose, title, children, actions }: ModalProps)
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
-  // 焦点管理：保存并恢复焦点
   useEffect(() => {
     if (isOpen) {
       previousActiveElement.current = document.activeElement as HTMLElement;
-      // 聚焦到 modal 容器
       modalRef.current?.focus();
     } else {
-      // 恢复焦点到触发元素
       previousActiveElement.current?.focus();
     }
   }, [isOpen]);
 
-  // 键盘陷阱：限制 Tab 在 modal 内循环
   useEffect(() => {
     if (!isOpen) return;
 
@@ -38,7 +34,7 @@ export function Modal({ isOpen, onClose, title, children, actions }: ModalProps)
       if (e.key !== "Tab") return;
 
       const focusableElements = modalRef.current?.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
 
       if (!focusableElements || focusableElements.length === 0) return;
@@ -47,17 +43,13 @@ export function Modal({ isOpen, onClose, title, children, actions }: ModalProps)
       const lastElement = focusableElements[focusableElements.length - 1];
 
       if (e.shiftKey) {
-        // Shift + Tab: 如果在第一个元素，跳到最后一个
         if (document.activeElement === firstElement) {
           e.preventDefault();
           lastElement.focus();
         }
-      } else {
-        // Tab: 如果在最后一个元素，跳到第一个
-        if (document.activeElement === lastElement) {
-          e.preventDefault();
-          firstElement.focus();
-        }
+      } else if (document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement.focus();
       }
     };
 
@@ -68,27 +60,37 @@ export function Modal({ isOpen, onClose, title, children, actions }: ModalProps)
   if (!isOpen) return null;
 
   return (
-    <dialog className="modal modal-open" aria-modal="true" role="dialog" aria-labelledby={title ? "modal-title" : undefined}>
+    <dialog
+      className="modal modal-open"
+      aria-modal="true"
+      role="dialog"
+      aria-labelledby={title ? "modal-title" : undefined}
+    >
       <div
         ref={modalRef}
-        className="modal-box bg-base-200"
+        className="modal-box max-w-lg border-2 border-base-content/20 bg-base-100 p-4 shadow-brutal-sm"
         tabIndex={-1}
       >
         {title && (
-          <h3 id="modal-title" className="font-heading font-bold text-lg mb-4">
+          <h3
+            id="modal-title"
+            className="mb-2 font-heading text-[length:var(--text-md)] font-bold"
+          >
             {title}
           </h3>
         )}
-        <div className="py-4">{children}</div>
-        <div className="modal-action gap-2">
+        <div className="py-2 text-[length:var(--text-base)]">{children}</div>
+        <div className="modal-action mt-3 gap-2">
           {actions}
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             关闭
           </Button>
         </div>
       </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onClose} aria-label="关闭对话框">关闭</button>
+      <form method="dialog" className="modal-backdrop bg-neutral/45">
+        <button type="button" onClick={onClose} aria-label="关闭对话框">
+          关闭
+        </button>
       </form>
     </dialog>
   );

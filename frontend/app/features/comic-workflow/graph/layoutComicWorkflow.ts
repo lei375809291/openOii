@@ -26,21 +26,36 @@ export interface ComicWorkflowLayout {
 	nodes: WorkflowLayoutNode[];
 }
 
+/** Dense cards — sizes align with Design Contract shot tokens where applicable. */
 const CARD_SIZE: Record<ComicWorkflowNode["kind"], { w: number; h: number }> = {
-	brief: { w: 420, h: 330 },
-	character: { w: 260, h: 330 },
-	shot: { w: 320, h: 430 },
-	output: { w: 440, h: 320 },
+	brief: { w: 340, h: 260 },
+	character: { w: 200, h: 250 },
+	shot: { w: 220, h: 300 }, // --shot-card-w/h
+	output: { w: 340, h: 250 },
 };
+
+/** Classic storyboard grid columns (九宫格 reading order). */
+export const SHOT_GRID_COLUMNS = 3;
 
 const GAP = {
-	section: 84,
-	card: 24,
-	framePaddingX: 34,
-	frameHeader: 84,
+	section: 48, // ~ --canvas-gap-section
+	card: 14, // ~ --canvas-gap-card
+	framePaddingX: 20, // ~ --canvas-frame-pad
+	frameHeader: 56, // ~ --canvas-frame-header
 };
 
-const START = { x: 120, y: 120 };
+const START = { x: 64, y: 64 };
+
+export function shotGridPosition(
+	index: number,
+	columns: number = SHOT_GRID_COLUMNS,
+): { row: number; column: number } {
+	const cols = Math.max(1, columns);
+	return {
+		row: Math.floor(index / cols),
+		column: index % cols,
+	};
+}
 
 function rows(count: number, columns: number): number {
 	return Math.max(1, Math.ceil(count / columns));
@@ -98,15 +113,19 @@ export function layoutComicWorkflow(
 	const shotNodes = nodesForSection(graph, "shotline");
 	const outputNodes = nodesForSection(graph, "output");
 	const characterColumns = Math.max(1, Math.min(4, characterNodes.length || 1));
-	const shotColumns = Math.max(1, shotNodes.length || 1);
+	// Always project shots as a storyboard grid (max 3 columns → 九宫格 feel).
+	const shotColumns = Math.min(
+		SHOT_GRID_COLUMNS,
+		Math.max(1, shotNodes.length || 1),
+	);
 
 	const briefFrame: WorkflowLayoutFrame = {
 		id: "frame:brief",
 		section: "brief",
 		x: START.x,
 		y: START.y,
-		w: 500,
-		h: 520,
+		w: 400,
+		h: 380,
 	};
 
 	const elementsFrame = {
@@ -119,8 +138,8 @@ export function layoutComicWorkflow(
 			cardHeight: CARD_SIZE.character.h,
 			columns: characterColumns,
 			count: characterNodes.length,
-			minWidth: 860,
-			minHeight: 440,
+			minWidth: 640,
+			minHeight: 320,
 		}),
 	};
 
@@ -134,8 +153,12 @@ export function layoutComicWorkflow(
 			cardHeight: CARD_SIZE.shot.h,
 			columns: shotColumns,
 			count: shotNodes.length,
-			minWidth: 980,
-			minHeight: 560,
+			// Width for a full 3-up row even when fewer shots exist
+			minWidth:
+				GAP.framePaddingX * 2 +
+				SHOT_GRID_COLUMNS * CARD_SIZE.shot.w +
+				(SHOT_GRID_COLUMNS - 1) * GAP.card,
+			minHeight: 360,
 		}),
 	};
 
@@ -143,9 +166,9 @@ export function layoutComicWorkflow(
 		id: "frame:output",
 		section: "output",
 		x: shotlineFrame.x + shotlineFrame.w + GAP.section,
-		y: shotlineFrame.y + 40,
-		w: 540,
-		h: 430,
+		y: shotlineFrame.y + 24,
+		w: 400,
+		h: 320,
 	};
 
 	const layoutNodes: WorkflowLayoutNode[] = [];
@@ -179,11 +202,18 @@ export function layoutComicWorkflow(
 	});
 
 	shotNodes.forEach((node, index) => {
+		const { row, column } = shotGridPosition(index, shotColumns);
 		layoutNodes.push({
 			id: node.id,
 			node,
-			x: shotlineFrame.x + GAP.framePaddingX + index * (CARD_SIZE.shot.w + GAP.card),
-			y: shotlineFrame.y + GAP.frameHeader,
+			x:
+				shotlineFrame.x +
+				GAP.framePaddingX +
+				column * (CARD_SIZE.shot.w + GAP.card),
+			y:
+				shotlineFrame.y +
+				GAP.frameHeader +
+				row * (CARD_SIZE.shot.h + GAP.card),
 			...CARD_SIZE.shot,
 		});
 	});

@@ -15,7 +15,7 @@ const SECTION_COPY: Record<
 > = {
 	brief: { title: "Brief", eyebrow: "01 / STORY" },
 	elements: { title: "Elements", eyebrow: "02 / CAST" },
-	shotline: { title: "Shotline", eyebrow: "03 / SEQUENCE" },
+	shotline: { title: "九宫格分镜", eyebrow: "03 / GRID 3×N" },
 	output: { title: "Output", eyebrow: "04 / FINAL" },
 };
 
@@ -174,7 +174,9 @@ function sectionCountLabel(
 	}
 	if (section === "shotline") {
 		const count = nodes.filter((node) => node.kind === "shot").length;
-		return `${count} shots`;
+		if (count === 0) return "0 格";
+		const rows = Math.ceil(count / 3);
+		return `${count} 格 · ${Math.min(3, count)}×${rows}`;
 	}
 	return nodes.some((node) => node.kind === "output") ? "final cut" : "0 final";
 }
@@ -229,7 +231,7 @@ export function buildComicWorkflow({
 					? character.approved_image_url || character.image_url
 					: character.image_url,
 		})),
-		...visibleShots.map((shot): ComicWorkflowNode => ({
+		...visibleShots.map((shot, index): ComicWorkflowNode => ({
 			id: `shot:${shot.id}`,
 			kind: "shot",
 			section: "shotline",
@@ -243,6 +245,8 @@ export function buildComicWorkflow({
 			characterNames: shot.character_ids
 				.map((id) => characterNameById.get(id))
 				.filter((name): name is string => Boolean(name)),
+			gridIndex: index,
+			gridCell: index + 1,
 		})),
 	);
 

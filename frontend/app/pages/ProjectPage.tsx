@@ -100,7 +100,7 @@ export function ProjectPage() {
 	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
 	const hasRecovery = Boolean(storeRecoveryControl);
 	const [sidebarTab, setSidebarTab] = useState<WorkspaceSidebarTab>("chat");
-	const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
+	const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 	const [lastRunStatus, setLastRunStatus] =
 		useState<LastRunTerminalStatus>(null);
@@ -293,10 +293,17 @@ export function ProjectPage() {
 	}, [messages]);
 
 	const generateMutation = useMutation({
-		mutationFn: ({ requestToken }: { requestToken: number }) =>
+		mutationFn: ({
+			requestToken,
+			skillId,
+		}: {
+			requestToken: number;
+			skillId?: string | null;
+		}) =>
 			projectsApi
 				.generate(projectId, {
 					auto_mode: useEditorStore.getState().runMode === "yolo",
+					skill_id: skillId || undefined,
 				})
 				.then((run) => ({ run, requestToken })),
 		onSuccess: ({ run, requestToken }) => {
@@ -348,12 +355,18 @@ export function ProjectPage() {
 	});
 
 	const feedbackMutation = useMutation({
-		mutationFn: (content: string) =>
+		mutationFn: (payload: {
+			content: string;
+			entityType?: string;
+			entityId?: number;
+		}) =>
 			projectsApi.feedback(
 				projectId,
-				content,
+				payload.content,
 				undefined,
 				feedbackTypeForStage(storeCurrentStage),
+				payload.entityType,
+				payload.entityId,
 			),
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
@@ -439,16 +452,42 @@ export function ProjectPage() {
 		setLastRunStatus(null);
 		useEditorStore.getState().clearMessages();
 		useEditorStore.getState().setCurrentStage("plan");
-		generateMutation.mutate({ requestToken });
+		generateMutation.mutate({
+			requestToken,
+			skillId: searchParams.get("skill"),
+		});
 	};
 
 	const handleFeedback = (content: string) => {
 		setLastRunStatus(null);
-		feedbackMutation.mutate(content);
+		// Bind canvas selection → Agent review context (Phase 2)
+		let entityType: string | undefined;
+		let entityId: number | undefined;
+		let contextLabel = "";
+		if (selectedNodeId?.startsWith("character:")) {
+			const id = Number(selectedNodeId.split(":")[1]);
+			if (Number.isFinite(id)) {
+				entityType = "character";
+				entityId = id;
+				const char = storeCharacters.find((c) => c.id === id);
+				contextLabel = char?.name ? `（角色：${char.name}）` : `（角色 #${id}）`;
+			}
+		} else if (selectedNodeId?.startsWith("shot:")) {
+			const id = Number(selectedNodeId.split(":")[1]);
+			if (Number.isFinite(id)) {
+				entityType = "shot";
+				entityId = id;
+				const shot = storeShots.find((s) => s.id === id);
+				contextLabel = shot
+					? `（镜头 ${shot.order ?? id}）`
+					: `（镜头 #${id}）`;
+			}
+		}
+		feedbackMutation.mutate({ content, entityType, entityId });
 		useEditorStore.getState().addMessage({
 			agent: "user",
 			role: "user",
-			content,
+			content: contextLabel ? `${content}\n${contextLabel}` : content,
 			timestamp: new Date().toISOString(),
 		});
 	};
@@ -514,6 +553,7 @@ export function ProjectPage() {
 
 	useEffect(() => {
 		const autoStart = searchParams.get("autoStart");
+		const skillId = searchParams.get("skill");
 		if (
 			autoStart === "true" &&
 			project &&
@@ -522,15 +562,20 @@ export function ProjectPage() {
 		) {
 			const editorStore = useEditorStore.getState();
 			autoStartTriggered.current = true;
-			setSearchParams({}, { replace: true });
+			// Keep skill in URL only for this kickoff; clear autoStart noise
+			setSearchParams(skillId ? { skill: skillId } : {}, { replace: true });
 			const requestToken = generateRequestTokenRef.current + 1;
 			generateRequestTokenRef.current = requestToken;
 			setLastRunStatus(null);
 			editorStore.clearMessages();
 			editorStore.setCurrentStage("plan");
-			generateMutation.mutate({ requestToken });
+			// quick skill prefers yolo
+			if (skillId === "quick-short" || skillId === "comedy-pet") {
+				editorStore.setRunMode("yolo");
+			}
+			generateMutation.mutate({ requestToken, skillId });
 		}
-	}, [project, searchParams, setSearchParams, generateMutation]);
+	}, [project, searchParams, setSearchParams, generateMutation, hasActiveRun]);
 
 	const selectedWorkflowNode = useMemo(() => {
 		if (!project || !selectedNodeId) return null;
@@ -603,20 +648,23 @@ export function ProjectPage() {
 
 	if (workspaceLoading) {
 		return (
-			<div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base-100">
-				<ArrowPathIcon className="w-6 h-6 animate-pulse text-base-content/60" />
-				<p className="font-sketch text-2xl text-base-content/80">
-					正在加载项目...
-				</p>
+			<div className="page-shell items-center justify-center gap-3 bg-base-100">
+				<ArrowPathIcon
+					className="h-5 w-5 animate-pulse text-base-content/60"
+					aria-hidden="true"
+				/>
+				<p className="font-mono text-sm text-base-content/70">正在加载项目…</p>
 			</div>
 		);
 	}
 
 	if (!project) {
 		return (
-			<div className="min-h-screen flex items-center justify-center bg-base-100">
+			<div className="page-shell items-center justify-center bg-base-100">
 				<Card className="text-center">
-					<h1 className="text-2xl font-heading font-bold mb-4">项目未找到</h1>
+					<h1 className="mb-4 text-xl font-heading font-bold text-pretty">
+						项目未找到
+					</h1>
 					<Link to="/">
 						<Button variant="primary">返回首页</Button>
 					</Link>
@@ -626,7 +674,13 @@ export function ProjectPage() {
 	}
 
 	return (
-		<div className="h-screen flex flex-col bg-base-100 font-sans overflow-hidden">
+		<div className="page-shell bg-base-100 font-sans" data-shell="director-desk">
+			<a
+				href="#workbench-main"
+				className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[var(--z-modal)] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-content"
+			>
+				跳到工作台
+			</a>
 			<TopBar projectId={projectId} />
 			<StagePipeline
 				currentStage={storeCurrentStage}
@@ -645,17 +699,12 @@ export function ProjectPage() {
 				generateDisabled={generateMutation.isPending || hasActiveRun}
 			/>
 
+			{/* OiiOii-style: Agent/chat left · canvas right */}
 			<main
-				className="relative flex flex-1 overflow-hidden"
+				id="workbench-main"
+				className="relative flex min-h-0 flex-1 overflow-hidden"
 				aria-label="漫剧工作台"
 			>
-				<div className="flex-1 relative overflow-hidden">
-					<StageView
-						projectId={projectId}
-						onSelectedNodeIdChange={handleSelectedNodeIdChange}
-					/>
-				</div>
-
 				<WorkspaceSidebar
 					activeTab={sidebarTab}
 					onTabChange={setSidebarTab}
@@ -668,7 +717,20 @@ export function ProjectPage() {
 					isGenerating={hasActiveRun}
 					collapsed={workspaceCollapsed}
 					onCollapsedChange={setWorkspaceCollapsed}
+					selectionLabel={
+						selectedWorkflowNode
+							? `${selectedWorkflowNode.kind} · ${selectedWorkflowNode.title}`
+							: null
+					}
+					placement="left"
 				/>
+
+				<div className="relative min-w-0 flex-1 overflow-hidden workbench-canvas-frame">
+					<StageView
+						projectId={projectId}
+						onSelectedNodeIdChange={handleSelectedNodeIdChange}
+					/>
+				</div>
 			</main>
 
 			{versionOpen && (

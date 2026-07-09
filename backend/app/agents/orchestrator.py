@@ -5,7 +5,6 @@ import logging
 from typing import Any, cast
 
 import redis.asyncio as redis
-from langgraph.types import Command
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +19,7 @@ from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
+from app.orchestration.driver import drive_graph_until_idle, gate_name_from_interrupt
 from app.orchestration.graph import build_phase2_graph
 from app.orchestration.persistence import build_postgres_checkpointer
 from app.orchestration.runtime import (
@@ -28,6 +28,7 @@ from app.orchestration.runtime import (
     build_stage_recovery_config,
 )
 from app.orchestration.state import Phase2Stage, next_production_stage, workflow_progress_for_stage
+from app.skills.catalog import resolve_skill_entry
 from app.services.creative_control import collect_project_blocking_clips
 from app.services.file_cleaner import delete_files
 from app.services.image_factory import create_image_service
@@ -689,8 +690,12 @@ class GenerationOrchestrator:
         run_id: int,
         thread_id: str,
         start_stage: str,
+        skill_id: str | None = None,
+        focus_entity_type: str | None = None,
+        focus_entity_id: int | None = None,
+        route_mode: str = "full",
     ) -> dict[str, Any]:
-        return {
+        state: dict[str, Any] = {
             "project_id": project_id,
             "run_id": run_id,
             "thread_id": thread_id,
@@ -701,9 +706,16 @@ class GenerationOrchestrator:
             "review_requested": False,
             "approval_feedback": "",
             "route_stage": start_stage,
-            "route_mode": "full",
+            "route_mode": route_mode,
             "video_generation_skipped": False,
         }
+        if skill_id:
+            state["skill_id"] = skill_id
+        if focus_entity_type:
+            state["focus_entity_type"] = focus_entity_type
+        if focus_entity_id is not None:
+            state["focus_entity_id"] = focus_entity_id
+        return state
 
     async def _invoke_phase2_graph(
         self,
@@ -722,50 +734,8 @@ class GenerationOrchestrator:
         project_pk = int(project.id)
         run_pk = int(run.id)
 
-        payload: Any = initial_payload
-        video_generation_skipped = False
-        final_stage = "compose"
-        saw_compose_stage = False
-        while True:
-            logger.debug(
-                "[graph] run=%s ainvoke start payload_type=%s", run_pk, type(payload).__name__
-            )
-            result = await compiled_graph.ainvoke(payload, graph_config, context=runtime_context)
-            logger.debug(
-                "[graph] run=%s ainvoke returned result_type=%s", run_pk, type(result).__name__
-            )
-            if not isinstance(result, dict):
-                logger.warning("[graph] run=%s result not dict, breaking", run_pk)
-                break
-
-            result_stage = result.get("current_stage")
-            if isinstance(result_stage, str) and result_stage:
-                final_stage = result_stage
-                if result_stage.startswith("compose"):
-                    saw_compose_stage = True
-
-            if _video_generation_skipped_in_result(result):
-                video_generation_skipped = True
-
-            interrupts = result.get("__interrupt__") or []
-            logger.debug(
-                "[graph] run=%s interrupts_count=%s keys=%s",
-                run_pk,
-                len(interrupts),
-                list(result.keys()),
-            )
-            if not interrupts:
-                logger.debug("[graph] run=%s no interrupts, breaking", run_pk)
-                break
-
-            interrupt_value = getattr(interrupts[0], "value", None)
-            gate_agent = None
-            if isinstance(interrupt_value, dict):
-                gate_agent = interrupt_value.get("gate")
-
-            if not isinstance(gate_agent, str) or not gate_agent.strip():
-                raise RuntimeError("LangGraph approval gate did not include a valid gate name")
-
+        async def _on_interrupt(interrupt_item: Any) -> dict[str, Any]:
+            gate_agent = gate_name_from_interrupt(interrupt_item)
             logger.debug(
                 "[graph] run=%s interrupt gate=%s auto_mode=%s", run_pk, gate_agent, auto_mode
             )
@@ -773,19 +743,34 @@ class GenerationOrchestrator:
             action = "approve"
             if not auto_mode:
                 feedback = (
-                    await self._wait_for_confirm(project_pk, run, gate_agent.strip(), agent_ctx=ctx)
-                    or ""
+                    await self._wait_for_confirm(project_pk, run, gate_agent, agent_ctx=ctx) or ""
                 )
             else:
                 await self._send_auto_approval_events(
-                    project_pk, run, gate_agent.strip(), agent_ctx=ctx
+                    project_pk, run, gate_agent, agent_ctx=ctx
                 )
+            if feedback:
+                action = "feedback"
             logger.debug(
                 "[graph] run=%s resume with feedback=%r action=%s", run_pk, feedback, action
             )
-            if feedback:
-                action = "feedback"
-            payload = Command(resume={"action": action, "feedback": feedback})
+            return {"action": action, "feedback": feedback}
+
+        graph_result = await drive_graph_until_idle(
+            compiled_graph,
+            initial_payload=initial_payload,
+            graph_config=graph_config,
+            runtime_context=runtime_context,
+            on_interrupt=_on_interrupt,
+            run_id=run_pk,
+        )
+        video_generation_skipped = graph_result.video_generation_skipped
+        final_stage = graph_result.final_stage
+        saw_compose_stage = graph_result.saw_compose_stage
+
+        # Preserve legacy detection if state flags differ
+        if _video_generation_skipped_in_result(graph_result.state):
+            video_generation_skipped = True
 
         await self.session.refresh(ctx.project)
 
@@ -832,6 +817,21 @@ class GenerationOrchestrator:
         if agent_name == "outline" and (not self.settings.outline_enabled or project.outline_approved):
             start_stage = "plan_characters"
             agent_name = "plan"
+
+        # Skill entry may override start stage when launching a full generate.
+        skill_resolution = resolve_skill_entry(
+            getattr(request, "skill_id", None),
+            auto_mode=auto_mode,
+            outline_enabled=self.settings.outline_enabled,
+        )
+        if request.skill_id and agent_name in ("outline", "plan") and not ctx.user_feedback:
+            start_stage = skill_resolution.start_stage
+            agent_name = skill_resolution.start_agent
+            auto_mode = skill_resolution.auto_mode
+            if skill_resolution.notes_suffix:
+                notes = (request.notes or "").strip()
+                request.notes = f"{notes}\n{skill_resolution.notes_suffix}".strip()
+
         if project.id is None or run.id is None:
             raise RuntimeError("Project and run must be persisted before graph execution")
         graph_config = cast(Any, build_graph_config(run))
@@ -843,12 +843,18 @@ class GenerationOrchestrator:
             agent_context=ctx,
             start_stage=start_stage,
             auto_mode=auto_mode,
+            skill_id=request.skill_id,
         )
+        route_mode = getattr(ctx, "rerun_mode", None) or "full"
         initial_state = self._build_phase2_state(
             project_id=int(project.id),
             run_id=int(run.id),
             thread_id=graph_config["configurable"]["thread_id"],
             start_stage=start_stage,
+            skill_id=request.skill_id,
+            focus_entity_type=ctx.entity_type or request.entity_type,
+            focus_entity_id=ctx.entity_id if ctx.entity_id is not None else request.entity_id,
+            route_mode=route_mode,
         )
 
         async with build_postgres_checkpointer(self.settings.database_url) as checkpointer:
@@ -1021,6 +1027,15 @@ class GenerationOrchestrator:
             )
 
             ctx = self._build_agent_context(project=project, run=run, request=request)
+            # Propagate selection focus for partial re-runs (canvas → Agent).
+            if entity_type and not ctx.entity_type:
+                ctx.entity_type = entity_type
+            if entity_id is not None and ctx.entity_id is None:
+                ctx.entity_id = entity_id
+            if request.entity_type and not ctx.entity_type:
+                ctx.entity_type = request.entity_type
+            if request.entity_id is not None and ctx.entity_id is None:
+                ctx.entity_id = request.entity_id
 
             # 初始化当前 run 已存在的用户反馈消息（避免后续确认不带反馈时误读历史反馈）
             stmt = (
@@ -1120,10 +1135,17 @@ class GenerationOrchestrator:
     async def run(
         self, *, project_id: int, run_id: int, request: GenerateRequest, auto_mode: bool = False
     ) -> None:
+        skill = resolve_skill_entry(
+            request.skill_id,
+            auto_mode=auto_mode or request.auto_mode,
+            outline_enabled=self.settings.outline_enabled,
+        )
         await self.run_from_agent(
             project_id=project_id,
             run_id=run_id,
             request=request,
-            agent_name="outline" if self.settings.outline_enabled else "plan",
-            auto_mode=auto_mode,
+            agent_name=skill.start_agent,
+            auto_mode=skill.auto_mode,
+            entity_type=request.entity_type,
+            entity_id=request.entity_id,
         )

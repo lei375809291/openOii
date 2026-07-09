@@ -1,3 +1,12 @@
+"""Phase-2 comic production graph.
+
+LangGraph notes (2026 docs):
+- Dynamic HITL uses ``interrupt()`` inside approval nodes (see ``nodes.py``),
+  not static ``interrupt_before`` breakpoints.
+- Resume only via ``Command(resume=...)`` (handled by ``driver.drive_graph_until_idle``).
+- Persistence requires a checkpointer + stable ``thread_id`` (orchestrator + runtime).
+"""
+
 from __future__ import annotations
 
 from langgraph.graph import END, StateGraph

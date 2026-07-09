@@ -61,6 +61,10 @@ export interface ShotWorkflowNode extends ComicWorkflowNodeBase {
 	imageUrl: string | null;
 	videoUrl: string | null;
 	characterNames: string[];
+	/** 0-based index in ordered shotline (for 九宫格 cell label). */
+	gridIndex: number;
+	/** 1-based cell number for display (格 1 …). */
+	gridCell: number;
 }
 
 export type OutputState =

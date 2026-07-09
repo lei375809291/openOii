@@ -310,10 +310,10 @@ export function SettingsModal() {
 	const renderConfigItem = (item: ConfigItem) => (
 		<div
 			key={item.key}
-			className="bg-base-200 p-4 rounded-lg border-2 border-base-content/30"
+			className="rounded-[var(--radius-md)] border-2 border-base-content/15 bg-base-200/70 p-2.5"
 		>
-			<div className="flex items-center gap-2 mb-2">
-				<span className="font-mono font-bold text-sm">
+			<div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+				<span className="font-mono text-[length:var(--text-xs)] font-bold">
 					{item.key.toUpperCase()}
 				</span>
 				{item.is_sensitive && (
@@ -328,7 +328,7 @@ export function SettingsModal() {
 				value={String(formState[item.key] ?? "")}
 				onChange={handleInputChange}
 			/>
-			<p className="text-xs text-base-content/60 mt-2">
+			<p className="mt-1.5 text-[length:var(--text-2xs)] text-base-content/55">
 				{getConfigDescription(item.key)}
 			</p>
 		</div>
@@ -353,139 +353,92 @@ export function SettingsModal() {
 				i.key.toLowerCase() !== "text_provider",
 		);
 
+		const providerCard = (value: string, title: string, desc: string) => (
+			<label
+				className={`
+          flex flex-1 cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border-2 p-2.5 transition-all
+          ${
+						textProvider === value
+							? "border-accent bg-accent/10"
+							: "border-base-content/20 hover:bg-base-300"
+					}
+        `}
+			>
+				<input
+					type="radio"
+					name="TEXT_PROVIDER"
+					value={value}
+					checked={textProvider === value}
+					onChange={handleInputChange}
+					className="radio radio-accent radio-sm"
+				/>
+				<div className="min-w-0">
+					<div className="text-[length:var(--text-sm)] font-bold">{title}</div>
+					<div className="text-[length:var(--text-2xs)] text-base-content/60">
+						{desc}
+					</div>
+				</div>
+			</label>
+		);
+
 		return (
-			<div className="space-y-6">
-				{/* 分类描述 */}
-				<div className="flex items-center gap-2 text-sm text-info bg-info/10 px-4 py-2 rounded-lg border border-info/30">
-					<InformationCircleIcon className="w-4 h-4 shrink-0" />
+			<div className="space-y-3">
+				<div className="flex items-start gap-1.5 rounded-[var(--radius-md)] border border-info/30 bg-info/10 px-2.5 py-1.5 text-[length:var(--text-xs)] text-info">
+					<InformationCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>{tabConfig[activeTab]?.desc}</span>
 				</div>
 
-				{/* 服务提供商选择 */}
 				{providerItem && (
-					<div className="bg-base-200 p-4 rounded-lg border-2 border-base-content/30">
-						<div className="flex items-center gap-2 mb-3">
-							<span className="font-mono font-bold text-sm">TEXT_PROVIDER</span>
+					<div className="rounded-[var(--radius-md)] border-2 border-base-content/15 bg-base-200/70 p-2.5">
+						<div className="mb-2 flex items-center gap-1.5">
+							<span className="font-mono text-[length:var(--text-xs)] font-bold">
+								TEXT_PROVIDER
+							</span>
 							<span className="badge badge-primary badge-xs">必选</span>
 						</div>
-						<div className="flex gap-4">
-							<label
-								className={`
-                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									textProvider === "anthropic"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="TEXT_PROVIDER"
-									value="anthropic"
-									checked={textProvider === "anthropic"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">Anthropic Claude</div>
-									<div className="text-xs text-base-content/60">
-										Anthropic 兼容接口，推荐使用
-									</div>
-								</div>
-							</label>
-							<label
-								className={`
-                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									textProvider === "openai"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="TEXT_PROVIDER"
-									value="openai"
-									checked={textProvider === "openai"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">OpenAI 兼容</div>
-									<div className="text-xs text-base-content/60">
-										支持任何 OpenAI 兼容接口
-									</div>
-								</div>
-							</label>
-							<label
-								className={`
-                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									textProvider === "fake"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="TEXT_PROVIDER"
-									value="fake"
-									checked={textProvider === "fake"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">Fake 本地测试</div>
-									<div className="text-xs text-base-content/60">
-										不调用外部文本 API，避免测试扣费
-									</div>
-								</div>
-							</label>
+						<div className="flex flex-col gap-2 lg:flex-row">
+							{providerCard("anthropic", "Anthropic Claude", "Anthropic 兼容接口，推荐使用")}
+							{providerCard("openai", "OpenAI 兼容", "支持任何 OpenAI 兼容接口")}
+							{providerCard("fake", "Fake 本地测试", "不调用外部文本 API，避免测试扣费")}
 						</div>
 					</div>
 				)}
 
-				{/* Anthropic 配置 */}
 				{textProvider === "anthropic" && anthropicItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<SparklesIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<SparklesIcon className="h-3.5 w-3.5" />
 							Anthropic Claude 配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{anthropicItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
 
-				{/* OpenAI 兼容配置 */}
 				{textProvider === "openai" && openaiItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<SparklesIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<SparklesIcon className="h-3.5 w-3.5" />
 							OpenAI 兼容接口配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{openaiItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
 
-				{/* Fake 配置 */}
 				{textProvider === "fake" && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<SparklesIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<SparklesIcon className="h-3.5 w-3.5" />
 							Fake 本地测试配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{activeSection.items
 								.filter((i) => i.key.toLowerCase().startsWith("fake_text_"))
 								.map(renderConfigItem)}
-							<p className="text-xs text-base-content/60 px-1">
+							<p className="m-0 px-1 text-[length:var(--text-2xs)] text-base-content/55">
 								启用后生成链路不会调用外部文本生成 API。
 							</p>
 						</div>
@@ -515,123 +468,81 @@ export function SettingsModal() {
 			i.key.toLowerCase().startsWith("fake_image_"),
 		);
 
+		const providerCard = (value: string, title: string, desc: string) => (
+			<label
+				className={`
+          flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border-2 p-2.5 transition-all
+          ${
+						imageProvider === value
+							? "border-accent bg-accent/10"
+							: "border-base-content/20 hover:bg-base-300"
+					}
+        `}
+			>
+				<input
+					type="radio"
+					name="IMAGE_PROVIDER"
+					value={value}
+					checked={imageProvider === value}
+					onChange={handleInputChange}
+					className="radio radio-accent radio-sm"
+				/>
+				<div className="min-w-0">
+					<div className="text-[length:var(--text-sm)] font-bold">{title}</div>
+					<div className="text-[length:var(--text-2xs)] text-base-content/60">
+						{desc}
+					</div>
+				</div>
+			</label>
+		);
+
 		return (
-			<div className="space-y-6">
-				<div className="flex items-center gap-2 text-sm text-info bg-info/10 px-4 py-2 rounded-lg border border-info/30">
-					<InformationCircleIcon className="w-4 h-4 shrink-0" />
+			<div className="space-y-3">
+				<div className="flex items-start gap-1.5 rounded-[var(--radius-md)] border border-info/30 bg-info/10 px-2.5 py-1.5 text-[length:var(--text-xs)] text-info">
+					<InformationCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>{tabConfig[activeTab]?.desc}</span>
 				</div>
 
 				{providerItem && (
-					<div className="bg-base-200 p-4 rounded-lg border-2 border-base-content/30">
-						<div className="flex items-center gap-2 mb-3">
-							<span className="font-mono font-bold text-sm">IMAGE_PROVIDER</span>
+					<div className="rounded-[var(--radius-md)] border-2 border-base-content/15 bg-base-200/70 p-2.5">
+						<div className="mb-2 flex items-center gap-1.5">
+							<span className="font-mono text-[length:var(--text-xs)] font-bold">
+								IMAGE_PROVIDER
+							</span>
 							<span className="badge badge-primary badge-xs">必选</span>
 						</div>
-						<div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-							<label
-								className={`
-                flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									imageProvider === "openai"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="IMAGE_PROVIDER"
-									value="openai"
-									checked={imageProvider === "openai"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">OpenAI 兼容</div>
-									<div className="text-xs text-base-content/60">
-										可用于 gpt-image-2 等兼容接口
-									</div>
-								</div>
-							</label>
-							<label
-								className={`
-                flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									imageProvider === "modelscope"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="IMAGE_PROVIDER"
-									value="modelscope"
-									checked={imageProvider === "modelscope"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">ModelScope</div>
-									<div className="text-xs text-base-content/60">
-										异步图片任务，支持 Z-Image-Turbo
-									</div>
-								</div>
-							</label>
-							<label
-								className={`
-                flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									imageProvider === "fake"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="IMAGE_PROVIDER"
-									value="fake"
-									checked={imageProvider === "fake"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">Fake 本地测试</div>
-									<div className="text-xs text-base-content/60">
-										返回本地占位图，不调用外部图像 API
-									</div>
-								</div>
-							</label>
+						<div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+							{providerCard("openai", "OpenAI 兼容", "可用于 gpt-image-2 等兼容接口")}
+							{providerCard("modelscope", "ModelScope", "异步图片任务，支持 Z-Image-Turbo")}
+							{providerCard("fake", "Fake 本地测试", "返回本地占位图，不调用外部图像 API")}
 						</div>
 					</div>
 				)}
 
 				{(imageProvider === "modelscope" || imageProvider === "openai") &&
 					imageApiItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<PhotoIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<PhotoIcon className="h-3.5 w-3.5" />
 							{imageProvider === "modelscope"
 								? "ModelScope 图像接口配置"
 								: "OpenAI 兼容接口配置"}
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{imageApiItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
 
 				{imageProvider === "fake" && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<PhotoIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<PhotoIcon className="h-3.5 w-3.5" />
 							Fake 本地测试配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{fakeItems.map(renderConfigItem)}
-							<p className="text-xs text-base-content/60 px-1">
+							<p className="m-0 px-1 text-[length:var(--text-2xs)] text-base-content/55">
 								未配置固定 URL 时会返回内置 SVG 占位图。
 							</p>
 						</div>
@@ -639,12 +550,12 @@ export function SettingsModal() {
 				)}
 
 				{commonItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-base-content/70">
-							<WrenchScrewdriverIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-base-content/70">
+							<WrenchScrewdriverIcon className="h-3.5 w-3.5" />
 							通用配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-base-300/30 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-base-300/30 py-1.5 pl-2.5">
 							{commonItems.map(renderConfigItem)}
 						</div>
 					</div>
@@ -687,150 +598,100 @@ export function SettingsModal() {
 			i.key.toLowerCase().startsWith("fake_video_"),
 		);
 
+		const providerCard = (value: string, title: string, desc: string) => (
+			<label
+				className={`
+          flex flex-1 cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border-2 p-2.5 transition-all
+          ${
+						videoProvider === value
+							? "border-accent bg-accent/10"
+							: "border-base-content/20 hover:bg-base-300"
+					}
+        `}
+			>
+				<input
+					type="radio"
+					name="VIDEO_PROVIDER"
+					value={value}
+					checked={videoProvider === value}
+					onChange={handleInputChange}
+					className="radio radio-accent radio-sm"
+				/>
+				<div className="min-w-0">
+					<div className="text-[length:var(--text-sm)] font-bold">{title}</div>
+					<div className="text-[length:var(--text-2xs)] text-base-content/60">
+						{desc}
+					</div>
+				</div>
+			</label>
+		);
+
 		return (
-			<div className="space-y-6">
-				{/* 分类描述 */}
-				<div className="flex items-center gap-2 text-sm text-info bg-info/10 px-4 py-2 rounded-lg border border-info/30">
-					<InformationCircleIcon className="w-4 h-4 shrink-0" />
+			<div className="space-y-3">
+				<div className="flex items-start gap-1.5 rounded-[var(--radius-md)] border border-info/30 bg-info/10 px-2.5 py-1.5 text-[length:var(--text-xs)] text-info">
+					<InformationCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>{tabConfig[activeTab]?.desc}</span>
 				</div>
 
-				{/* 服务提供商选择 */}
 				{providerItem && (
-					<div className="bg-base-200 p-4 rounded-lg border-2 border-base-content/30">
-						<div className="flex items-center gap-2 mb-3">
-							<span className="font-mono font-bold text-sm">
+					<div className="rounded-[var(--radius-md)] border-2 border-base-content/15 bg-base-200/70 p-2.5">
+						<div className="mb-2 flex items-center gap-1.5">
+							<span className="font-mono text-[length:var(--text-xs)] font-bold">
 								VIDEO_PROVIDER
 							</span>
 							<span className="badge badge-primary badge-xs">必选</span>
 						</div>
-						<div className="flex gap-4">
-							<label
-								className={`
-                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									videoProvider === "doubao"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="VIDEO_PROVIDER"
-									value="doubao"
-									checked={videoProvider === "doubao"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">豆包视频</div>
-									<div className="text-xs text-base-content/60">
-										火山引擎 Ark API，国内推荐
-									</div>
-								</div>
-							</label>
-							<label
-								className={`
-                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									videoProvider === "openai"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="VIDEO_PROVIDER"
-									value="openai"
-									checked={videoProvider === "openai"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">OpenAI 兼容</div>
-									<div className="text-xs text-base-content/60">
-										支持任何 OpenAI 兼容接口
-									</div>
-								</div>
-							</label>
-							<label
-								className={`
-                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                ${
-									videoProvider === "fake"
-										? "border-accent bg-accent/10"
-										: "border-base-content/30 hover:bg-base-300"
-								}
-              `}
-							>
-								<input
-									type="radio"
-									name="VIDEO_PROVIDER"
-									value="fake"
-									checked={videoProvider === "fake"}
-									onChange={handleInputChange}
-									className="radio radio-accent"
-								/>
-								<div>
-									<div className="font-bold">Fake 本地测试</div>
-									<div className="text-xs text-base-content/60">
-										使用本地视频素材，不调用外部视频 API
-									</div>
-								</div>
-							</label>
+						<div className="flex flex-col gap-2 lg:flex-row">
+							{providerCard("doubao", "豆包视频", "火山引擎 Ark API，国内推荐")}
+							{providerCard("openai", "OpenAI 兼容", "支持任何 OpenAI 兼容接口")}
+							{providerCard("fake", "Fake 本地测试", "使用本地视频素材，不调用外部视频 API")}
 						</div>
 					</div>
 				)}
 
-				{/* 豆包配置 */}
 				{videoProvider === "doubao" && doubaoItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<VideoCameraIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<VideoCameraIcon className="h-3.5 w-3.5" />
 							豆包视频配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{doubaoItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
 
-				{/* OpenAI 兼容配置 */}
 				{videoProvider === "openai" && openaiItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<VideoCameraIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<VideoCameraIcon className="h-3.5 w-3.5" />
 							OpenAI 兼容接口配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{openaiItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
 
-				{/* Fake 配置 */}
 				{videoProvider === "fake" && fakeItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
-							<VideoCameraIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-accent">
+							<VideoCameraIcon className="h-3.5 w-3.5" />
 							Fake 本地测试配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{fakeItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
 
-				{/* 通用配置 */}
 				{commonItems.length > 0 && (
-					<div className="space-y-4">
-						<h4 className="font-bold text-sm flex items-center gap-2 text-base-content/70">
-							<WrenchScrewdriverIcon className="w-4 h-4" />
+					<div className="space-y-2">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-base-content/70">
+							<WrenchScrewdriverIcon className="h-3.5 w-3.5" />
 							通用配置
 						</h4>
-						<div className="space-y-4 pl-4 bg-base-300/30 rounded-r-lg py-2">
+						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-base-300/30 py-1.5 pl-2.5">
 							{commonItems.map(renderConfigItem)}
 						</div>
 					</div>
@@ -850,23 +711,20 @@ export function SettingsModal() {
 			return null;
 
 		return (
-			<div className="space-y-4">
-				{/* 分类描述 */}
-				<div className="flex items-center gap-2 text-sm text-info bg-info/10 px-4 py-2 rounded-lg border border-info/30">
-					<InformationCircleIcon className="w-4 h-4 shrink-0" />
+			<div className="space-y-3">
+				<div className="flex items-start gap-1.5 rounded-[var(--radius-md)] border border-info/30 bg-info/10 px-2.5 py-1.5 text-[length:var(--text-xs)] text-info">
+					<InformationCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>{tabConfig[activeTab]?.desc}</span>
 				</div>
 
-				{/* 配置项列表 */}
-				<div className="space-y-4">
+				<div className="space-y-2">
 					{activeSection.items.map(renderConfigItem)}
 				</div>
 
-				{/* 空状态 */}
 				{activeSection.items.length === 0 && (
-					<div className="text-center py-12 text-base-content/50">
-						<InformationCircleIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-						<p>此分类暂无配置项</p>
+					<div className="py-8 text-center text-[length:var(--text-xs)] text-base-content/50">
+						<InformationCircleIcon className="mx-auto mb-1.5 h-8 w-8 opacity-50" />
+						<p className="m-0">此分类暂无配置项</p>
 					</div>
 				)}
 			</div>
@@ -880,40 +738,39 @@ export function SettingsModal() {
 			aria-modal="true"
 			aria-labelledby="settings-modal-title"
 		>
-			<div className="modal-box w-11/12 max-w-5xl max-h-[90vh] border-3 border-base-content/30 shadow-brutal-lg bg-base-100 p-0 flex flex-col">
-				{/* 头部 */}
-				<div className="flex items-center justify-between px-6 py-4 border-b-3 border-base-content/30 bg-base-200 shrink-0">
+			<div className="modal-box flex max-h-[88vh] w-11/12 max-w-5xl flex-col border-2 border-base-content/20 bg-base-100 p-0 shadow-brutal-sm">
+				<div className="flex shrink-0 items-center justify-between border-b-2 border-base-content/15 bg-base-200 px-3 py-2 sm:px-4">
 					<h3
 						id="settings-modal-title"
-						className="font-bold text-xl flex items-center gap-2"
+						className="flex items-center gap-1.5 font-heading text-[length:var(--text-md)] font-bold"
 					>
-						<Cog6ToothIcon className="w-6 h-6 text-accent" />
+						<Cog6ToothIcon className="h-5 w-5 text-accent" />
 						环境变量配置管理
 					</h3>
 					<button
 						type="button"
 						onClick={handleCancel}
-						className="btn btn-ghost btn-circle h-11 min-h-11 w-11"
+						className="btn btn-ghost btn-circle touch-target-dense h-8 min-h-8 w-8"
 						aria-label="关闭设置"
 						title="关闭设置"
 					>
-						<XMarkIcon className="w-5 h-5" />
+						<XMarkIcon className="h-4 w-4" />
 					</button>
 				</div>
 
 				{isLoading && (
-					<div className="flex items-center justify-center p-12">
-						<span className="loading loading-spinner loading-lg"></span>
+					<div className="flex items-center justify-center p-8">
+						<span className="loading loading-spinner loading-md" />
 					</div>
 				)}
 
 				{isError && (
-					<div className="p-6">
+					<div className="p-3">
 						<div
 							role="alert"
-							className="alert alert-error border-2 border-base-content/30"
+							className="alert alert-error border-2 border-base-content/20 py-2 text-[length:var(--text-sm)]"
 						>
-							<ExclamationCircleIcon className="w-6 h-6" />
+							<ExclamationCircleIcon className="h-5 w-5" />
 							<span>加载配置失败，请检查后端服务是否正常运行。</span>
 						</div>
 					</div>
@@ -922,11 +779,10 @@ export function SettingsModal() {
 				{config && (
 					<form
 						onSubmit={handleSubmit}
-						className="flex flex-col flex-1 min-h-0"
+						className="flex min-h-0 flex-1 flex-col"
 					>
-						{/* 标签页导航 */}
-						<div className="px-4 py-3 border-b-3 border-base-content/30 bg-base-100 shrink-0">
-							<div role="tablist" className="flex flex-wrap gap-2">
+						<div className="shrink-0 border-b-2 border-base-content/15 bg-base-100 px-3 py-2">
+							<div role="tablist" className="flex flex-wrap gap-1.5">
 								{sections.map((section) => {
 									const cfg = tabConfig[section.key];
 									const isActive = activeTab === section.key;
@@ -938,11 +794,12 @@ export function SettingsModal() {
 											aria-selected={isActive}
 											onClick={() => handleTabChange(section.key)}
 											className={`
-                        flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-                        border-2 border-base-content/30 transition-all
+                        flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] px-2.5
+                        text-[length:var(--text-xs)] font-medium
+                        border-2 border-base-content/20 transition-all
                         ${
 													isActive
-														? "bg-accent text-accent-content shadow-brutal"
+														? "bg-accent text-accent-content shadow-brutal-sm"
 														: "bg-base-200 hover:bg-base-300"
 												}
                       `}
@@ -951,7 +808,7 @@ export function SettingsModal() {
 											<span>{cfg?.title || section.title}</span>
 											<span
 												className={`
-                        text-xs px-1.5 py-0.5 rounded
+                        rounded px-1 py-0.5 text-[length:var(--text-2xs)] tabular-nums
                         ${isActive ? "bg-accent-content/20" : "bg-base-300"}
                       `}
 											>
@@ -963,8 +820,7 @@ export function SettingsModal() {
 							</div>
 						</div>
 
-						{/* 标签页内容 */}
-						<div className="flex-1 overflow-y-auto p-6">
+						<div className="flex-1 overflow-y-auto p-3 sm:p-4">
 							{activeTab === "text"
 								? renderTextSection()
 								: activeTab === "image"
@@ -974,34 +830,35 @@ export function SettingsModal() {
 										: renderNormalSection()}
 						</div>
 
-						{/* 底部操作栏 */}
-						<div className="border-t-3 border-base-content/30 bg-base-200 px-6 py-4 flex items-center gap-4 shrink-0">
-							<div className="flex items-center gap-2 text-info text-sm flex-1">
-								<InformationCircleIcon className="w-5 h-5 shrink-0" />
-								<span>大部分配置保存后立即生效，数据库/Redis 配置需重启</span>
+						<div className="flex shrink-0 flex-wrap items-center gap-2 border-t-2 border-base-content/15 bg-base-200 px-3 py-2 sm:px-4">
+							<div className="flex min-w-0 flex-1 items-center gap-1.5 text-[length:var(--text-2xs)] text-info">
+								<InformationCircleIcon className="h-4 w-4 shrink-0" />
+								<span className="truncate">
+									大部分配置保存后立即生效，数据库/Redis 配置需重启
+								</span>
 							</div>
 
 							<button
 								type="button"
 								onClick={handleCancel}
-								className="btn border-2 border-base-content/30"
+								className="btn h-8 min-h-8 border-2 border-base-content/20 px-3 text-[length:var(--text-xs)]"
 							>
 								取消
 							</button>
 
 							<button
 								type="submit"
-								className="btn btn-primary border-2 border-base-content/30"
+								className="btn btn-primary h-8 min-h-8 border-2 border-base-content/20 px-3 text-[length:var(--text-xs)]"
 								disabled={updateMutation.isPending}
 							>
 								{updateMutation.isPending && (
-									<span className="loading loading-spinner loading-sm"></span>
+									<span className="loading loading-spinner loading-xs" />
 								)}
 								保存配置
 							</button>
 							<button
 								type="button"
-								className="btn btn-outline border-2 border-base-content/30"
+								className="btn btn-outline h-8 min-h-8 border-2 border-base-content/20 px-3 text-[length:var(--text-xs)]"
 								onClick={handleTestConnection}
 								disabled={
 									updateMutation.isPending ||
@@ -1010,7 +867,7 @@ export function SettingsModal() {
 								}
 							>
 								{isTestingConnection && (
-									<span className="loading loading-spinner loading-sm"></span>
+									<span className="loading loading-spinner loading-xs" />
 								)}
 								测试连接
 							</button>
@@ -1019,12 +876,10 @@ export function SettingsModal() {
 				)}
 			</div>
 
-			{/* Alert Modal */}
 			{alertState.show && (
 				<div className="modal modal-open">
-					<div className="modal-box border-3 border-base-content/30 shadow-brutal-lg">
-						<div className="flex items-start gap-3">
-							{/* Icon */}
+					<div className="modal-box max-w-md border-2 border-base-content/20 p-4 shadow-brutal-sm">
+						<div className="flex items-start gap-2.5">
 							<div
 								className={`shrink-0 ${
 									alertState.type === "success"
@@ -1035,19 +890,22 @@ export function SettingsModal() {
 								}`}
 							>
 								{alertState.type === "success" ? (
-									<CheckCircleIcon className="w-8 h-8" />
+									<CheckCircleIcon className="h-6 w-6" />
 								) : (
-									<ExclamationCircleIcon className="w-8 h-8" />
+									<ExclamationCircleIcon className="h-6 w-6" />
 								)}
 							</div>
 
-							{/* Content */}
-							<div className="flex-1">
-								<h3 className="font-bold text-lg mb-2">{alertState.title}</h3>
-								<p className="text-base-content/80">{alertState.message}</p>
+							<div className="min-w-0 flex-1">
+								<h3 className="mb-1 font-heading text-[length:var(--text-md)] font-bold">
+									{alertState.title}
+								</h3>
+								<p className="m-0 text-[length:var(--text-sm)] text-base-content/80">
+									{alertState.message}
+								</p>
 								{alertState.details && (
-									<div className="mt-3 p-3 bg-base-200 rounded-lg border-2 border-base-content/30">
-										<p className="text-sm whitespace-pre-line">
+									<div className="mt-2 rounded-[var(--radius-md)] border-2 border-base-content/15 bg-base-200 p-2">
+										<p className="m-0 whitespace-pre-line text-[length:var(--text-xs)]">
 											{alertState.details}
 										</p>
 									</div>
@@ -1055,14 +913,14 @@ export function SettingsModal() {
 							</div>
 						</div>
 
-						{/* Actions */}
-						<div className="modal-action">
+						<div className="modal-action mt-3">
 							<button
+								type="button"
 								onClick={() => {
 									setAlertState({ ...alertState, show: false });
-									closeModal(); // 关闭设置模态框
+									closeModal();
 								}}
-								className="btn btn-primary border-2 border-base-content/30"
+								className="btn btn-primary h-8 min-h-8 border-2 border-base-content/20 px-3 text-[length:var(--text-xs)]"
 							>
 								确定
 							</button>

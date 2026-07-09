@@ -35,10 +35,10 @@ export function HoverActionBar({
     >
       {children}
       <div
-        className={`absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg bg-base-100/90 p-1 transition-all duration-200 ${
+        className={`absolute top-1.5 right-1.5 z-[var(--z-dropdown)] flex items-center gap-0.5 rounded-[var(--radius-md)] border border-base-content/10 bg-base-100/95 p-0.5 shadow-brutal-sm transition-all duration-200 ${
           isHovered
-            ? "opacity-100 translate-y-0"
-            : "opacity-0 -translate-y-2 pointer-events-none"
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none -translate-y-1 opacity-0"
         }`}
       >
         {actions.map((action, index) => {
@@ -52,7 +52,8 @@ export function HoverActionBar({
           return (
             <div key={index} className="tooltip" data-tip={action.label}>
               <button
-                className={`btn btn-xs btn-circle ${btnColor} ${
+                type="button"
+                className={`btn btn-xs btn-circle h-7 min-h-7 w-7 ${btnColor} ${
                   action.loading ? "loading" : ""
                 }`}
                 onClick={(e) => {
@@ -63,7 +64,7 @@ export function HoverActionBar({
                 disabled={action.loading}
                 aria-label={action.label}
               >
-                {!action.loading && <Icon className="w-4 h-4" />}
+                {!action.loading && <Icon className="h-3.5 w-3.5" />}
               </button>
             </div>
           );

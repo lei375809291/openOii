@@ -105,6 +105,31 @@ components:
 
 # Design System: openOii
 
+## 0. Design Contract (executable)
+
+**Authority:** `frontend/app/styles/tokens.css` is the source of truth. This document is human-readable; update it in the **same PR** when tokens change (ADR 0002).
+
+**Aesthetic (D2):** Dense Comic Workbench — keep CMYK offset shadows, halftone, Bangers/Fredoka/Nunito. Tighten chrome and cards to cockpit density. Not cold SaaS grey; not dual themes.
+
+**Shell geometry (tokens):**
+
+| Token | Role |
+|-------|------|
+| `--workbench-header` / `--workbench-toolbar` | TopBar + stage row (each 2.75rem) |
+| `--workbench-sidebar` | Agent Column width (18rem) |
+| `--shot-card-w` / `--shot-card-h` | Shot Grid cell |
+| `--shot-grid-columns` | 3 |
+
+**Layout rules:**
+
+1. **No document scroll** — `html`/`body`/`#root` overflow hidden; only `.page-body` / panel panes scroll.
+2. **Interaction soft freeze** — selection binding, Agent Column chat, cell regenerate, generate/confirm/cancel keep meaning (ADR 0003).
+3. **One display face per screen** — Bangers at most once.
+4. **Dense chrome** — header/toolbar use `--touch-target-dense` for chips; primary actions keep `--touch-target-min` (44px).
+5. **Shell classes** — TopBar → `.chrome-row` + `data-shell="topbar"`; StagePipeline → `.chrome-toolbar` + `data-shell="stage-pipeline"`; pages → `.page-shell` / `.page-body`.
+
+**Program:** Full UI domains land in batches (`docs/frontend-redesign-program.md`).
+
 ## 1. Overview
 
 **Creative North Star: "The Comic Workbench"**
@@ -121,6 +146,7 @@ This system explicitly rejects three aesthetics: the grey SaaS panel (Notion/Jir
 - Speech-bubble chat pattern grounded in comic convention
 - Tactile button press (translate on active, shadow collapse) with physical feedback
 - Dual-theme: warm cream workshop (light) / pressroom darkroom (dark)
+- **Dense desk density** — more cells and messages on screen without losing craft identity
 
 ## 2. Colors
 

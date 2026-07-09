@@ -55,33 +55,33 @@ export function WorkflowInspector({
 
 	if (!selectedNode) {
 		return (
-			<div className="flex h-full flex-col items-center justify-center px-6 text-center text-sm text-base-content/45">
-				<SvgIcon name="layers" size={28} className="mb-3 opacity-40" />
-				<p className="m-0">选择一个画布卡片查看细节</p>
+			<div className="flex h-full flex-col items-center justify-center px-4 text-center text-[length:var(--text-xs)] text-base-content/45">
+				<SvgIcon name="layers" size={22} className="mb-2 opacity-40" />
+				<p className="m-0">选择画布卡片查看细节</p>
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex h-full min-h-0 flex-col bg-base-100">
-			<div className="border-b border-base-content/10 px-3 py-3">
-				<p className="m-0 text-[10px] font-mono uppercase text-base-content/40">
+		<div className="flex h-full min-h-0 flex-col bg-base-100" data-shell="inspector">
+			<div className="border-b border-base-content/10 px-2 py-1.5">
+				<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/40">
 					{selectedNode.kind}
 				</p>
-				<h2 className="m-0 truncate font-heading text-base font-bold">
+				<h2 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
 					{selectedNode.title}
 				</h2>
-				<p className="m-0 truncate text-xs text-base-content/50">
+				<p className="m-0 truncate text-[length:var(--text-2xs)] text-base-content/50">
 					{selectedNode.subtitle}
 				</p>
 			</div>
 
-			<div className="flex border-b border-base-content/10 p-1">
+			<div className="flex gap-0.5 border-b border-base-content/10 p-0.5">
 				{(Object.keys(TAB_LABELS) as InspectorTab[]).map((tab) => (
 					<button
 						key={tab}
 						type="button"
-						className={`h-8 flex-1 rounded-md text-xs font-semibold transition-colors ${
+						className={`touch-target-dense flex-1 rounded-[var(--radius-sm)] text-[length:var(--text-2xs)] font-semibold transition-colors duration-[var(--duration-fast)] ${
 							activeTab === tab
 								? "bg-primary text-primary-content"
 								: "text-base-content/55 hover:bg-base-200"
@@ -93,7 +93,7 @@ export function WorkflowInspector({
 				))}
 			</div>
 
-			<div className="min-h-0 flex-1 overflow-y-auto p-3">
+			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
 				{activeTab === "overview" ? (
 					<OverviewTab node={selectedNode} />
 				) : null}
@@ -149,6 +149,7 @@ function OverviewTab({ node }: { node: ComicWorkflowNode }) {
 		return (
 			<FieldList
 				items={[
+					["宫格", `格 ${node.gridCell ?? node.shot.order}`],
 					["顺序", node.shot.order],
 					["场景", node.shot.scene || "未设置"],
 					["机位", node.shot.camera || "未设置"],
@@ -174,13 +175,13 @@ function OverviewTab({ node }: { node: ComicWorkflowNode }) {
 
 function FieldList({ items }: { items: Array<[string, string | number]> }) {
 	return (
-		<div className="space-y-2">
+		<div className="space-y-1">
 			{items.map(([label, value]) => (
 				<div
 					key={label}
-					className="flex items-start justify-between gap-4 border-b border-base-content/8 pb-2 text-sm"
+					className="flex items-start justify-between gap-3 border-b border-base-content/8 pb-1.5 text-[length:var(--text-sm)]"
 				>
-					<span className="text-xs font-mono uppercase text-base-content/40">
+					<span className="font-mono text-[length:var(--text-2xs)] uppercase text-base-content/40">
 						{label}
 					</span>
 					<span className="min-w-0 text-right text-base-content/75">{value}</span>
@@ -552,16 +553,23 @@ function ActionsTab({
 			toast.success({ title: "审阅", message: "已批准" });
 		});
 
-	const regenerate = () =>
-		runAction("regenerate", async () => {
+	const regenerate = (type: "image" | "video" = "image") =>
+		runAction(type === "image" ? "regenerate" : "regenerate-video", async () => {
 			if (node.kind === "character") {
 				await charactersApi.regenerate(entityId);
 			} else {
-				await shotsApi.regenerate(entityId, "image");
+				await shotsApi.regenerate(entityId, type);
 			}
+			const cell =
+				node.kind === "shot" ? `格 ${node.gridCell ?? node.shot.order}` : "当前角色";
 			toast.success({
-				title: node.kind === "character" ? "重新生成当前角色" : "重新生成当前镜头",
-				message: "任务已启动",
+				title:
+					node.kind === "character"
+						? "重新生成当前角色"
+						: type === "image"
+							? `重做本格 · 首帧（${cell}）`
+							: `重做本格 · 视频（${cell}）`,
+				message: "任务已启动，仅影响选中实体",
 			});
 		});
 
@@ -589,11 +597,21 @@ function ActionsTab({
 			toast.success({ title: "删除", message: "已删除" });
 		});
 
+	const shotCellLabel =
+		node.kind === "shot" ? `格 ${node.gridCell ?? node.shot.order}` : null;
+
 	return (
 		<ActionStack>
 			{structureLocked ? (
 				<div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
 					生成运行中，结构写入操作已锁定。
+				</div>
+			) : null}
+			{shotCellLabel ? (
+				<div className="rounded-lg border border-accent/30 bg-accent/10 p-3 text-xs leading-relaxed text-base-content/70">
+					<strong className="text-accent">{shotCellLabel}</strong>
+					{" · "}
+					重做只刷新这一格，不影响其他分镜与角色资产。也可在对话里绑定本格发反馈。
 				</div>
 			) : null}
 			<ActionButton
@@ -603,13 +621,32 @@ function ActionsTab({
 				loading={busy === "approve"}
 				onClick={approve}
 			/>
-			<ActionButton
-				icon="refresh-cw"
-				label={node.kind === "character" ? "重新生成当前角色" : "重新生成当前镜头"}
-				disabled={writeDisabled}
-				loading={busy === "regenerate"}
-				onClick={regenerate}
-			/>
+			{node.kind === "shot" ? (
+				<>
+					<ActionButton
+						icon="refresh-cw"
+						label={`重做本格 · 首帧图（${shotCellLabel}）`}
+						disabled={writeDisabled}
+						loading={busy === "regenerate"}
+						onClick={() => regenerate("image")}
+					/>
+					<ActionButton
+						icon="play"
+						label={`重做本格 · 视频（${shotCellLabel}）`}
+						disabled={writeDisabled}
+						loading={busy === "regenerate-video"}
+						onClick={() => regenerate("video")}
+					/>
+				</>
+			) : (
+				<ActionButton
+					icon="refresh-cw"
+					label="重新生成当前角色"
+					disabled={writeDisabled}
+					loading={busy === "regenerate"}
+					onClick={() => regenerate("image")}
+				/>
+			)}
 			<ActionButton
 				icon="archive"
 				label="保存到资产库"

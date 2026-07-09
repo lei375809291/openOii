@@ -232,7 +232,7 @@ describe('ProjectsPage', () => {
     render(<ProjectsPage />);
 
     expect(screen.getByText('暂无项目')).toBeInTheDocument();
-    expect(screen.getByText('开始创作你的第一个故事吧！')).toBeInTheDocument();
+    expect(screen.getByText('开始创作你的第一个故事')).toBeInTheDocument();
   });
 
   it('shows load errors and wires the retry action to invalidate the project list query', async () => {
@@ -252,7 +252,7 @@ describe('ProjectsPage', () => {
     await waitFor(() => {
       expect(toastError).toHaveBeenCalled();
     });
-    expect(screen.getByText('加载项目失败，请重试。')).toBeInTheDocument();
+    expect(screen.getByText('加载失败，请重试')).toBeInTheDocument();
 
     const toastPayload = toastError.mock.calls[0][0] as {
       actions?: Array<{ label: string; onClick: () => void }>;

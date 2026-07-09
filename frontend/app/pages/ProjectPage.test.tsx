@@ -697,7 +697,7 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    expect(screen.getByText('正在加载项目...')).toBeInTheDocument();
+    expect(screen.getByText('正在加载项目…')).toBeInTheDocument();
     expect(screen.queryByTestId('workspace-sidebar')).not.toBeInTheDocument();
   });
 
@@ -710,7 +710,7 @@ describe('ProjectPage live hydration', () => {
 
     render(<ProjectPage />);
 
-    expect(screen.getByText('正在加载项目...')).toBeInTheDocument();
+    expect(screen.getByText('正在加载项目…')).toBeInTheDocument();
     expect(screen.queryByTestId('stage-view')).not.toBeInTheDocument();
     expect(screen.queryByTestId('workspace-sidebar')).not.toBeInTheDocument();
   });
@@ -873,7 +873,14 @@ describe('ProjectPage live hydration', () => {
     await user.click(screen.getByRole('button', { name: '发送反馈' }));
 
     await waitFor(() => {
-      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏', undefined, 'plan');
+      expect(projectsApi.feedback).toHaveBeenCalledWith(
+        9,
+        '继续调整故事节奏',
+        undefined,
+        'plan',
+        undefined,
+        undefined,
+      );
     });
     expect(storeState.addMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -896,7 +903,14 @@ describe('ProjectPage live hydration', () => {
     await user.click(screen.getByRole('button', { name: '发送反馈' }));
 
     await waitFor(() => {
-      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏', undefined, 'render');
+      expect(projectsApi.feedback).toHaveBeenCalledWith(
+        9,
+        '继续调整故事节奏',
+        undefined,
+        'render',
+        undefined,
+        undefined,
+      );
     });
   });
 
@@ -912,7 +926,14 @@ describe('ProjectPage live hydration', () => {
     await user.click(screen.getByRole('button', { name: '发送反馈' }));
 
     await waitFor(() => {
-      expect(projectsApi.feedback).toHaveBeenCalledWith(9, '继续调整故事节奏', undefined, 'compose');
+      expect(projectsApi.feedback).toHaveBeenCalledWith(
+        9,
+        '继续调整故事节奏',
+        undefined,
+        'compose',
+        undefined,
+        undefined,
+      );
     });
   });
 

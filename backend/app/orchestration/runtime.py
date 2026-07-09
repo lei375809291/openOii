@@ -23,12 +23,14 @@ def build_phase2_runtime_context(
     agent_context: Any,
     start_stage: Phase2Stage = "plan_outline",
     auto_mode: bool = False,
+    skill_id: str | None = None,
 ) -> Phase2RuntimeContext:
     return Phase2RuntimeContext(
         orchestrator=orchestrator,
         agent_context=agent_context,
         start_stage=start_stage,
         auto_mode=auto_mode,
+        skill_id=skill_id,
     )
 
 

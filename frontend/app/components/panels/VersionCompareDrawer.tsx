@@ -59,23 +59,23 @@ function versionLabel(version: ArtifactVersion): string {
 function VersionColumn({ title, version }: { title: string; version?: ArtifactVersion }) {
 	const imageUrl = getStaticUrl(version?.snapshot.image_url as string | null | undefined);
 	return (
-		<section className="min-w-0 rounded-box border-2 border-base-content/15 bg-base-200/60 p-3">
-			<h3 className="font-heading text-sm font-bold">{title}</h3>
-			<div className="mt-2 aspect-video overflow-hidden rounded border border-base-content/10 bg-base-300">
+		<section className="min-w-0 rounded-[var(--radius-md)] border-2 border-base-content/15 bg-base-200/60 p-2.5">
+			<h3 className="m-0 font-heading text-[length:var(--text-xs)] font-bold">{title}</h3>
+			<div className="mt-1.5 aspect-video overflow-hidden rounded-[var(--radius-sm)] border border-base-content/10 bg-base-300">
 				{imageUrl ? (
 					<img src={imageUrl} alt={title} className="h-full w-full object-cover" />
 				) : (
-					<div className="flex h-full items-center justify-center text-xs text-base-content/45">
+					<div className="flex h-full items-center justify-center text-[length:var(--text-2xs)] text-base-content/45">
 						图片不存在或未生成
 					</div>
 				)}
 			</div>
-			<div className="mt-3 space-y-2">
+			<div className="mt-2 space-y-1.5">
 				{DISPLAY_FIELDS.map((field) => {
 					const value = version?.snapshot[field];
 					if (value === undefined || value === null || value === "") return null;
 					return (
-						<div key={field} className="text-xs">
+						<div key={field} className="text-[length:var(--text-2xs)]">
 							<div className="font-semibold text-base-content/60">{LABELS[field] || field}</div>
 							<div className="whitespace-pre-wrap break-words">{valueToText(value)}</div>
 						</div>
@@ -178,28 +178,30 @@ export function VersionCompareDrawer({
 
 	return (
 		<aside
-			className={`fixed right-0 top-0 z-50 h-full w-full max-w-5xl transform overflow-y-auto border-l-2 border-base-content/15 bg-base-100 shadow-xl transition-transform duration-200 ${
+			className={`fixed right-0 top-0 z-[var(--z-modal)] h-full w-full max-w-5xl transform overflow-y-auto border-l-2 border-base-content/15 bg-base-100 shadow-brutal-sm transition-transform duration-200 ${
 				open ? "translate-x-0" : "translate-x-full"
 			}`}
 		>
-			<div className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-base-content/10 bg-base-100 p-4">
-				<SvgIcon name="clock-3" size={18} />
-				<h2 className="font-heading text-lg font-bold">版本对比</h2>
+			<div className="sticky top-0 z-[var(--z-sticky)] flex items-center gap-2 border-b-2 border-base-content/10 bg-base-100 px-3 py-2">
+				<SvgIcon name="clock-3" size={16} />
+				<h2 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
+					版本对比
+				</h2>
 				<button
 					type="button"
-					className="btn btn-sm btn-ghost ml-auto"
+					className="btn btn-ghost btn-circle touch-target-dense ml-auto h-8 min-h-8 w-8"
 					onClick={onClose}
 					aria-label="关闭版本对比"
 					title="关闭版本对比"
 				>
-					<SvgIcon name="x" size={16} />
+					<SvgIcon name="x" size={14} />
 				</button>
 			</div>
 
-			<div className="space-y-4 p-4">
-				<div className="grid gap-3 md:grid-cols-4">
+			<div className="space-y-3 p-3">
+				<div className="grid gap-2 md:grid-cols-4">
 					<select
-						className="select select-bordered select-sm"
+						className="select select-bordered select-sm h-8 min-h-8"
 						value={entityType}
 						onChange={(e) => handleEntityTypeChange(e.currentTarget.value as VersionEntityType)}
 					>
@@ -207,7 +209,7 @@ export function VersionCompareDrawer({
 						<option value="shot">分镜</option>
 					</select>
 					<select
-						className="select select-bordered select-sm md:col-span-3"
+						className="select select-bordered select-sm h-8 min-h-8 md:col-span-3"
 						value={selectedEntityId ?? ""}
 						onChange={(e) => setEntityId(Number(e.currentTarget.value))}
 					>
@@ -221,18 +223,22 @@ export function VersionCompareDrawer({
 					</select>
 				</div>
 
-				{versionsQuery.isLoading && <div className="text-sm text-base-content/60">加载版本中...</div>}
+				{versionsQuery.isLoading && (
+					<div className="text-[length:var(--text-xs)] text-base-content/60">
+						加载版本中...
+					</div>
+				)}
 				{!versionsQuery.isLoading && versions.length === 0 && (
-					<div className="rounded-box border border-base-content/10 p-6 text-sm text-base-content/60">
+					<div className="rounded-[var(--radius-md)] border border-base-content/10 p-4 text-[length:var(--text-xs)] text-base-content/60">
 						暂无版本快照。生成或重新生成后会自动记录。
 					</div>
 				)}
 
 				{versions.length > 0 && (
 					<>
-						<div className="grid gap-3 md:grid-cols-2">
+						<div className="grid gap-2 md:grid-cols-2">
 							<select
-								className="select select-bordered select-sm"
+								className="select select-bordered select-sm h-8 min-h-8"
 								value={effectiveLeft ?? ""}
 								onChange={(e) => setLeftVersion(Number(e.currentTarget.value))}
 							>
@@ -241,7 +247,7 @@ export function VersionCompareDrawer({
 								))}
 							</select>
 							<select
-								className="select select-bordered select-sm"
+								className="select select-bordered select-sm h-8 min-h-8"
 								value={effectiveRight ?? ""}
 								onChange={(e) => setRightVersion(Number(e.currentTarget.value))}
 							>
@@ -251,18 +257,26 @@ export function VersionCompareDrawer({
 							</select>
 						</div>
 
-						<div className="grid gap-4 lg:grid-cols-2">
+						<div className="grid gap-3 lg:grid-cols-2">
 							<VersionColumn title={`旧版本 v${effectiveLeft ?? "—"}`} version={effectiveLeft ? versionByNumber.get(effectiveLeft) : undefined} />
 							<VersionColumn title={`新版本 v${effectiveRight ?? "—"}`} version={effectiveRight ? versionByNumber.get(effectiveRight) : undefined} />
 						</div>
 
-						<section className="rounded-box border-2 border-base-content/10 bg-base-200/40 p-3">
-							<h3 className="mb-2 font-heading text-sm font-bold">差异</h3>
-							{compareQuery.isLoading && <div className="text-xs text-base-content/60">计算差异中...</div>}
-							{!compareQuery.isLoading && (compareQuery.data?.diffs.length ?? 0) === 0 && (
-								<div className="text-xs text-base-content/60">两个版本内容相同。</div>
+						<section className="rounded-[var(--radius-md)] border-2 border-base-content/10 bg-base-200/40 p-2.5">
+							<h3 className="mb-1.5 font-heading text-[length:var(--text-xs)] font-bold">
+								差异
+							</h3>
+							{compareQuery.isLoading && (
+								<div className="text-[length:var(--text-2xs)] text-base-content/60">
+									计算差异中...
+								</div>
 							)}
-							<ul className="space-y-2">
+							{!compareQuery.isLoading && (compareQuery.data?.diffs.length ?? 0) === 0 && (
+								<div className="text-[length:var(--text-2xs)] text-base-content/60">
+									两个版本内容相同。
+								</div>
+							)}
+							<ul className="space-y-1.5">
 								{compareQuery.data?.diffs.map((diff) => (
 									<DiffRow key={diff.field_name} diff={diff} />
 								))}
@@ -272,6 +286,7 @@ export function VersionCompareDrawer({
 						<div className="flex justify-end">
 							<Button
 								variant="secondary"
+								size="sm"
 								loading={rollbackMutation.isPending}
 								disabled={!effectiveLeft || rollbackMutation.isPending}
 								onClick={() => {

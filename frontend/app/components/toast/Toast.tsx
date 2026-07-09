@@ -29,39 +29,41 @@ export function Toast({ toast }: ToastProps) {
   return (
     <div
       className={`
-        relative min-w-[320px] max-w-[480px] p-4 bg-base-100
-        border-2 ${typeStyles[toast.type]}
-        shadow-brutal
-        transform -rotate-[0.5deg]
+        relative min-w-[16rem] max-w-[22rem] border-2 bg-base-100 p-3
+        shadow-brutal-sm ${typeStyles[toast.type]}
         animate-slide-in-right
       `}
+      role="status"
     >
-      {/* 标题和关闭按钮 */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="font-heading font-bold text-base">{toast.title}</h4>
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <h4 className="m-0 font-heading text-[length:var(--text-sm)] font-bold leading-snug">
+          {toast.title}
+        </h4>
         <button
+          type="button"
           onClick={() => removeToast(toast.id)}
-          className="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
+          className="btn btn-ghost btn-circle touch-target-dense h-7 min-h-7 w-7 hover:bg-base-200"
           aria-label="关闭"
         >
-          <XMarkIcon className="w-4 h-4" />
+          <XMarkIcon className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* 消息内容 */}
-      <p className="text-sm text-base-content/80">{toast.message}</p>
+      <p className="m-0 text-[length:var(--text-xs)] leading-snug text-base-content/75">
+        {toast.message}
+      </p>
 
-      {/* 操作按钮 */}
       {toast.actions && toast.actions.length > 0 && (
-        <div className="flex gap-2 mt-3">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {toast.actions.map((action, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => {
                 action.onClick();
                 removeToast(toast.id);
               }}
-              className={`btn btn-xs border-2 border-base-content/50 ${
+              className={`btn btn-xs h-7 min-h-7 border-2 border-base-content/30 px-2 ${
                 action.variant === "primary"
                   ? "btn-primary"
                   : "btn-ghost hover:bg-base-200"

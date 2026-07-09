@@ -10,6 +10,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
+import { PageBody, PageShell } from "~/components/layout/PageShell";
 import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { projectsApi } from "~/services/api";
 import { cleanupDeletedProjectCaches } from "~/features/projects/deleteProject";
@@ -167,43 +168,43 @@ export function ProjectsPage() {
 	};
 
 	return (
-		<div className="min-h-screen bg-base-100 font-sans text-base-content">
+		<PageShell className="text-base-content" data-shell="projects-list">
 			<TopBar />
 
-			<main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6">
-				<header className="flex flex-col gap-4 border-b-2 border-base-content/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
+			<PageBody className="mx-auto flex w-full max-w-7xl flex-col gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]">
+				<header className="flex flex-col gap-2 border-b border-base-content/10 pb-3 lg:flex-row lg:items-end lg:justify-between">
 					<div className="min-w-0">
-						<p className="m-0 text-[10px] font-mono uppercase tracking-wide text-base-content/75">
+						<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/55">
 							project browser
 						</p>
-						<h1 className="m-0 mt-1 font-heading text-3xl font-bold">
+						<h1 className="m-0 mt-0.5 font-heading text-[length:var(--text-xl)] font-bold leading-tight">
 							项目
 						</h1>
-						<p className="m-0 mt-2 max-w-2xl text-sm leading-relaxed text-base-content/75">
-							从这里回到任意漫剧工作台，或清理不再需要的草稿。
+						<p className="m-0 mt-1 max-w-2xl text-[length:var(--text-sm)] text-base-content/65">
+							回到工作台，或清理草稿
 						</p>
 					</div>
 
-					<div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+					<div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
 						<Metric label="全部" value={visibleProjects.length} />
 						<Metric label="成片" value={completedCount} />
 						<Metric label="已选" value={selectedCount} />
 						<Link
 							to="/"
-							className="btn-doodle touch-target col-span-3 inline-flex items-center justify-center gap-2 bg-primary px-4 py-2 text-sm font-heading text-primary-content sm:col-span-1"
+							className="btn-doodle touch-target-dense col-span-3 inline-flex h-9 min-h-9 items-center justify-center gap-1.5 bg-primary px-3 text-[length:var(--text-xs)] font-heading text-primary-content sm:col-span-1"
 						>
-							<PlusIcon className="h-4 w-4" aria-hidden="true" />
-							新建项目
+							<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+							新建
 						</Link>
 					</div>
 				</header>
 
 				<section
-					className="rounded-xl border-2 border-base-content/15 bg-base-200/45"
+					className="rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-200/45"
 					aria-label="项目批量操作"
 				>
-					<div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-						<label className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg px-2 text-sm font-semibold text-base-content/70">
+					<div className="flex flex-col gap-2 p-2 sm:flex-row sm:items-center sm:justify-between">
+						<label className="touch-target-dense flex cursor-pointer select-none items-center gap-2 rounded-[var(--radius-md)] px-1.5 text-[length:var(--text-xs)] font-semibold text-base-content/70">
 							<input
 								type="checkbox"
 								checked={allSelected}
@@ -213,26 +214,26 @@ export function ProjectsPage() {
 							/>
 							<span>全选</span>
 						</label>
-						<div className="flex flex-wrap items-center gap-2">
-							<span className="rounded-full border border-base-content/15 bg-base-100 px-3 py-1 text-xs font-semibold text-base-content/75">
+						<div className="flex flex-wrap items-center gap-1.5">
+							<span className="rounded-full border border-base-content/15 bg-base-100 px-2 py-0.5 text-[length:var(--text-2xs)] font-semibold tabular-nums text-base-content/70">
 								{selectedCount > 0
-									? `已选择 ${selectedCount} 个项目`
-									: "未选择项目"}
+									? `已选 ${selectedCount}`
+									: "未选择"}
 							</span>
 							<button
 								type="button"
-								className="btn btn-sm btn-error min-h-11 gap-2"
+								className="btn btn-sm btn-error h-8 min-h-8 gap-1 px-2"
 								onClick={handleBatchDeleteClick}
 								disabled={selectedCount === 0 || deleteMutation.isPending}
 							>
-								<TrashIcon className="h-4 w-4" aria-hidden="true" />
+								<TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
 								批量删除（{selectedCount}）
 							</button>
 						</div>
 					</div>
 				</section>
 
-				<section className="min-h-[28rem]" aria-label="项目列表">
+				<section className="min-h-0 flex-1" aria-label="项目列表">
 					{isLoading ? (
 						<LoadingState />
 					) : error ? (
@@ -240,8 +241,8 @@ export function ProjectsPage() {
 					) : visibleProjects.length === 0 ? (
 						<EmptyState />
 					) : (
-						<div className="overflow-hidden rounded-xl border-2 border-base-content/15 bg-base-100 shadow-brutal-sm">
-							<div className="grid grid-cols-[44px_minmax(0,1fr)_120px_120px_64px] gap-3 border-b border-base-content/10 bg-base-200/65 px-4 py-2 text-xs font-mono uppercase text-base-content/75">
+						<div className="overflow-hidden rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-100 shadow-brutal-sm">
+							<div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_5.5rem_2.5rem] gap-2 border-b border-base-content/10 bg-base-200/65 px-2 py-1.5 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60 sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem] sm:gap-3 sm:px-3">
 								<span />
 								<span>项目</span>
 								<span>状态</span>
@@ -264,7 +265,7 @@ export function ProjectsPage() {
 						</div>
 					)}
 				</section>
-			</main>
+			</PageBody>
 
 			<ConfirmModal
 				isOpen={deleteTarget !== null}
@@ -277,17 +278,19 @@ export function ProjectsPage() {
 				variant="danger"
 				isLoading={deleteMutation.isPending}
 			/>
-		</div>
+		</PageShell>
 	);
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
 	return (
-		<div className="rounded-lg border border-base-content/10 bg-base-200 px-3 py-2">
-			<p className="m-0 text-[10px] font-mono uppercase text-base-content/75">
+		<div className="rounded-[var(--radius-md)] border border-base-content/10 bg-base-200 px-2 py-1.5">
+			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
 				{label}
 			</p>
-			<p className="m-0 font-heading text-lg font-bold leading-none">{value}</p>
+			<p className="m-0 font-heading text-[length:var(--text-md)] font-bold leading-none tabular-nums">
+				{value}
+			</p>
 		</div>
 	);
 }
@@ -307,8 +310,8 @@ function ProjectRow({
 	const story = project.story?.trim();
 
 	return (
-		<article className="grid min-h-20 grid-cols-[44px_minmax(0,1fr)_120px_120px_64px] items-center gap-3 px-4 py-3 transition-colors hover:bg-base-200/45">
-			<label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg hover:bg-base-200">
+		<article className="grid min-h-14 grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_5.5rem_2.5rem] items-center gap-2 px-2 py-2 transition-colors duration-[var(--duration-fast)] hover:bg-base-200/45 sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem] sm:gap-3 sm:px-3">
+			<label className="touch-target-dense flex cursor-pointer items-center justify-center rounded-[var(--radius-md)] hover:bg-base-200">
 				<input
 					type="checkbox"
 					aria-label={`选择项目 ${project.title}`}
@@ -320,45 +323,47 @@ function ProjectRow({
 
 			<Link
 				to={`/project/${project.id}`}
-				className="min-w-0 rounded-lg py-1 pr-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				className="min-w-0 rounded-[var(--radius-md)] py-0.5 pr-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
 			>
-				<div className="flex min-w-0 items-center gap-2">
+				<div className="flex min-w-0 items-center gap-1.5">
 					<FolderOpenIcon
-						className="h-4 w-4 shrink-0 text-primary"
+						className="h-3.5 w-3.5 shrink-0 text-primary"
 						aria-hidden="true"
 					/>
-					<h2 className="m-0 truncate font-heading text-base font-bold">
+					<h2 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
 						{project.title}
 					</h2>
 				</div>
-				<p className="m-0 mt-1 truncate text-sm text-base-content/75">
+				<p className="m-0 mt-0.5 truncate text-[length:var(--text-xs)] text-base-content/65">
 					{story || "尚未填写故事内容"}
 				</p>
-				<div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold text-base-content/75">
+				<div className="mt-1 flex flex-wrap gap-1.5 text-[length:var(--text-2xs)] font-semibold text-base-content/55">
 					<span>{project.style || "未设风格"}</span>
-					<span>{project.target_shot_count ?? "自动"} 镜头</span>
+					<span className="tabular-nums">
+						{project.target_shot_count ?? "自动"} 镜头
+					</span>
 					{project.creation_mode ? <span>{project.creation_mode}</span> : null}
 				</div>
 			</Link>
 
 			<span
-				className={`inline-flex min-h-8 items-center justify-center rounded-full border px-3 text-xs font-bold ${status.cls}`}
+				className={`inline-flex min-h-7 items-center justify-center rounded-full border px-2 text-[length:var(--text-2xs)] font-bold ${status.cls}`}
 			>
 				{status.label}
 			</span>
 
-			<span className="font-mono text-xs text-base-content/75">
+			<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/65">
 				{formatDate(project.updated_at)}
 			</span>
 
 			<button
 				type="button"
-				className="btn btn-ghost btn-sm btn-square justify-self-end text-error hover:bg-error/10"
+				className="btn btn-ghost btn-sm btn-square h-8 min-h-8 justify-self-end text-error hover:bg-error/10"
 				onClick={onDelete}
 				aria-label={`删除项目 ${project.title}`}
 				title="删除"
 			>
-				<TrashIcon className="h-5 w-5" aria-hidden="true" />
+				<TrashIcon className="h-4 w-4" aria-hidden="true" />
 			</button>
 		</article>
 	);
@@ -366,13 +371,13 @@ function ProjectRow({
 
 function LoadingState() {
 	return (
-		<div className="flex min-h-[28rem] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-base-content/15 bg-base-200/35">
+		<div className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed border-base-content/15 bg-base-200/35">
 			<ArrowPathIcon
-				className="h-6 w-6 animate-spin text-primary"
+				className="h-5 w-5 animate-spin text-primary"
 				aria-hidden="true"
 			/>
-			<p className="m-0 text-sm font-semibold text-base-content/75">
-				正在加载项目...
+			<p className="m-0 text-[length:var(--text-sm)] font-semibold text-base-content/70">
+				正在加载项目…
 			</p>
 		</div>
 	);
@@ -380,14 +385,14 @@ function LoadingState() {
 
 function ErrorState() {
 	return (
-		<div className="flex min-h-[28rem] flex-col items-center justify-center gap-3 rounded-xl border-2 border-error/25 bg-error/5 text-center">
-			<FaceFrownIcon className="h-7 w-7 text-error" aria-hidden="true" />
+		<div className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-error/25 bg-error/5 px-3 text-center">
+			<FaceFrownIcon className="h-6 w-6 text-error" aria-hidden="true" />
 			<div>
-				<p className="m-0 font-heading text-lg font-bold text-error">
-					加载项目失败，请重试。
+				<p className="m-0 font-heading text-[length:var(--text-md)] font-bold text-error">
+					加载失败，请重试
 				</p>
-				<p className="m-0 mt-1 text-sm text-base-content/75">
-					可以使用右上角刷新浏览器，或等待后端恢复。
+				<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-base-content/65">
+					刷新页面或检查后端是否可用
 				</p>
 			</div>
 		</div>
@@ -396,21 +401,23 @@ function ErrorState() {
 
 function EmptyState() {
 	return (
-		<div className="flex min-h-[28rem] flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-base-content/15 bg-base-200/35 text-center">
-			<span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-content shadow-brutal-sm">
-				<DocumentTextIcon className="h-6 w-6" aria-hidden="true" />
+		<div className="flex min-h-[10rem] flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-2 border-dashed border-base-content/15 bg-base-200/35 px-3 text-center">
+			<span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] bg-primary text-primary-content shadow-brutal-sm">
+				<DocumentTextIcon className="h-5 w-5" aria-hidden="true" />
 			</span>
 			<div>
-				<p className="m-0 font-heading text-xl font-bold">暂无项目</p>
-				<p className="m-0 mt-1 text-sm text-base-content/75">
-					开始创作你的第一个故事吧！
+				<p className="m-0 font-heading text-[length:var(--text-lg)] font-bold">
+					暂无项目
+				</p>
+				<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-base-content/65">
+					开始创作你的第一个故事
 				</p>
 			</div>
 			<Link
 				to="/"
-				className="btn-doodle touch-target inline-flex items-center justify-center gap-2 bg-primary px-4 py-2 text-sm font-heading text-primary-content"
+				className="btn-doodle touch-target-dense inline-flex h-9 min-h-9 items-center justify-center gap-1.5 bg-primary px-3 text-[length:var(--text-xs)] font-heading text-primary-content"
 			>
-				<PlusIcon className="h-4 w-4" aria-hidden="true" />
+				<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
 				新建项目
 			</Link>
 		</div>

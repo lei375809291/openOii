@@ -38,32 +38,44 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 	}, [open]);
 
 	const list = (projects ?? []) as Project[];
+	const currentTitle =
+		list.find((p) => p.id === currentId)?.title || "项目";
 
 	return (
 		<div className="relative min-w-0" ref={ref}>
 			<button
 				type="button"
 				onClick={() => setOpen(!open)}
-				className="flex h-11 max-w-[132px] items-center gap-1.5 rounded-lg px-2 text-sm font-heading font-bold transition-colors hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:max-w-[220px]"
+				className="touch-target-dense flex max-w-[10rem] items-center gap-1 rounded-[var(--radius-md)] px-1.5 text-sm font-heading font-bold transition-colors duration-[var(--duration-fast)] hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:max-w-[14rem]"
 				aria-expanded={open}
-				aria-haspopup="true"
+				aria-haspopup="listbox"
 			>
-				<FilmIcon className="h-4 w-4 flex-shrink-0 text-primary" />
-				<span className="truncate">{list.find((p) => p.id === currentId)?.title || "项目"}</span>
-				<ChevronDownIcon className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+				<FilmIcon
+					className="h-3.5 w-3.5 flex-shrink-0 text-primary"
+					aria-hidden="true"
+				/>
+				<span className="min-w-0 truncate">{currentTitle}</span>
+				<ChevronDownIcon
+					className={`h-3 w-3 flex-shrink-0 transition-transform duration-[var(--duration-fast)] ${open ? "rotate-180" : ""}`}
+					aria-hidden="true"
+				/>
 			</button>
 
 			{open && (
-				<div className="absolute left-0 top-full mt-1 w-64 bg-base-200 border-2 border-base-content/15 rounded-lg shadow-comic z-50 py-1 max-h-80 overflow-y-auto">
+				<div
+					className="absolute left-0 top-full z-[var(--z-dropdown)] mt-1 max-h-80 w-64 overflow-y-auto overscroll-contain rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-200 py-1 shadow-comic"
+					role="listbox"
+					aria-label="项目列表"
+				>
 					<Link
 						to="/"
 						onClick={() => setOpen(false)}
-						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-base-content/60 hover:bg-base-300 transition-colors"
+						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-base-content/60 transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
 					>
-						<SparklesIcon className="w-3 h-3" />
+						<SparklesIcon className="h-3 w-3" aria-hidden="true" />
 						首页 — 所有项目
 					</Link>
-					<div className="border-t border-base-content/10 my-1" />
+					<div className="my-1 border-t border-base-content/10" />
 					{list.map((p) => {
 						const statusMap: Record<string, { label: string; cls: string }> = {
 							draft: { label: "草稿", cls: "text-base-content/70" },
@@ -71,26 +83,39 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 							ready: { label: "完成", cls: "text-base-content" },
 							superseded: { label: "已覆盖", cls: "text-base-content/70" },
 						};
-						const st = statusMap[p.status] ?? { label: p.status, cls: "text-base-content/70" };
+						const st = statusMap[p.status] ?? {
+							label: p.status,
+							cls: "text-base-content/70",
+						};
 						return (
 							<Link
 								key={p.id}
 								to={`/project/${p.id}`}
 								onClick={() => setOpen(false)}
-								className={`flex items-center justify-between px-3 py-1.5 text-xs hover:bg-base-300 transition-colors group ${p.id === currentId ? "bg-primary/10 text-primary font-bold" : ""}`}
+								role="option"
+								aria-selected={p.id === currentId}
+								className={`flex items-center justify-between px-3 py-1.5 text-xs transition-colors duration-[var(--duration-fast)] hover:bg-base-300 ${
+									p.id === currentId
+										? "bg-primary/10 font-bold text-primary"
+										: ""
+								}`}
 							>
-								<span className="truncate flex-1">{p.title}</span>
-								<span className={`text-[10px] ml-1.5 flex-shrink-0 ${st.cls}`}>{st.label}</span>
+								<span className="min-w-0 flex-1 truncate">{p.title}</span>
+								<span
+									className={`ml-1.5 flex-shrink-0 font-mono text-[length:var(--text-2xs)] tabular-nums ${st.cls}`}
+								>
+									{st.label}
+								</span>
 							</Link>
 						);
 					})}
-					<div className="border-t border-base-content/10 my-1" />
+					<div className="my-1 border-t border-base-content/10" />
 					<Link
 						to="/"
 						onClick={() => setOpen(false)}
-						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary hover:bg-base-300 transition-colors"
+						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
 					>
-						<PlusIcon className="w-3 h-3" />
+						<PlusIcon className="h-3 w-3" aria-hidden="true" />
 						新建项目
 					</Link>
 				</div>
@@ -99,23 +124,39 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 	);
 }
 
-export function TopBar({
-	projectId,
-}: TopBarProps) {
+export function TopBar({ projectId }: TopBarProps) {
 	const { theme, toggleTheme } = useThemeStore();
 	const isDark = theme.endsWith("dark");
 	const { openModal: openSettingsModal } = useSettingsStore();
 
-	const btnCls = "flex items-center whitespace-nowrap gap-1.5 !px-2.5";
-	const iconCls = "h-4 w-4";
+	const chromeBtn =
+		"touch-target-dense !h-8 !min-h-8 gap-1 !px-2 transition-colors duration-[var(--duration-fast)]";
 
 	return (
-		<header className="z-30 flex min-h-14 flex-shrink-0 items-center gap-2 border-b-2 border-base-content/15 bg-base-100 px-3 sm:gap-3 sm:px-4">
-			<div className="flex min-w-0 items-center gap-2">
+		<header
+			className="chrome-row z-[var(--z-fixed)] gap-1.5 border-b border-base-content/12 bg-base-100 px-2 sm:gap-2 sm:px-3"
+			data-shell="topbar"
+		>
+			<div className="flex min-w-0 items-center gap-1.5">
 				{projectId ? (
-					<ProjectDropdown currentId={projectId} />
+					<>
+						<Link
+							to="/"
+							className="touch-target-dense inline-flex items-center rounded-[var(--radius-md)] px-1.5 font-comic text-base tracking-wide text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+							aria-label="返回首页"
+						>
+							openOii
+						</Link>
+						<span className="text-base-content/25" aria-hidden="true">
+							/
+						</span>
+						<ProjectDropdown currentId={projectId} />
+					</>
 				) : (
-					<Link to="/" className="inline-flex h-11 items-center rounded-lg px-1 font-comic text-xl font-bold tracking-wider text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+					<Link
+						to="/"
+						className="touch-target-dense inline-flex items-center rounded-[var(--radius-md)] px-1 font-comic text-lg font-bold tracking-wider text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+					>
 						openOii
 					</Link>
 				)}
@@ -123,28 +164,30 @@ export function TopBar({
 
 			<div className="min-w-0 flex-1" />
 
-			<div className="flex shrink-0 items-center gap-1">
+			<div className="flex shrink-0 items-center gap-0.5">
 				<Button
 					variant="ghost"
 					size="sm"
-					className={btnCls}
+					className={chromeBtn}
 					onClick={toggleTheme}
-					aria-label={isDark ? "主题，切换亮色" : "主题，切换暗色"}
+					aria-label={isDark ? "切换亮色主题" : "切换暗色主题"}
 					title={isDark ? "切换亮色" : "切换暗色"}
 				>
-					{isDark ? <SunIcon className={iconCls} /> : <MoonIcon className={iconCls} />}
-					<span className="hidden text-sm sm:inline">主题</span>
+					{isDark ? (
+						<SunIcon className="h-4 w-4" aria-hidden="true" />
+					) : (
+						<MoonIcon className="h-4 w-4" aria-hidden="true" />
+					)}
 				</Button>
 				<Button
 					variant="ghost"
 					size="sm"
-					className={btnCls}
+					className={chromeBtn}
 					onClick={openSettingsModal}
 					title="设置"
 					aria-label="设置"
 				>
-					<Cog6ToothIcon className={iconCls} />
-					<span className="hidden text-sm sm:inline">设置</span>
+					<Cog6ToothIcon className="h-4 w-4" aria-hidden="true" />
 				</Button>
 			</div>
 		</header>

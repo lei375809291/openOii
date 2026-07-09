@@ -69,8 +69,17 @@ describe("HomePage", () => {
 
   it("renders title and textarea", () => {
     renderHomePage();
-    expect(screen.getAllByText("openOii").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/导演/)).toBeInTheDocument();
     expect(screen.getByLabelText("输入你的故事创意")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Skill/ })).toBeInTheDocument();
+  });
+
+  it("applies skill preset to creation form", async () => {
+    renderHomePage();
+    fireEvent.click(screen.getByRole("button", { name: /快速成片/ }));
+    const textarea = screen.getByLabelText("输入你的故事创意") as HTMLTextAreaElement;
+    expect(textarea.placeholder).toMatch(/一句话|自动推进/);
+    expect(screen.getByText("quick-short")).toBeInTheDocument();
   });
 
   it("submits story on button click", async () => {

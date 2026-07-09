@@ -46,20 +46,28 @@ export function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <Suspense fallback={<LoadingOverlay text="加载中..." />}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/project/new" element={<Navigate to="/" replace />} />
-              <Route path="/project/:id" element={<ProjectPage />} />
-              <Route path="/projects/:id" element={<ProjectPage />} />
-              <Route path="/universes" element={<UniversesPage />} />
-              <Route path="/universes/:universeId" element={<UniverseDetailPage />} />
-            </Routes>
-          </Suspense>
-          {/* 全局设置弹窗 - 在所有页面都可用 */}
+          {/* Viewport host: pages fill this; no document scroll */}
+          <div
+            className="relative h-full max-h-dvh overflow-hidden bg-base-100"
+            data-shell="app-root"
+          >
+            <Suspense
+              fallback={
+                <LoadingOverlay text="加载中…" className="fixed inset-0 z-[var(--z-modal)]" />
+              }
+            >
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/project/new" element={<Navigate to="/" replace />} />
+                <Route path="/project/:id" element={<ProjectPage />} />
+                <Route path="/projects/:id" element={<ProjectPage />} />
+                <Route path="/universes" element={<UniversesPage />} />
+                <Route path="/universes/:universeId" element={<UniverseDetailPage />} />
+              </Routes>
+            </Suspense>
+          </div>
           <SettingsModalHost />
-          {/* 全局 Toast 通知 - 在所有页面都可用 */}
           <ToastContainer />
         </BrowserRouter>
       </QueryClientProvider>

@@ -97,6 +97,7 @@ class ProjectCreate(BaseModel):
     universe_id: int | None = None
     chapter_number: int | None = None
     chapter_title: str | None = None
+    skill_id: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -279,6 +280,10 @@ class GenerateRequest(BaseModel):
     seed: int | None = None
     notes: str | None = None
     auto_mode: bool = False
+    skill_id: str | None = None
+    # Optional selection focus for partial re-runs (mirrors FeedbackRequest)
+    entity_type: str | None = None
+    entity_id: int | None = None
 
 
 class ResumeRequest(BaseModel):

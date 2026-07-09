@@ -184,10 +184,11 @@ function ShotCard({ node }: { node: Extract<ComicWorkflowNode, { kind: "shot" }>
 	const previewType = videoUrl ? "video" : "image";
 	const previewUrl = videoUrl || imageUrl;
 	const isFirstShot = node.shot.order === 1;
+	const cell = node.gridCell ?? node.shot.order;
 
 	return (
 		<div className="flex h-full flex-col overflow-hidden">
-			<div className="relative h-[180px] shrink-0 bg-base-300">
+			<div className="relative h-[128px] shrink-0 bg-base-300">
 				{imageUrl ? (
 					<img
 						src={imageUrl}
@@ -203,7 +204,11 @@ function ShotCard({ node }: { node: Extract<ComicWorkflowNode, { kind: "shot" }>
 				) : (
 					<EmptyMedia label="等待分镜图" />
 				)}
-				<span className="absolute left-2 top-2 badge badge-xs bg-base-100/90">
+				{/* 九宫格 cell index */}
+				<span className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-[var(--radius-sm)] border-2 border-base-content/20 bg-accent px-1 font-mono text-[length:var(--text-2xs)] font-bold text-accent-content shadow-brutal-sm">
+					{cell}
+				</span>
+				<span className="absolute bottom-1.5 left-1.5 badge badge-xs bg-base-100/90 tabular-nums">
 					{node.shot.duration ? `${node.shot.duration}s` : "未定时长"}
 				</span>
 				<div className="absolute right-2 top-2">
@@ -216,8 +221,11 @@ function ShotCard({ node }: { node: Extract<ComicWorkflowNode, { kind: "shot" }>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col p-3">
 				<CardHeader node={node} icon="clapperboard" accentClass="bg-accent" compact />
+				<p className="m-0 mt-1 font-mono text-[10px] uppercase tracking-wide text-base-content/40">
+					格 {cell} · 选中可重做本格
+				</p>
 				{node.shot.description ? (
-					<p className="m-0 mt-3 line-clamp-4 text-xs leading-relaxed text-base-content/65">
+					<p className="m-0 mt-2 line-clamp-3 text-xs leading-relaxed text-base-content/65">
 						{node.shot.description}
 					</p>
 				) : null}
@@ -226,7 +234,7 @@ function ShotCard({ node }: { node: Extract<ComicWorkflowNode, { kind: "shot" }>
 						"{node.shot.dialogue}"
 					</p>
 				) : null}
-				<div className="mt-auto flex flex-wrap gap-1 pt-3">
+				<div className="mt-auto flex flex-wrap gap-1 pt-2">
 					{node.characterNames.length > 0 ? (
 						<span className="badge badge-secondary badge-xs max-w-full truncate">
 							{node.characterNames.join("、")}
@@ -313,22 +321,22 @@ function CardHeader({
 	compact?: boolean;
 }) {
 	return (
-		<div className="flex items-start gap-3">
+		<div className="flex items-start gap-2">
 			<div
-				className={`flex shrink-0 items-center justify-center rounded-xl text-primary-content shadow-brutal-sm ${accentClass} ${
-					compact ? "h-8 w-8" : "h-9 w-9"
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-md)] text-primary-content shadow-brutal-sm ${accentClass} ${
+					compact ? "h-7 w-7" : "h-8 w-8"
 				}`}
 			>
-				<SvgIcon name={icon} size={compact ? 15 : 17} />
+				<SvgIcon name={icon} size={compact ? 13 : 15} />
 			</div>
 			<div className="min-w-0 flex-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<h3 className="m-0 truncate font-heading text-sm font-bold">
+				<div className="flex min-w-0 items-center gap-1.5">
+					<h3 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
 						{node.title}
 					</h3>
 					{statusBadge(node.status)}
 				</div>
-				<p className="m-0 truncate text-[11px] font-mono uppercase text-base-content/45">
+				<p className="m-0 truncate font-mono text-[length:var(--text-2xs)] uppercase text-base-content/45">
 					{node.subtitle}
 				</p>
 			</div>
@@ -386,21 +394,21 @@ export class WorkflowFrameShapeUtil extends ShapeUtil<WorkflowFrameShape> {
 		return (
 			<HTMLContainer style={{ width: w, height: h, pointerEvents: "all" }}>
 				<section
-					className={`h-full w-full rounded-[1.25rem] border-3 border-base-content/15 p-5 shadow-brutal-sm ${
+					className={`h-full w-full rounded-[var(--radius-xl)] border-3 border-base-content/15 p-3 shadow-brutal-sm ${
 						draggable ? "cursor-grab active:cursor-grabbing" : "cursor-default"
 					} ${style.surface}`}
 					onPointerDown={draggable ? undefined : stopCanvasPointer}
 				>
-					<div className="flex items-center gap-3">
-						<span className={`h-9 w-1.5 rounded-full ${style.accent}`} />
+					<div className="flex items-center gap-2">
+						<span className={`h-7 w-1 rounded-full ${style.accent}`} />
 						<div className="min-w-0">
-							<p className="m-0 text-[10px] font-mono uppercase text-base-content/45">
+							<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/45">
 								{eyebrow}
 							</p>
-							<h2 className="m-0 font-heading text-lg font-bold leading-tight">
+							<h2 className="m-0 font-heading text-[length:var(--text-md)] font-bold leading-tight">
 								{title}
 							</h2>
-							<p className="m-0 text-[11px] font-mono uppercase text-base-content/45">
+							<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/45">
 								{countLabel}
 							</p>
 						</div>
