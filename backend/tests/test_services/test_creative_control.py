@@ -51,6 +51,18 @@ def test_infer_feedback_targets_returns_none_for_unmatched_items():
     assert infer_feedback_targets(data, {"characters": [], "shots": []}) is None
 
 
+def test_infer_feedback_targets_from_free_text_feedback():
+    data = {"feedback": "把阿宁的发色改深一点，镜头 3 重画夜景"}
+    state = {
+        "characters": [{"id": 10, "name": "阿宁"}, {"id": 11, "name": "路人"}],
+        "shots": [{"id": 20, "order": 2}, {"id": 21, "order": 3}],
+    }
+    result = infer_feedback_targets(data, state)
+    assert result is not None
+    assert result.character_ids == [10]
+    assert result.shot_ids == [21]
+
+
 @pytest.mark.asyncio
 async def test_apply_character_rerun_edits_updates_fields(monkeypatch):
     class DummySession:

@@ -174,6 +174,20 @@ describe("ChatPanel", () => {
 		expect(onSendFeedback).toHaveBeenLastCalledWith("  这里有建议  ");
 	});
 
+	it("does not treat mid-run messages as confirm when not awaiting a gate", async () => {
+		const user = userEvent.setup();
+		storeState.currentRunId = 99;
+		storeState.awaitingConfirm = false;
+
+		renderChatPanel(true);
+
+		await user.type(screen.getByRole("textbox"), "中途反馈");
+		await user.click(screen.getByRole("button", { name: "发送" }));
+
+		expect(onConfirm).not.toHaveBeenCalled();
+		expect(onSendFeedback).not.toHaveBeenCalled();
+	});
+
 	it("shows render stage icon when currentStage is render", () => {
 		storeState.currentStage = "render";
 

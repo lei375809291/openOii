@@ -666,6 +666,7 @@ async def review_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
         agent_ctx.project.id,
         start_agent,
         mode=mode,
+        target_ids=getattr(agent_ctx, "target_ids", None),
     )
     await orchestrator.session.refresh(agent_ctx.project)
 

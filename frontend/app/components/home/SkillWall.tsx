@@ -88,8 +88,8 @@ export function SkillWall({
 				className={clsx(
 					"m-0 grid list-none p-0",
 					embedded
-						? "grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-4"
-						: "grid-cols-2 gap-[var(--space-2)] sm:grid-cols-3 lg:grid-cols-4",
+						? "grid-cols-3 gap-1.5"
+						: "grid-cols-1 gap-[var(--space-2)] sm:grid-cols-3",
 				)}
 			>
 				{catalog.map((skill) => {

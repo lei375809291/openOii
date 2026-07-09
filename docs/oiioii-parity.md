@@ -1,6 +1,6 @@
 # OiiOii ↔ openOii 功能差距与复刻路线
 
-> 状态：Phase 0–5a + LangGraph + redesign **已完成**；**仅保留 6 个简单 Skill**（厚 directives/template/pipeline），拉片/广告等复杂流已从产品面下线  
+> 状态：Phase 0–5a + LangGraph + redesign **已完成**；**仅保留 3 个常用简单 Skill**（厚 directives/template/pipeline），拉片等复杂流下线；Review 局部重做已修目标推断与清理范围
 > 原则：复刻 **产品原语**，不 1:1 抄 UI / 不追闭源模型护城河；复杂实验流不做。
 
 ## 产品原语对照
@@ -33,9 +33,11 @@
 - HITL：`interrupt()` in approval nodes + `Command(resume=…)` only
 - Driver：`app/orchestration/driver.py` 抽出 interrupt 循环
 - State：`skill_id` / `focus_entity_*` 写入 Phase2State
-- Skills（仅 6 个简单流）：`story-anime` / `character-design` / `script-breakdown` / `quick-short` / `scene-design` / `comedy-pet`  
+- Skills（仅 3 个常用简单流）：`story-anime` / `character-design` / `quick-short`  
   - 每 skill：`directives` + `story_template` + `pipeline_hints` + 入口 stage/agent  
   - 注入 outline/plan system prompt；创建 时回填默认 style/镜头数/模式  
+  - Review：自由文本可解析角色名/镜头号为 target_ids；局部清理不误伤未选实体  
+
 - Selection：review `target_ids` → orchestrator cleanup/render 局部重跑  
   - 反馈语义路由：对白/设定 → plan；画面/光色 → render；运镜/视频 → compose  
   - resume 继承 `project.skill_id`；compose/render 注入实体反馈

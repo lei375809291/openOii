@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -9,6 +10,11 @@ from app.agents.base import TargetIds
 from app.models.agent_run import AgentRun
 from app.models.project import Character, Project, Shot
 from app.services.file_cleaner import delete_file
+
+_SHOT_ORDER_RE = re.compile(
+    r"(?:镜头|分镜|格|shot)\s*#?\s*(\d+)",
+    re.IGNORECASE,
+)
 
 
 def _sanitize_ids(values: Any) -> list[int]:
@@ -91,6 +97,7 @@ async def collect_project_blocking_clips(
 
 
 def infer_feedback_targets(data: dict[str, Any], state: dict[str, Any]) -> TargetIds | None:
+    """Infer character/shot targets from explicit ids, analysis, or free-text feedback."""
     raw_target_ids = data.get("target_ids") if isinstance(data, dict) else None
     if isinstance(raw_target_ids, dict):
         character_ids = _sanitize_ids(raw_target_ids.get("character_ids"))
@@ -107,7 +114,19 @@ def infer_feedback_targets(data: dict[str, Any], state: dict[str, Any]) -> Targe
                 item.strip() for item in raw_items if isinstance(item, str) and item.strip()
             ]
 
-    if not target_items:
+    feedback_text = ""
+    if isinstance(data, dict):
+        for key in ("feedback", "content", "user_feedback", "text"):
+            raw = data.get(key)
+            if isinstance(raw, str) and raw.strip():
+                feedback_text = raw.strip()
+                break
+
+    scan_texts = list(target_items)
+    if feedback_text:
+        scan_texts.append(feedback_text)
+
+    if not scan_texts:
         return None
 
     parsed_character_ids: list[int] = []
@@ -115,18 +134,38 @@ def infer_feedback_targets(data: dict[str, Any], state: dict[str, Any]) -> Targe
     characters = state.get("characters") if isinstance(state, dict) else []
     shots = state.get("shots") if isinstance(state, dict) else []
 
-    for item in target_items:
-        for character in characters if isinstance(characters, list) else []:
-            name = character.get("name") if isinstance(character, dict) else None
-            character_id = character.get("id") if isinstance(character, dict) else None
-            if isinstance(name, str) and isinstance(character_id, int) and name and name in item:
+    # Longer names first so "小明同学" wins over "小明"
+    named_chars: list[tuple[str, int]] = []
+    for character in characters if isinstance(characters, list) else []:
+        if not isinstance(character, dict):
+            continue
+        name = character.get("name")
+        character_id = character.get("id")
+        if isinstance(name, str) and name.strip() and isinstance(character_id, int):
+            named_chars.append((name.strip(), character_id))
+    named_chars.sort(key=lambda pair: len(pair[0]), reverse=True)
+
+    order_to_shot: dict[int, int] = {}
+    for shot in shots if isinstance(shots, list) else []:
+        if not isinstance(shot, dict):
+            continue
+        shot_id = shot.get("id")
+        order = shot.get("order")
+        if isinstance(shot_id, int) and isinstance(order, int):
+            order_to_shot[order] = shot_id
+
+    for item in scan_texts:
+        for name, character_id in named_chars:
+            if name in item:
                 parsed_character_ids.append(character_id)
-        for shot in shots if isinstance(shots, list) else []:
-            shot_id = shot.get("id") if isinstance(shot, dict) else None
-            order = shot.get("order") if isinstance(shot, dict) else None
-            if isinstance(shot_id, int) and isinstance(order, int) and f"镜头{order}" in item:
+        for match in _SHOT_ORDER_RE.finditer(item):
+            order = int(match.group(1))
+            shot_id = order_to_shot.get(order)
+            if shot_id is not None:
                 parsed_shot_ids.append(shot_id)
-            elif isinstance(shot_id, int) and isinstance(order, int) and f"分镜{order}" in item:
+        # Legacy phrases without regex group still covered by 镜头N / 分镜N above
+        for order, shot_id in order_to_shot.items():
+            if f"镜头{order}" in item or f"分镜{order}" in item or f"格{order}" in item:
                 parsed_shot_ids.append(shot_id)
 
     character_ids = list(dict.fromkeys(parsed_character_ids))

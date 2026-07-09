@@ -616,11 +616,7 @@ export function ProjectPage() {
 			editorStore.clearMessages();
 			editorStore.setCurrentStage("plan");
 			// quick skill prefers yolo
-			if (
-				skillId === "quick-short" ||
-				skillId === "comedy-pet" ||
-				project.creation_mode === "quick"
-			) {
+			if (skillId === "quick-short" || project.creation_mode === "quick") {
 				editorStore.setRunMode("yolo");
 			}
 			generateMutation.mutate({ requestToken, skillId });

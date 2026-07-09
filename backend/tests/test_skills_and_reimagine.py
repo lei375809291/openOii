@@ -16,10 +16,7 @@ from app.skills.context import (
 SIMPLE_SKILL_IDS = (
     "story-anime",
     "character-design",
-    "script-breakdown",
     "quick-short",
-    "scene-design",
-    "comedy-pet",
 )
 
 

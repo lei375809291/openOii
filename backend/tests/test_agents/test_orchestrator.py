@@ -706,6 +706,9 @@ async def test_run_from_agent_happy_path(monkeypatch):
         user_feedback=None,
         rerun_mode=None,
         target_ids=None,
+        entity_type=None,
+        entity_id=None,
+        entity_ids=None,
     )
     monkeypatch.setattr(orchestrator, "_build_agent_context", lambda **kwargs: ctx)
 
@@ -729,7 +732,10 @@ async def test_run_from_agent_happy_path(monkeypatch):
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop_async)
 
     await orchestrator.run_from_agent(
-        project_id=1, run_id=2, request=SimpleNamespace(notes=""), agent_name="plan"
+        project_id=1,
+        run_id=2,
+        request=SimpleNamespace(notes="", entity_type=None, entity_id=None),
+        agent_name="plan",
     )
 
     assert ws.events[0][1]["type"] == "run_started"
@@ -762,12 +768,15 @@ async def test_run_from_agent_review_branch(monkeypatch):
         user_feedback=None,
         rerun_mode=None,
         target_ids=None,
+        entity_type=None,
+        entity_id=None,
+        entity_ids=None,
     )
 
     async def fake_review_run(_ctx):
         _ctx.rerun_mode = "incremental"
         _ctx.user_feedback = "notes"
-        return {"start_agent": "scriptwriter", "mode": "incremental"}
+        return {"start_agent": "plan", "mode": "incremental"}
 
     monkeypatch.setattr(orchestrator, "_build_agent_context", lambda **kwargs: ctx)
 
@@ -785,12 +794,16 @@ async def test_run_from_agent_review_branch(monkeypatch):
     monkeypatch.setattr(orchestrator, "_set_run", set_run)
     monkeypatch.setattr(orchestrator, "_log", noop_async)
     monkeypatch.setattr(orchestrator, "_agent_index", lambda name: 0)
+    # _agent_index is mocked to 0, so review_agent resolves to agents[0]
     monkeypatch.setattr(orchestrator.agents[0], "run", fake_review_run)
     monkeypatch.setattr("app.agents.orchestrator.clear_confirm_event_redis", noop_async)
     monkeypatch.setattr("app.agents.orchestrator.clear_awaiting_payload", noop_async)
 
     await orchestrator.run_from_agent(
-        project_id=1, run_id=2, request=SimpleNamespace(notes="notes"), agent_name="review"
+        project_id=1,
+        run_id=2,
+        request=SimpleNamespace(notes="notes", entity_type=None, entity_id=None),
+        agent_name="review",
     )
 
     assert ctx.user_feedback == "notes"
@@ -813,13 +826,13 @@ async def test_cleanup_for_rerun_incremental_render(monkeypatch):
         session=session,
     )
 
-    async def clear_chars(pid):
+    async def clear_chars(pid, ids=None):
         cleared.append("chars")
 
-    async def clear_shots(pid):
+    async def clear_shots(pid, ids=None):
         cleared.append("shots")
 
-    async def clear_videos(pid):
+    async def clear_videos(pid, ids=None):
         cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
@@ -847,14 +860,55 @@ async def test_cleanup_for_rerun_incremental_compose(monkeypatch):
         session=session,
     )
 
-    async def clear_videos(pid):
-        cleared.append("videos")
+    async def clear_videos(pid, ids=None):
+        cleared.append(("videos", ids))
 
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
 
     await orchestrator._cleanup_for_rerun(1, "compose", mode="incremental")
 
-    assert cleared == ["videos"]
+    assert cleared == [("videos", None)]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_for_rerun_scoped_plan_only_selected(monkeypatch):
+    """Scoped plan cleanup must not clear unselected character media."""
+    from app.agents.base import TargetIds
+
+    calls = []
+    session = FakeSession(project=SimpleNamespace(id=1), run=SimpleNamespace(id=2))
+    orchestrator = GenerationOrchestrator(
+        settings=Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            anthropic_api_key="test",
+            image_api_key="test",
+            video_api_key="test",
+        ),
+        ws=MockWsManager(),
+        session=session,
+    )
+
+    async def clear_chars(pid, ids=None):
+        calls.append(("chars", ids))
+
+    async def clear_shots(pid, ids=None):
+        calls.append(("shots", ids))
+
+    async def clear_videos(pid, ids=None):
+        calls.append(("videos", ids))
+
+    monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
+    monkeypatch.setattr(orchestrator, "_clear_shot_images", clear_shots)
+    monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
+
+    await orchestrator._cleanup_for_rerun(
+        1,
+        "plan",
+        mode="incremental",
+        target_ids=TargetIds(character_ids=[], shot_ids=[9, 10]),
+    )
+
+    assert calls == [("shots", [9, 10]), ("videos", [9, 10])]
 
 
 @pytest.mark.asyncio
@@ -892,13 +946,13 @@ async def test_cleanup_for_rerun_full_render(monkeypatch):
         session=session,
     )
 
-    async def clear_chars(pid):
+    async def clear_chars(pid, ids=None):
         cleared.append("chars")
 
-    async def clear_shots(pid):
+    async def clear_shots(pid, ids=None):
         cleared.append("shots")
 
-    async def clear_videos(pid):
+    async def clear_videos(pid, ids=None):
         cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_character_images", clear_chars)
@@ -926,7 +980,7 @@ async def test_cleanup_for_rerun_full_compose(monkeypatch):
         session=session,
     )
 
-    async def clear_videos(pid):
+    async def clear_videos(pid, ids=None):
         cleared.append("videos")
 
     monkeypatch.setattr(orchestrator, "_clear_shot_videos", clear_videos)
@@ -1200,7 +1254,15 @@ async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
         ws=MockWsManager(),
         session=session,
     )
-    ctx = SimpleNamespace(project=project, run=run, session=session, user_feedback=None)
+    ctx = SimpleNamespace(
+        project=project,
+        run=run,
+        session=session,
+        user_feedback=None,
+        entity_type=None,
+        entity_id=None,
+        rerun_mode="full",
+    )
 
     async def fake_invoke(**kwargs):
         return False, "compose"
@@ -1218,7 +1280,12 @@ async def test_run_phase2_graph_review_agent_sets_feedback(monkeypatch):
     await orchestrator._run_phase2_graph(
         project=project,
         run=run,
-        request=SimpleNamespace(notes="user feedback text"),
+        request=SimpleNamespace(
+            notes="user feedback text",
+            skill_id=None,
+            entity_type=None,
+            entity_id=None,
+        ),
         ctx=ctx,
         agent_name="review",
         auto_mode=False,

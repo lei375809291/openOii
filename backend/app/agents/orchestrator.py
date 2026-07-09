@@ -337,9 +337,17 @@ class GenerationOrchestrator:
                     project.outline_approved = False
                     self.session.add(project)
             elif start_agent in {"plan"}:
-                await self._clear_character_images(project_id, char_ids if scoped else None)
-                await self._clear_shot_images(project_id, shot_ids if scoped else None)
-                await self._clear_shot_videos(project_id, shot_ids if scoped else None)
+                # Scoped: only clear the selected entity media (never expand None → all).
+                if scoped:
+                    if char_ids:
+                        await self._clear_character_images(project_id, char_ids)
+                    if shot_ids:
+                        await self._clear_shot_images(project_id, shot_ids)
+                        await self._clear_shot_videos(project_id, shot_ids)
+                else:
+                    await self._clear_character_images(project_id)
+                    await self._clear_shot_images(project_id)
+                    await self._clear_shot_videos(project_id)
             elif start_agent == "render":
                 if scoped:
                     if char_ids:
@@ -347,16 +355,16 @@ class GenerationOrchestrator:
                     if shot_ids:
                         await self._clear_shot_images(project_id, shot_ids)
                         await self._clear_shot_videos(project_id, shot_ids)
-                    if not char_ids and not shot_ids:
-                        await self._clear_character_images(project_id)
-                        await self._clear_shot_images(project_id)
-                        await self._clear_shot_videos(project_id)
                 else:
                     await self._clear_character_images(project_id)
                     await self._clear_shot_images(project_id)
                     await self._clear_shot_videos(project_id)
             elif start_agent == "compose":
-                await self._clear_shot_videos(project_id, shot_ids if scoped else None)
+                if scoped:
+                    if shot_ids:
+                        await self._clear_shot_videos(project_id, shot_ids)
+                else:
+                    await self._clear_shot_videos(project_id)
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
         else:
@@ -895,8 +903,13 @@ class GenerationOrchestrator:
             thread_id=graph_config["configurable"]["thread_id"],
             start_stage=start_stage,
             skill_id=effective_skill_id,
-            focus_entity_type=ctx.entity_type or request.entity_type,
-            focus_entity_id=ctx.entity_id if ctx.entity_id is not None else request.entity_id,
+            focus_entity_type=getattr(ctx, "entity_type", None)
+            or getattr(request, "entity_type", None),
+            focus_entity_id=(
+                getattr(ctx, "entity_id", None)
+                if getattr(ctx, "entity_id", None) is not None
+                else getattr(request, "entity_id", None)
+            ),
             route_mode=route_mode,
         )
 
@@ -1078,18 +1091,20 @@ class GenerationOrchestrator:
 
             ctx = self._build_agent_context(project=project, run=run, request=request)
             # Propagate selection focus for partial re-runs (canvas → Agent).
-            if entity_type and not ctx.entity_type:
+            if entity_type and not getattr(ctx, "entity_type", None):
                 ctx.entity_type = entity_type
-            if entity_id is not None and ctx.entity_id is None:
+            if entity_id is not None and getattr(ctx, "entity_id", None) is None:
                 ctx.entity_id = entity_id
             if entity_ids:
                 ctx.entity_ids = list(dict.fromkeys(entity_ids))
-                if ctx.entity_id is None and ctx.entity_ids:
+                if getattr(ctx, "entity_id", None) is None and ctx.entity_ids:
                     ctx.entity_id = ctx.entity_ids[0]
-            if request.entity_type and not ctx.entity_type:
-                ctx.entity_type = request.entity_type
-            if request.entity_id is not None and ctx.entity_id is None:
-                ctx.entity_id = request.entity_id
+            req_entity_type = getattr(request, "entity_type", None)
+            req_entity_id = getattr(request, "entity_id", None)
+            if req_entity_type and not getattr(ctx, "entity_type", None):
+                ctx.entity_type = req_entity_type
+            if req_entity_id is not None and getattr(ctx, "entity_id", None) is None:
+                ctx.entity_id = req_entity_id
 
             # 初始化当前 run 已存在的用户反馈消息（避免后续确认不带反馈时误读历史反馈）
             stmt = (

@@ -84,9 +84,15 @@ export function ChatPanel({
 
   const handleSend = () => {
     if (!input.trim()) return;
-    if (currentRunId || isGenerating || awaitingConfirm) {
+    // Only gate confirms go through WS confirm. Mid-run "confirm" was a bug:
+    // it set Redis without a waiter, then the next gate cleared it — feedback lost.
+    if (awaitingConfirm) {
       onConfirm(input.trim());
       setInput("");
+      return;
+    }
+    if (isGenerating || currentRunId) {
+      // Active run without a gate: wait for 通过 / stop first, then feedback.
       return;
     }
     onSendFeedback(input);

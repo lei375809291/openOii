@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
+
 from app.agents.base import AgentContext, BaseAgent, TargetIds
+from app.models.project import Character, Shot
 from app.services.creative_control import infer_feedback_targets
 
 ALLOWED_START_AGENTS = {"outline", "plan", "render", "compose"}
@@ -167,6 +170,31 @@ def _entity_target_ids(entity_type: str, entity_id: int) -> TargetIds:
     return TargetIds()
 
 
+async def _project_entity_state(ctx: AgentContext) -> dict[str, Any]:
+    """Load cast + shots so free-text feedback can resolve concrete targets."""
+    project_id = getattr(ctx.project, "id", None)
+    if project_id is None:
+        return {"project_id": None, "characters": [], "shots": []}
+
+    char_res = await ctx.session.execute(
+        select(Character).where(Character.project_id == project_id)
+    )
+    shot_res = await ctx.session.execute(
+        select(Shot).where(Shot.project_id == project_id).order_by(Shot.order.asc())
+    )
+    characters = [
+        {"id": c.id, "name": c.name}
+        for c in char_res.scalars().all()
+        if c.id is not None
+    ]
+    shots = [
+        {"id": s.id, "order": s.order}
+        for s in shot_res.scalars().all()
+        if s.id is not None
+    ]
+    return {"project_id": project_id, "characters": characters, "shots": shots}
+
+
 class ReviewRuleEngine(BaseAgent):
     name = "review"
 
@@ -177,7 +205,12 @@ class ReviewRuleEngine(BaseAgent):
 
         if not feedback:
             await self.send_message(ctx, "未找到用户反馈内容，将从规划阶段重新开始。")
-            return {"start_agent": "plan", "mode": "full", "reason": "未提供具体反馈"}
+            return {
+                "start_agent": "plan",
+                "mode": "full",
+                "reason": "未提供具体反馈",
+                "target_ids": None,
+            }
 
         multi_ids = [
             int(i)
@@ -245,10 +278,29 @@ class ReviewRuleEngine(BaseAgent):
 
         mode = _decide_mode(feedback_type, feedback)
 
+        entity_state = await _project_entity_state(ctx)
         target_ids = infer_feedback_targets(
-            {"routing": {"start_agent": start_agent, "mode": mode}},
-            {"project_id": ctx.project.id},
+            {
+                "routing": {"start_agent": start_agent, "mode": mode},
+                "feedback": feedback,
+            },
+            entity_state,
         )
+
+        # Free-text that hits a concrete entity defaults to incremental partial re-run
+        if target_ids and target_ids.has_targets() and mode != "full":
+            mode = "incremental"
+            if not ctx.entity_type:
+                if target_ids.shot_ids and not target_ids.character_ids:
+                    ctx.entity_type = "shot"
+                    ctx.entity_id = target_ids.shot_ids[0]
+                    ctx.entity_ids = list(target_ids.shot_ids)
+                    start_agent = resolve_entity_start_agent("shot", feedback)
+                elif target_ids.character_ids and not target_ids.shot_ids:
+                    ctx.entity_type = "character"
+                    ctx.entity_id = target_ids.character_ids[0]
+                    ctx.entity_ids = list(target_ids.character_ids)
+                    start_agent = resolve_entity_start_agent("character", feedback)
 
         if retry_merge_requested:
             start_agent = "compose"
@@ -256,6 +308,11 @@ class ReviewRuleEngine(BaseAgent):
 
         if start_agent not in ALLOWED_START_AGENTS:
             start_agent = "plan"
+
+        # Non-empty feedback without full-restart keywords stays incremental
+        # so we don't wipe the whole project on a soft tweak.
+        if mode == "full" and not _is_full_restart_feedback(feedback) and feedback:
+            mode = "incremental"
 
         mode_desc = "增量更新" if mode == "incremental" else "重新生成"
         target_info = ""
